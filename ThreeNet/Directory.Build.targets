@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- Every packable library ships the same short package readme. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false'">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)src\PACKAGE_README.md" Pack="true" PackagePath="\README.md" Visible="false" />
+  </ItemGroup>
+
+</Project>

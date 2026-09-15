@@ -1,0 +1,119 @@
+name: ThreeNet
+
+# Builds the Rust core on every desktop OS, tests the .NET layers and publishes
+# ThreeNet, ThreeNet.Native (all RIDs) and ThreeNet.Avalonia to NuGet.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ThreeNet/**"
+      - ".github/workflows/threenet.yml"
+  pull_request:
+    paths:
+      - "ThreeNet/**"
+      - ".github/workflows/threenet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  native:
+    name: Native core (${{ matrix.rid }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            lib: threenet_core.dll
+          - os: ubuntu-latest
+            rid: linux-x64
+            lib: libthreenet_core.so
+          - os: macos-latest
+            rid: osx-arm64
+            lib: libthreenet_core.dylib
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ThreeNet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ThreeNet/rust -> target
+
+      - name: Build
+        run: cargo build --release --manifest-path rust/threenet-core/Cargo.toml
+
+      - name: Test
+        # GPU tests skip themselves when the runner has no adapter.
+        run: cargo test --release --manifest-path rust/threenet-core/Cargo.toml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: ThreeNet/rust/target/release/${{ matrix.lib }}
+          if-no-files-found: error
+
+  dotnet:
+    name: Test, pack and publish
+    needs: native
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ThreeNet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: artifacts
+
+      - name: Stage native binaries
+        shell: pwsh
+        run: |
+          foreach ($rid in 'win-x64', 'linux-x64', 'osx-arm64') {
+            $target = "src/ThreeNet.Native/runtimes/$rid/native"
+            New-Item -ItemType Directory -Force $target | Out-Null
+            Copy-Item "../artifacts/native-$rid/*" $target
+          }
+          Get-ChildItem -Recurse src/ThreeNet.Native/runtimes | Select-Object FullName, Length
+
+      - name: Test the binding
+        run: dotnet test tests/ThreeNet.Tests -c Release -p:SkipRustBuild=true
+
+      - name: Test the converter (fast tests)
+        run: dotnet test tests/ThreeAppGen.Tests -c Release -p:SkipRustBuild=true --filter "Category!=LLM&Category!=Slow"
+
+      - name: Pack
+        run: |
+          dotnet pack src/ThreeNet.Native/ThreeNet.Native.csproj -c Release -p:SkipRustBuild=true -o nupkgs
+          dotnet pack src/ThreeNet/ThreeNet.csproj -c Release -p:SkipRustBuild=true -o nupkgs
+          dotnet pack src/ThreeNet.Avalonia/ThreeNet.Avalonia.csproj -c Release -p:SkipRustBuild=true -o nupkgs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs
+          path: ThreeNet/nupkgs
+
+      - name: Publish to NuGet
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          # --skip-duplicate keeps re-runs green; bump VersionPrefix to publish a new release.
+          dotnet nuget push "nupkgs/*.nupkg" --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate

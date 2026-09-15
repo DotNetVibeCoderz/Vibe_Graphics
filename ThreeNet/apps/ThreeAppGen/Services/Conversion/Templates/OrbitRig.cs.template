@@ -1,0 +1,70 @@
+// Minimal OrbitControls equivalent for hosts that deliver ThreeNet.InputEvent
+// (the native desktop window). Avalonia hosts use ThreeNet.Avalonia.OrbitController.
+// Part of the conversion contract: the LLM pass never replaces this file.
+
+using System.Numerics;
+using ThreeNet;
+
+namespace __ROOT_NAMESPACE__.Core;
+
+public sealed class OrbitRig
+{
+    private readonly Node _camera;
+    private bool _rotating;
+    private bool _panning;
+    private float _yaw;
+    private float _pitch;
+    private float _distance;
+
+    public OrbitRig(Node camera, Vector3 target)
+    {
+        _camera = camera;
+        Target = target;
+        Vector3 offset = camera.Position - target;
+        _distance = MathF.Max(offset.Length(), 0.5f);
+        _yaw = MathF.Atan2(offset.X, offset.Z);
+        _pitch = MathF.Asin(Math.Clamp(offset.Y / _distance, -1f, 1f));
+    }
+
+    public Vector3 Target { get; set; }
+
+    public void Handle(InputEvent input)
+    {
+        switch (input.Kind)
+        {
+            case InputEventKind.MouseDown:
+                _rotating = input.Button == MouseButton.Left;
+                _panning = input.Button is MouseButton.Right or MouseButton.Middle;
+                break;
+            case InputEventKind.MouseUp:
+                _rotating = false;
+                _panning = false;
+                break;
+            case InputEventKind.MouseMove when _rotating:
+                _yaw -= input.Delta.X * 0.008f;
+                _pitch = Math.Clamp(_pitch + (input.Delta.Y * 0.008f), -1.5f, 1.5f);
+                Apply();
+                break;
+            case InputEventKind.MouseMove when _panning:
+                Matrix4x4 world = _camera.WorldMatrix;
+                Vector3 right = new(world.M11, world.M12, world.M13);
+                Vector3 up = new(world.M21, world.M22, world.M23);
+                float scale = 0.0025f * _distance;
+                Target += (right * -input.Delta.X * scale) + (up * input.Delta.Y * scale);
+                Apply();
+                break;
+            case InputEventKind.MouseWheel:
+                _distance = Math.Clamp(_distance * MathF.Exp(-input.Delta.Y * 0.12f), 0.2f, 5000f);
+                Apply();
+                break;
+        }
+    }
+
+    private void Apply()
+    {
+        float cosPitch = MathF.Cos(_pitch);
+        Vector3 offset = new(MathF.Sin(_yaw) * cosPitch, MathF.Sin(_pitch), MathF.Cos(_yaw) * cosPitch);
+        _camera.Position = Target + (offset * _distance);
+        _camera.LookAt(Target);
+    }
+}

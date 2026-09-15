@@ -1,0 +1,202 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    ThreeAppGen design tokens.
+    An IDE surface: quiet greys so code and the 3D previews carry the colour,
+    with one blue accent reserved for focus, selection and Jack.
+  -->
+  <Styles.Resources>
+    <Color x:Key="CanvasColor">#0A0D13</Color>
+    <Color x:Key="PanelColor">#11151D</Color>
+    <Color x:Key="ElevatedColor">#171C26</Color>
+    <Color x:Key="HairlineColor">#232A36</Color>
+    <Color x:Key="AccentColor">#4FA3FF</Color>
+    <Color x:Key="AccentSoftColor">#14263D</Color>
+    <Color x:Key="SuccessColor">#3FD07E</Color>
+    <Color x:Key="WarningColor">#F5B14C</Color>
+    <Color x:Key="DangerColor">#FF6B6B</Color>
+    <Color x:Key="TextPrimaryColor">#E6EAF2</Color>
+    <Color x:Key="TextSecondaryColor">#93A0B4</Color>
+    <Color x:Key="TextMutedColor">#5F6C80</Color>
+
+    <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource CanvasColor}" />
+    <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}" />
+    <SolidColorBrush x:Key="ElevatedBrush" Color="{StaticResource ElevatedColor}" />
+    <SolidColorBrush x:Key="HairlineBrush" Color="{StaticResource HairlineColor}" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoftColor}" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}" />
+
+    <FontFamily x:Key="CodeFont">Cascadia Code,Cascadia Mono,JetBrains Mono,Consolas,Menlo,monospace</FontFamily>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource CanvasBrush}" />
+    <Setter Property="FontFamily" Value="Inter,Segoe UI,sans-serif" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="TextBlock.body">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="LineHeight" Value="18" />
+  </Style>
+
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="10.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1.1" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{StaticResource CodeFont}" />
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <!-- Menu -->
+  <Style Selector="Menu">
+    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+    <Setter Property="Padding" Value="6,2" />
+  </Style>
+
+  <Style Selector="MenuItem">
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <!-- Buttons -->
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{StaticResource ElevatedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#1F2733" />
+    <Setter Property="BorderBrush" Value="#2E3847" />
+  </Style>
+
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="#1E4570" />
+    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#1B3554" />
+  </Style>
+
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="Padding" Value="8,4" />
+  </Style>
+
+  <Style Selector="ToggleButton">
+    <Setter Property="Background" Value="{StaticResource ElevatedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="ToggleButton:checked /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="#1E4570" />
+  </Style>
+
+  <!-- Inputs -->
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{StaticResource ElevatedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="9,6" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{StaticResource ElevatedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="9,4" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
+  <!-- Trees and lists -->
+  <Style Selector="TreeView">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TreeViewItem">
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Padding" Value="4,3" />
+  </Style>
+
+  <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+  </Style>
+
+  <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="{StaticResource HairlineBrush}" />
+  </Style>
+
+  <!-- Chat bubbles -->
+  <Style Selector="Border.bubble">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="12,9" />
+    <Setter Property="Margin" Value="0,0,0,10" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Border.bubble.user">
+    <Setter Property="Background" Value="#1B2330" />
+    <Setter Property="BorderBrush" Value="#2A3444" />
+  </Style>
+
+  <Style Selector="Border.bubble.assistant">
+    <Setter Property="Background" Value="#141D2A" />
+    <Setter Property="BorderBrush" Value="#1E4570" />
+  </Style>
+
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+
+</Styles>

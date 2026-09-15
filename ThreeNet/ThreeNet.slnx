@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/apps/">
+    <Project Path="apps/ThreeAppGen/ThreeAppGen.csproj" />
+    <Project Path="apps/ThreeGallery/ThreeGallery.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/ThreeNet.Samples.HelloCube/ThreeNet.Samples.HelloCube.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/ThreeNet.Avalonia/ThreeNet.Avalonia.csproj" />
+    <Project Path="src/ThreeNet.Native/ThreeNet.Native.csproj" />
+    <Project Path="src/ThreeNet/ThreeNet.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ThreeAppGen.Tests/ThreeAppGen.Tests.csproj" />
+    <Project Path="tests/ThreeNet.Tests/ThreeNet.Tests.csproj" />
+  </Folder>
+</Solution>

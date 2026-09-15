@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ThreeAppGen</RootNamespace>
+    <AssemblyName>ThreeAppGen</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Several Semantic Kernel connectors are still marked experimental. -->
+    <NoWarn>$(NoWarn);SKEXP0001;SKEXP0010;SKEXP0070;SKEXP0050;CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Label="UI">
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="AI">
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.80.1" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.80.1" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.80.1-alpha" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.80.1-alpha" />
+    <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Platform">
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.12" />
+    <!-- Roslyn powers the Format Code command. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ThreeNet.Avalonia\ThreeNet.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WithCulture=false: "X.cs.template" would otherwise be treated as a Czech (cs) satellite resource. -->
+    <EmbeddedResource Include="Services\Conversion\Templates\*.template" WithCulture="false" LogicalName="ThreeAppGen.Templates.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="app.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

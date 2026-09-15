@@ -1,0 +1,30 @@
+[package]
+name = "threenet-core"
+description = "Three.Net native core engine (wgpu based renderer, scene graph, asset pipeline)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "threenet_core"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["gltf-lights"]
+# Imports KHR_lights_punctual lights from glTF files.
+gltf-lights = ["gltf/KHR_lights_punctual"]
+
+[dependencies]
+bytemuck = { version = "1.25.2", features = ["derive"] }
+env_logger = "0.11.11"
+glam = { version = "0.33.7", features = ["bytemuck"] }
+gltf = { version = "1.4.1", features = ["import", "utils", "names"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "bmp", "tga"] }
+log = "0.4.34"
+pollster = "1.0.1"
+raw-window-handle = "0.6.2"
+thiserror = "2.0.20"
+wgpu = "30.0.1"
+winit = "0.30.13"

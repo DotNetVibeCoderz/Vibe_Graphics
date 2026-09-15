@@ -1,0 +1,137 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:edit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
+        xmlns:tn="clr-namespace:ThreeNet.Avalonia;assembly=ThreeNet.Avalonia"
+        xmlns:samples="clr-namespace:ThreeGallery.Samples"
+        x:Class="ThreeGallery.Views.MainWindow"
+        Title="Three.Net Gallery"
+        Width="1480" Height="900"
+        MinWidth="1040" MinHeight="640"
+        Background="{StaticResource CanvasBrush}">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ================= header ================= -->
+    <Border Grid.Row="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource HairlineBrush}"
+            BorderThickness="0,0,0,1" Padding="18,12">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}"
+                  BorderBrush="#5A431C" BorderThickness="1">
+            <TextBlock Text="3N" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel>
+            <TextBlock Classes="display" Text="Three.Net Gallery" />
+            <TextBlock Classes="label" Text="NATIVE 3D FOR .NET · GRAVICODE STUDIOS" Margin="0,2,0,0" />
+          </StackPanel>
+        </StackPanel>
+
+        <TextBox Grid.Column="1" x:Name="SearchBox" PlaceholderText="Search samples..."
+                 Width="280" HorizontalAlignment="Right" Margin="0,0,16,0" VerticalAlignment="Center" />
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Border Classes="hud" Padding="10,5">
+            <TextBlock x:Name="AdapterText" Classes="metric" Text="GPU: detecting..." />
+          </Border>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ================= body ================= -->
+    <Grid Grid.Row="1" ColumnDefinitions="300,1,*,1,440">
+
+      <!-- sample list -->
+      <Border Grid.Column="0" Background="{StaticResource PanelBrush}">
+        <ScrollViewer>
+          <ListBox x:Name="SampleList" SelectionChanged="OnSampleSelected">
+            <ListBox.DataTemplates>
+              <DataTemplate DataType="samples:GallerySample">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="title" Text="{Binding Title}" />
+                  <TextBlock Classes="body" Text="{Binding Summary}" TextWrapping="Wrap" FontSize="11.5" />
+                </StackPanel>
+              </DataTemplate>
+              <DataTemplate DataType="x:String">
+                <TextBlock Classes="label" Text="{Binding}" Margin="2,10,0,2" />
+              </DataTemplate>
+            </ListBox.DataTemplates>
+          </ListBox>
+        </ScrollViewer>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <!-- viewport -->
+      <Grid Grid.Column="2" Background="#05070B">
+        <tn:ThreeNetView x:Name="Viewport" />
+
+        <!-- stats overlay -->
+        <Border Classes="hud" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16">
+          <StackPanel Spacing="3">
+            <TextBlock x:Name="FpsText" Classes="metric" Foreground="{StaticResource AccentBrush}" Text="-- fps" />
+            <TextBlock x:Name="DrawText" Classes="metric" Text="draws --" />
+            <TextBlock x:Name="TriangleText" Classes="metric" Text="tris --" />
+            <TextBlock x:Name="CullText" Classes="metric" Text="culled --" />
+          </StackPanel>
+        </Border>
+
+        <!-- viewport toolbar -->
+        <Border Classes="hud" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="16" Padding="6">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button Content="Reset view" Click="OnResetView" />
+            <ToggleButton x:Name="AutoRotateToggle" Content="Auto-rotate" IsChecked="True" />
+            <ToggleButton x:Name="PauseToggle" Content="Pause" />
+            <Button Content="Screenshot" Click="OnScreenshot" />
+          </StackPanel>
+        </Border>
+
+        <!-- sample caption -->
+        <Border Classes="hud" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16" MaxWidth="520">
+          <StackPanel Spacing="4">
+            <TextBlock x:Name="SampleTitleText" Classes="title" Text="Sample" />
+            <TextBlock x:Name="SampleSummaryText" Classes="body" Text="" TextWrapping="Wrap" />
+            <TextBlock Classes="label" Text="DRAG TO ORBIT · RIGHT DRAG TO PAN · WHEEL TO ZOOM · CLICK TO PICK" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+      <!-- code panel -->
+      <Border Grid.Column="4" Background="{StaticResource PanelBrush}">
+        <Grid RowDefinitions="Auto,*">
+          <Border Grid.Row="0" BorderBrush="{StaticResource HairlineBrush}" BorderThickness="0,0,0,1" Padding="14,10">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Classes="label" Text="SAMPLE SOURCE" />
+                <TextBlock x:Name="CodeFileText" Classes="metric" Text="" />
+              </StackPanel>
+              <Button Grid.Column="1" Content="Copy" Classes="accent" Click="OnCopyCode" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+
+          <edit:TextEditor Grid.Row="1" x:Name="CodeEditor"
+                           IsReadOnly="True"
+                           ShowLineNumbers="True"
+                           WordWrap="False"
+                           FontFamily="{StaticResource CodeFont}"
+                           FontSize="12"
+                           Background="{StaticResource PanelBrush}"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           Padding="10,8" />
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- ================= status bar ================= -->
+    <Border Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource HairlineBrush}"
+            BorderThickness="0,1,0,0" Padding="16,6">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" x:Name="StatusText" Classes="metric" Text="Ready" />
+        <TextBlock Grid.Column="1" Classes="metric" Foreground="{StaticResource TextMutedBrush}"
+                   Text="Three.Net · dibuat oleh Gravicode Studios · dipimpin Kang Fadhil" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

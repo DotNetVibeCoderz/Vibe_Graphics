@@ -1,0 +1,33 @@
+# ---- Rust ----
+target/
+**/*.rs.bk
+*.pdb
+
+# ---- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+.vs/
+.idea/
+*.nupkg
+*.snupkg
+
+# ---- Native artifacts copied into managed projects ----
+src/ThreeNet.Native/runtimes/**/native/*.dll
+src/ThreeNet.Native/runtimes/**/native/*.so
+src/ThreeNet.Native/runtimes/**/native/*.dylib
+
+# ---- Secrets / local config ----
+*.local.config
+app.local.config
+secrets.json
+testkey.txt
+PackageCredentials.txt
+
+# ---- OS ----
+Thumbs.db
+.DS_Store

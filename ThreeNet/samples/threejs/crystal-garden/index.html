@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crystal Garden - Three.js</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; }
+    #hud { position: fixed; left: 16px; bottom: 16px; color: #cfd6e4; font: 12px/1.4 system-ui; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="hud">Space: pause rotation &middot; drag to orbit</div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

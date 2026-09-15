@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ships the Three.Net native core (rust/threenet-core) under the
+    runtimes/<rid>/native layout that both `dotnet run` and NuGet understand.
+
+    Local builds compile the core for the current OS with cargo.
+    CI builds each OS in its own job, drops the binaries into
+    runtimes/<rid>/native/ next to this file and packs with -p:SkipRustBuild=true,
+    so one package carries every platform.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>ThreeNet.Native</RootNamespace>
+    <AssemblyName>ThreeNet.Native</AssemblyName>
+    <PackageId>ThreeNet.Native</PackageId>
+    <Description>Native runtime binaries for Three.Net: the Rust + wgpu rendering core for Windows (x64), Linux (x64) and macOS (arm64).</Description>
+    <PackageTags>3d;graphics;wgpu;rust;native;runtime</PackageTags>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <SkipRustBuild Condition="'$(SkipRustBuild)' == ''">false</SkipRustBuild>
+    <!--
+      The native core is always built in release: a debug wgpu build is an order
+      of magnitude slower to run and is rarely what a .NET developer debugging
+      managed code needs. Override with -p:RustProfile=debug when working on the
+      Rust side itself.
+    -->
+    <RustProfile Condition="'$(RustProfile)' == ''">release</RustProfile>
+    <RustManifest>$(MSBuildThisFileDirectory)..\..\rust\threenet-core\Cargo.toml</RustManifest>
+    <RustTargetDir>$(MSBuildThisFileDirectory)..\..\rust\target\$(RustProfile)\</RustTargetDir>
+    <PrebuiltRuntimesDir>$(MSBuildThisFileDirectory)runtimes\</PrebuiltRuntimesDir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <NativeRuntimeIdentifier>win-x64</NativeRuntimeIdentifier>
+    <NativeLibraryFileName>threenet_core.dll</NativeLibraryFileName>
+  </PropertyGroup>
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <NativeRuntimeIdentifier>linux-x64</NativeRuntimeIdentifier>
+    <NativeLibraryFileName>libthreenet_core.so</NativeLibraryFileName>
+  </PropertyGroup>
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <NativeRuntimeIdentifier>osx-arm64</NativeRuntimeIdentifier>
+    <NativeLibraryFileName>libthreenet_core.dylib</NativeLibraryFileName>
+  </PropertyGroup>
+
+  <Target Name="BuildRustCore" BeforeTargets="BeforeBuild" Condition="'$(SkipRustBuild)' != 'true'">
+    <Message Importance="high" Text="Building the Three.Net native core ($(RustProfile))..." />
+    <Exec Command="cargo build --manifest-path &quot;$(RustManifest)&quot;" Condition="'$(RustProfile)' == 'debug'" />
+    <Exec Command="cargo build --manifest-path &quot;$(RustManifest)&quot; --release" Condition="'$(RustProfile)' == 'release'" />
+  </Target>
+
+  <!-- Also runs before packing, so `dotnet pack no-build` still includes the binaries. -->
+  <Target Name="CollectNativeCore" BeforeTargets="AssignTargetPaths;_GetPackageFiles" DependsOnTargets="BuildRustCore">
+    <ItemGroup>
+      <_PrebuiltNative Include="$(PrebuiltRuntimesDir)*\native\*" />
+      <_HostNative Include="$(RustTargetDir)$(NativeLibraryFileName)" Condition="Exists('$(RustTargetDir)$(NativeLibraryFileName)')" />
+    </ItemGroup>
+
+    <!-- Prebuilt multi-platform binaries win when present (CI), otherwise the local cargo output. -->
+    <ItemGroup Condition="'@(_PrebuiltNative)' != '' and !@(Content->AnyHaveMetadataValue('ThreeNetNative', 'true'))">
+      <Content Include="@(_PrebuiltNative)">
+        <Link>runtimes\$([MSBuild]::MakeRelative('$(PrebuiltRuntimesDir)', '%(_PrebuiltNative.FullPath)'))</Link>
+        <PackagePath>runtimes\$([MSBuild]::MakeRelative('$(PrebuiltRuntimesDir)', '%(_PrebuiltNative.FullPath)'))</PackagePath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Pack>true</Pack>
+        <ThreeNetNative>true</ThreeNetNative>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup Condition="'@(_PrebuiltNative)' == '' and '@(_HostNative)' != '' and !@(Content->AnyHaveMetadataValue('ThreeNetNative', 'true'))">
+      <Content Include="@(_HostNative)">
+        <Link>runtimes\$(NativeRuntimeIdentifier)\native\$(NativeLibraryFileName)</Link>
+        <PackagePath>runtimes\$(NativeRuntimeIdentifier)\native\$(NativeLibraryFileName)</PackagePath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Pack>true</Pack>
+        <ThreeNetNative>true</ThreeNetNative>
+      </Content>
+    </ItemGroup>
+
+    <Warning Text="No native core found: expected $(RustTargetDir)$(NativeLibraryFileName) or prebuilt binaries in $(PrebuiltRuntimesDir). Run 'cargo build --release' in rust/threenet-core."
+             Condition="'@(_PrebuiltNative)' == '' and '@(_HostNative)' == ''" />
+  </Target>
+
+</Project>

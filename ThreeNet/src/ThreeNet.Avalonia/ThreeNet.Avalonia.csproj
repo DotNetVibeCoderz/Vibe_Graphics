@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ThreeNet.Avalonia</RootNamespace>
+    <AssemblyName>ThreeNet.Avalonia</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>ThreeNet.Avalonia</PackageId>
+    <Description>Avalonia UI control hosting a Three.Net scene, with an orbit camera controller.</Description>
+    <PackageTags>3d;avalonia;rendering;wgpu;control</PackageTags>
+    <!-- CS1591: styled property fields and control overrides are self explanatory. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThreeNet\ThreeNet.csproj" />
+  </ItemGroup>
+
+</Project>

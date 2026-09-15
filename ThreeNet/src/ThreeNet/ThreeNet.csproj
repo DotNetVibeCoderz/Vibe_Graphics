@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ThreeNet</RootNamespace>
+    <AssemblyName>ThreeNet</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>ThreeNet</PackageId>
+    <Description>Native multiplatform 3D library for .NET - a Rust (wgpu) rendering core with a Three.js style API.</Description>
+    <PackageTags>3d;graphics;rendering;wgpu;pbr;gamedev;rust</PackageTags>
+    <!-- CS1591: the interop layer is documented at the public API level. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ThreeNet.Native\ThreeNet.Native.csproj" />
+  </ItemGroup>
+
+</Project>
