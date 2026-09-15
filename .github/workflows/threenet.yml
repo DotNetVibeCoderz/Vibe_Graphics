@@ -116,4 +116,11 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           # --skip-duplicate keeps re-runs green; bump VersionPrefix to publish a new release.
-          dotnet nuget push "nupkgs/*.nupkg" --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+          # Native first so the managed packages never point at a missing dependency.
+          # Each .nupkg push also uploads the matching .snupkg symbols package.
+          $packages = Get-ChildItem nupkgs -Filter *.nupkg | Sort-Object { if ($_.Name -like 'ThreeNet.Native.*') { 0 } elseif ($_.Name -like 'ThreeNet.Avalonia.*') { 2 } else { 1 } }
+          foreach ($package in $packages) {
+            Write-Host "Pushing $($package.Name)"
+            dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { throw "push failed for $($package.Name)" }
+          }
