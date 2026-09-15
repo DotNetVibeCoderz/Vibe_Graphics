@@ -3,6 +3,17 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-16 - First release / Rilis pertama (0.1.0)
+
+- Published to NuGet: `ThreeNet`, `ThreeNet.Native` (win-x64, linux-x64, osx-arm64) and `ThreeNet.Avalonia` 0.1.0,
+  with symbol packages. Source moved into `DotNetVibeCoderz/Vibe_Graphics/ThreeNet`.
+- GitHub Actions (`.github/workflows/threenet.yml`): native core built and tested on Windows, Linux and macOS,
+  .NET tests, multi-RID pack, publish with the `NUGET_API_KEY` secret (`--skip-duplicate`; bump `VersionPrefix`
+  to release again).
+- Screenshots added to the README and docs.
+- Fixed: ThreeAppGen crashed when sending a chat message (transcript is now an `ObservableCollection`);
+  the last project reopens with its main file in the editor; dark syntax highlighting palette in both apps.
+
 ## 2026-09-15 - Three.js converter / Konverter Three.js
 
 - ThreeAppGen: **Tools > Convert Three.js project...** page (source folder, target Desktop/Web/Mobile,
