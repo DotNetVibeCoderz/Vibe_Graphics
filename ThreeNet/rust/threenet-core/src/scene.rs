@@ -269,6 +269,55 @@ impl Scene {
         Ok(id)
     }
 
+    /// Duplicates `source` and its whole subtree under `parent` (the root when
+    /// `None`). Clones share geometry, materials and textures with the
+    /// original, so placing an imported model many times costs no GPU memory
+    /// beyond the per-object transforms. Returns the id of the copied root.
+    pub fn clone_subtree(&mut self, source: NodeId, parent: Option<NodeId>) -> Result<NodeId> {
+        if source == self.root {
+            return Err(Error::InvalidArgument("the root node cannot be cloned".into()));
+        }
+        if !self.nodes.contains(source) {
+            return Err(Error::InvalidHandle("node"));
+        }
+        let parent = parent.unwrap_or(self.root);
+        if !self.nodes.contains(parent) {
+            return Err(Error::InvalidHandle("parent node"));
+        }
+
+        // Breadth first: (source node, parent of its copy).
+        let mut queue = std::collections::VecDeque::from([(source, parent)]);
+        let mut copied_root = None;
+        while let Some((original, new_parent)) = queue.pop_front() {
+            let Some(node) = self.nodes.get(original) else {
+                continue;
+            };
+            let copy = Node {
+                name: node.name.clone(),
+                transform: node.transform,
+                visible: node.visible,
+                layers: node.layers,
+                user_data: 0,
+                mesh: node.mesh,
+                light: node.light,
+                camera: node.camera,
+                parent: Some(new_parent),
+                children: Vec::new(),
+                world: Mat4::IDENTITY,
+                world_dirty: true,
+            };
+            let children = node.children.clone();
+            let id = self.nodes.insert(copy);
+            if let Some(parent_node) = self.nodes.get_mut(new_parent) {
+                parent_node.children.push(id);
+            }
+            copied_root.get_or_insert(id);
+            queue.extend(children.into_iter().map(|child| (child, id)));
+        }
+
+        copied_root.ok_or(Error::InvalidHandle("node"))
+    }
+
     /// Removes a node and its whole subtree. The root cannot be removed.
     pub fn remove_node(&mut self, id: NodeId) -> Result<()> {
         if id == self.root {
@@ -554,6 +603,26 @@ mod tests {
         scene.update_world_transforms();
         let world = scene.node(child).unwrap().world_matrix();
         assert_eq!(world.w_axis.truncate(), Vec3::new(1.0, 2.0, 0.0));
+    }
+
+    #[test]
+    fn cloning_copies_the_subtree_and_shares_meshes() {
+        let mut scene = Scene::new();
+        let geometry = scene.add_geometry(crate::geometry::primitives::cuboid(1.0, 1.0, 1.0, 1));
+        let material = scene.add_material(crate::material::Material::default());
+        let parent = scene.create_node(None).unwrap();
+        let child = scene.add_mesh(Some(parent), geometry, material).unwrap();
+        scene.node_mut(child).unwrap().transform.translation = Vec3::new(1.0, 2.0, 3.0);
+
+        let copy = scene.clone_subtree(parent, None).unwrap();
+        assert_ne!(copy, parent);
+        let copied_child = scene.node(copy).unwrap().children()[0];
+        assert_ne!(copied_child, child);
+        let node = scene.node(copied_child).unwrap();
+        assert_eq!(node.transform.translation, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(node.mesh.unwrap().geometry, geometry);
+        assert_eq!(node.parent(), Some(copy));
+        assert!(scene.clone_subtree(scene.root(), None).is_err());
     }
 
     #[test]

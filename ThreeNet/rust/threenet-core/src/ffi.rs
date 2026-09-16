@@ -691,6 +691,20 @@ pub unsafe extern "C" fn tn_scene_create_node(scene: *mut Scene, parent: u32) ->
     }
 }
 
+/// Deep copies `node` under `parent` (0 = root), sharing geometry and
+/// materials. Returns the new node id, or 0 on failure.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_clone(scene: *mut Scene, node: u32, parent: u32) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    match scene.clone_subtree(node, (parent != 0).then_some(parent)) {
+        Ok(id) => id,
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_scene_remove_node(scene: *mut Scene, node: u32) -> i32 {
     let scene = scene_ref!(scene);
@@ -1096,6 +1110,31 @@ pub unsafe extern "C" fn tn_node_set_light(
     };
     node_mut!(scene, node).light = Some((*desc).into());
     status::OK
+}
+
+/// Reads the light attached to `node`. Returns `INVALID_ARGUMENT` when the node
+/// carries no light, so callers can distinguish "no light" from a failure.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_get_light(
+    scene: *mut Scene,
+    node: u32,
+    out_desc: *mut TnLightDesc,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_desc.is_null() {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    }
+    match node_mut!(scene, node).light {
+        Some(light) => {
+            unsafe { *out_desc = light.into() };
+            status::OK
+        }
+        None => {
+            set_last_error("node has no light");
+            status::INVALID_ARGUMENT
+        }
+    }
 }
 
 #[unsafe(no_mangle)]

@@ -99,6 +99,11 @@ public sealed class Node : IEquatable<Node>
     /// <summary>Light attached to this node, if any.</summary>
     public Light? Light
     {
+        get
+        {
+            int status = NativeMethods.tn_node_get_light(Scene.Handle, Id, out NativeLightDesc desc);
+            return status == NativeStatus.Ok ? ThreeNet.Light.FromNative(desc) : null;
+        }
         set
         {
             if (value is { } light)
@@ -230,6 +235,14 @@ public sealed class Node : IEquatable<Node>
 
     /// <summary>Rotates the node by <paramref name="rotation"/> in local space.</summary>
     public void Rotate(Quaternion rotation) => Rotation = Quaternion.Normalize(Rotation * rotation);
+
+    /// <summary>
+    /// Copies this node and its whole subtree under <paramref name="parent"/>
+    /// (the scene root when null). The copy shares geometry, materials and
+    /// textures, so instancing an imported model costs almost nothing.
+    /// </summary>
+    public Node Clone(Node? parent = null) =>
+        new(Scene, NativeError.CheckHandle(NativeMethods.tn_node_clone(Scene.Handle, Id, parent?.Id ?? 0)));
 
     /// <summary>Removes this node and its subtree from the scene.</summary>
     public void Remove() => Scene.Remove(this);

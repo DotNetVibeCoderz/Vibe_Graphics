@@ -33,6 +33,12 @@ lights face -Z.
 `Tag`, `Light` (set), `Camera`, `Parent`, `Children`, `WorldMatrix`, `WorldPosition`,
 `CreateChild`, `AttachMesh`, `DetachMesh`, `SetTransform`, `LookAt(target, up?)`, `Translate`, `Rotate`, `Remove`.
 
+## Instancing and lights
+
+- `Node.Clone(parent)` copies a node and its subtree; the copy shares geometry, materials and textures, so
+  import a glTF once and clone it for every placement.
+- `Node.Light` has a getter: `node.Light = node.Light is { } l ? l with { Enabled = false } : null;`
+
 ## Resources
 
 - `Geometry`: `Counts`, `Update(vertices, indices)`, `ComputeNormals()`, `ComputeTangents()`, `Destroy()`.

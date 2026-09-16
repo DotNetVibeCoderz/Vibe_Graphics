@@ -95,6 +95,22 @@ public struct Light
         ShadowNormalBias = ShadowNormalBias,
         ShadowStrength = ShadowStrength,
     };
+
+    internal static Light FromNative(in NativeLightDesc desc) => new()
+    {
+        Type = (LightType)desc.Kind,
+        Color = desc.Color,
+        Intensity = desc.Intensity,
+        Range = desc.Range,
+        InnerConeAngle = desc.InnerConeAngle,
+        OuterConeAngle = desc.OuterConeAngle,
+        Size = new Vector2(desc.Width, desc.Height),
+        CastShadow = desc.CastShadow != 0,
+        Enabled = desc.Enabled != 0,
+        ShadowBias = desc.ShadowBias,
+        ShadowNormalBias = desc.ShadowNormalBias,
+        ShadowStrength = desc.ShadowStrength,
+    };
 }
 
 /// <summary>A perspective or orthographic camera, attached to a scene node.</summary>

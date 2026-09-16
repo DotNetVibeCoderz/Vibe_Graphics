@@ -1,0 +1,201 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tn="clr-namespace:ThreeNet.Avalonia;assembly=ThreeNet.Avalonia"
+        x:Class="HomeComplexCad.Views.MainWindow"
+        Title="Griya Nusantara Residence · Home Complex CAD Viewer"
+        Width="1480" Height="900" MinWidth="1100" MinHeight="680"
+        Background="#0E1116"
+        RequestedThemeVariant="Dark">
+
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="#E6EAEF" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="#8B96A3" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="Foreground" Value="#C9A96A" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="1.6" />
+      <Setter Property="Margin" Value="0,14,0,6" />
+    </Style>
+    <Style Selector="TextBlock.value">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#161B22" />
+      <Setter Property="BorderBrush" Value="#232A33" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14" />
+    </Style>
+    <Style Selector="Button.location">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="Button.location:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1F2630" />
+    </Style>
+    <Style Selector="ToggleButton.mode">
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="#1A2029" />
+    </Style>
+    <Style Selector="ToggleButton.mode:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="#C9A96A" />
+      <Setter Property="Foreground" Value="#15120C" />
+    </Style>
+    <Style Selector="Button.chip">
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="#1A2029" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Top bar -->
+    <Border Grid.Row="0" Background="#12161C" BorderBrush="#232A33" BorderThickness="0,0,0,1" Padding="16,10">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Border Width="34" Height="34" CornerRadius="8" Background="#C9A96A">
+            <TextBlock Text="GN" FontWeight="Bold" Foreground="#15120C" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel>
+            <TextBlock Text="Griya Nusantara Residence" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" Text="Home Complex CAD Viewer · Three.Net" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <ToggleButton x:Name="FirstPersonButton" Classes="mode" Content="🚶 Orang ke-1" />
+          <ToggleButton x:Name="ThirdPersonButton" Classes="mode" Content="🧍 Orang ke-3" />
+          <ToggleButton x:Name="FlyButton" Classes="mode" Content="🚁 Terbang" IsChecked="True" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,16,0">
+          <TextBlock x:Name="SunIcon" Text="☀" FontSize="18" VerticalAlignment="Center" />
+          <StackPanel Width="170">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="muted" Text="Simulasi waktu" />
+              <TextBlock x:Name="HourText" Grid.Column="1" Text="09:30" FontSize="12" FontWeight="SemiBold" />
+            </Grid>
+            <Slider x:Name="HourSlider" Minimum="0" Maximum="24" Value="9.5" Margin="0,-6,0,-8" />
+          </StackPanel>
+          <ToggleButton x:Name="PlayTimeButton" Classes="mode" Content="▶" ToolTip.Tip="Putar siklus hari" />
+          <Button x:Name="MorningButton" Classes="chip" Content="Pagi" />
+          <Button x:Name="NoonButton" Classes="chip" Content="Siang" />
+          <Button x:Name="EveningButton" Classes="chip" Content="Sore" />
+          <Button x:Name="NightButton" Classes="chip" Content="Malam" />
+        </StackPanel>
+
+        <ToggleButton Grid.Column="3" x:Name="QualityButton" Classes="mode" Content="✨ HQ" IsChecked="True" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="270,*,340">
+
+      <!-- Locations -->
+      <Border Grid.Column="0" Background="#12161C" BorderBrush="#232A33" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,*">
+          <StackPanel Margin="16,14,16,4">
+            <TextBlock Text="Jelajahi lokasi" FontSize="14" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" Text="Klik untuk terbang ke ruangan atau area" TextWrapping="Wrap" />
+          </StackPanel>
+          <ScrollViewer Grid.Row="1" Padding="8,0,8,12">
+            <StackPanel x:Name="LocationList" Spacing="1" />
+          </ScrollViewer>
+        </Grid>
+      </Border>
+
+      <!-- Viewport -->
+      <Grid Grid.Column="1">
+        <tn:ThreeNetView x:Name="Viewport" Focusable="True" />
+
+        <!-- Crosshair for first person look-at -->
+        <Border x:Name="Crosshair" Width="6" Height="6" CornerRadius="3" Background="#E6FFFFFF"
+                HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" IsVisible="False" />
+
+        <Border x:Name="LookBadge" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0"
+                Background="#CC12161C" CornerRadius="16" Padding="12,6" IsVisible="False" IsHitTestVisible="False">
+          <TextBlock x:Name="LookText" FontSize="12" />
+        </Border>
+
+        <Border HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14" Background="#B012161C" CornerRadius="8" Padding="10,6" IsHitTestVisible="False">
+          <TextBlock x:Name="HintText" Classes="muted" Text="WASD bergerak · Q/E naik-turun · Shift cepat · seret mouse kanan untuk melihat · klik bangunan untuk info" />
+        </Border>
+
+        <Border x:Name="LoadingOverlay" Background="#0E1116">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+            <TextBlock Text="Membangun kompleks perumahan…" FontSize="16" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" Text="Tekstur prosedural, model Rodin, rumah, taman dan fasilitas" HorizontalAlignment="Center" />
+            <ProgressBar IsIndeterminate="True" Width="260" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Property info -->
+      <Border Grid.Column="2" Background="#12161C" BorderBrush="#232A33" BorderThickness="1,0,0,0">
+        <ScrollViewer Padding="14">
+          <StackPanel>
+            <Border Classes="card">
+              <StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel>
+                    <TextBlock x:Name="InfoKind" Classes="muted" Text="Arahkan kamera ke bangunan" />
+                    <TextBlock x:Name="InfoName" Text="Informasi Bangunan" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Border x:Name="StatusChip" Grid.Column="1" CornerRadius="10" Padding="9,3" VerticalAlignment="Top" Background="#2A3340">
+                    <TextBlock x:Name="StatusText" FontSize="11" FontWeight="SemiBold" Text="-" />
+                  </Border>
+                </Grid>
+                <TextBlock x:Name="InfoPrice" FontSize="20" FontWeight="Bold" Foreground="#C9A96A" Margin="0,8,0,0" Text="" />
+                <TextBlock x:Name="InfoDescription" Classes="muted" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Text="Informasi tanah dan bangunan akan muncul untuk setiap rumah, ruko atau fasilitas yang sedang Anda lihat atau klik." />
+                <Button x:Name="VisitButton" Classes="chip" Content="Kunjungi lokasi →" Margin="0,10,0,0" IsVisible="False" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="section" Text="TANAH &amp; BANGUNAN" />
+            <Border Classes="card">
+              <Grid x:Name="SpecGrid" ColumnDefinitions="Auto,*" />
+            </Border>
+
+            <TextBlock Classes="section" Text="KONSTRUKSI" />
+            <Border Classes="card">
+              <Grid x:Name="BuildGrid" ColumnDefinitions="Auto,*" />
+            </Border>
+
+            <TextBlock Classes="section" Text="FASILITAS" />
+            <Border Classes="card">
+              <StackPanel x:Name="FeatureList" Spacing="4" />
+            </Border>
+
+            <TextBlock Classes="section" Text="RINGKASAN KAWASAN" />
+            <Border Classes="card">
+              <StackPanel x:Name="SummaryPanel" Spacing="4" />
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- Status bar -->
+    <Border Grid.Row="2" Background="#0B0E12" BorderBrush="#232A33" BorderThickness="0,1,0,0" Padding="14,5">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock x:Name="StatusBar" Classes="muted" Text="Siap" />
+        <TextBlock Grid.Column="1" Classes="muted" Text="Made by Gravicode Studios, led by Kang Fadhil · 3D assets: Rodin (Hyper3D)" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

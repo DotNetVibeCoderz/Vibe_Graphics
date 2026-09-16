@@ -31,3 +31,7 @@ PackageCredentials.txt
 # ---- OS ----
 Thumbs.db
 .DS_Store
+
+# ---- Local tooling (Rodin MCP config and its generation history) ----
+rodin.mcp.json
+Rodin3D_History.json

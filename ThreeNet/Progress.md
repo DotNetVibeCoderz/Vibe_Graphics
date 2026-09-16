@@ -3,6 +3,19 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-16 - Sample apps / Aplikasi contoh
+
+- **Motocross** (`samples/ThreeNet.Samples.MotoCross`): procedural circuit with jumps, whoops and berms, analytic
+  terrain, arcade suspension physics, dust particles, synthesised engine audio (winmm), lap timing, mini map,
+  day/night presets with floodlights and headlight. Rider and bike are a Rodin (Hyper3D) GLB.
+- **Home Complex CAD Viewer** (`apps/HomeComplexCad`): "Griya Nusantara Residence" with 12 houses (3 furnished show
+  units with kitchen, bathrooms, bedrooms, playroom, family room, private pool), shops, clubhouse pool, park,
+  sports court, street lamps and text signs; first person / third person / fly cameras with floor and wall
+  collision; location menu; continuous time of day; land & building information for the building in view.
+  Furniture, cars, trees and lamps generated with Rodin and instanced with `Node.Clone`.
+- Library: `Node.Clone` (`tn_node_clone`), `Node.Light` getter (`tn_node_get_light`); **ABI 3**.
+- Rodin MCP server registered for the project (`rodin.mcp.json` stays local and is git ignored).
+
 ## 2026-09-16 - Phase 2: shadows & SSAO / Bayangan & SSAO
 
 - **Shadow maps**: cascaded shadow maps for directional lights (1-4 cascades, sphere fit with texel snapping

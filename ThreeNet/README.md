@@ -17,8 +17,10 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | ![ThreeAppGen](docs/images/appgen-main.png) | ![Converter](docs/images/appgen-converter.png) |
 | **Converted Three.js app (desktop)** | **Hello Cube sample** |
 | ![Converted Crystal Garden](docs/images/converted-crystal-garden.png) | ![Hello Cube](docs/images/hello-cube.png) |
-| **Shadow maps + SSAO** | |
-| ![Shadows and SSAO](docs/images/gallery-shadows.png) | |
+| **Shadow maps + SSAO** | **Motocross sample (Rodin rider & bike)** |
+| ![Shadows and SSAO](docs/images/gallery-shadows.png) | ![Motocross](docs/images/moto-rodin.png) |
+| **Home Complex CAD - estate** | **Home Complex CAD - show unit interior** |
+| ![Estate](docs/images/cad-estate.png) | ![Interior](docs/images/cad-interior.png) |
 
 ---
 
@@ -34,7 +36,8 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
 | **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 13 samples |
 | **ThreeAppGen** - AI code editor (Jack - The Code Bender) + Three.js converter | `apps/ThreeAppGen` | working |
-| Samples | `samples/` | Hello Cube, Three.js demo project |
+| **Home Complex CAD Viewer** - housing estate explorer (interiors, day/night, land & building info) | `apps/HomeComplexCad` | working |
+| Samples | `samples/` | Hello Cube, **Motocross** game, Three.js demo project |
 | Tests | `tests/`, `rust/threenet-core/tests` | Rust, .NET and converter tests |
 
 ### Requirements
@@ -108,7 +111,8 @@ development log in [Progress.md](Progress.md).
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |
 | **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 13 contoh |
 | **ThreeAppGen** - editor kode AI (Jack - The Code Bender) + konverter Three.js | `apps/ThreeAppGen` | berjalan |
-| Contoh | `samples/` | Hello Cube, project demo Three.js |
+| **Home Complex CAD Viewer** - penjelajah kompleks perumahan (interior, siang/malam, info tanah & bangunan) | `apps/HomeComplexCad` | berjalan |
+| Contoh | `samples/` | Hello Cube, game **Motocross**, project demo Three.js |
 | Test | `tests/`, `rust/threenet-core/tests` | test Rust, .NET dan konverter |
 
 ### Kebutuhan

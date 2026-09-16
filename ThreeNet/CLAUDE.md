@@ -27,6 +27,8 @@ THREENET_LLM_KEYFILE=<key file> dotnet test tests/ThreeAppGen.Tests --filter "Ca
 dotnet run --project samples/ThreeNet.Samples.HelloCube
 dotnet run --project apps/ThreeGallery
 dotnet run --project apps/ThreeAppGen            # add `-- --convert <folder>` to open the Three.js converter page
+dotnet run --project samples/ThreeNet.Samples.MotoCross
+dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tamu" --group Dahlia --hour 20 --mode fp`
 ```
 
 ## Architecture (big picture)
@@ -46,6 +48,8 @@ dotnet run --project apps/ThreeAppGen            # add `-- --convert <folder>` t
   `runtimes/<rid>/native`. `NativeLibraryResolver` also probes the repo's `rust/target`.
 - `src/ThreeNet.Avalonia`: `ThreeNetView` renders offscreen (BGRA) and blits to a `WriteableBitmap`;
   `OrbitController`.
+- `samples/ThreeNet.Samples.MotoCross` and `apps/HomeComplexCad`: larger showcase apps; Rodin generated GLBs live
+  in their `Assets/` folders and are instanced with `Node.Clone`. The renderer keeps at most 64 enabled lights.
 - `apps/ThreeGallery`: each `Samples/*.cs` is embedded and shown as live source; register new samples in `SampleCatalog`.
 - `apps/ThreeAppGen`: Semantic Kernel (`Services/KernelFactory.cs` picks OpenAI / Azure OpenAI / Claude via
   Anthropic.SDK / Gemini / Ollama and builds provider-specific execution settings), `ChatService` (Jack, tools in
