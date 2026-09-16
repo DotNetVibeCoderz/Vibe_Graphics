@@ -17,6 +17,7 @@ pub mod math;
 pub mod raycast;
 pub mod renderer;
 pub mod scene;
+pub mod shader;
 pub mod texture;
 pub mod window;
 
@@ -26,7 +27,7 @@ pub use geometry::{Geometry, Vertex, primitives};
 pub use light::{Light, LightKind};
 pub use material::{AlphaMode, Material, ShadingModel};
 pub use math::Transform;
-pub use renderer::{Renderer, RendererConfig, ToneMapping};
+pub use renderer::{RenderPath, Renderer, RendererConfig, ToneMapping};
 pub use scene::{NodeId, Scene};
 
 /// Semantic version of the native core, exposed to the managed layer so it can
@@ -35,4 +36,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;

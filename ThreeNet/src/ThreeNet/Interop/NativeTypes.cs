@@ -69,6 +69,9 @@ internal struct NativeMaterialDesc
     public uint MetallicRoughnessTexture;
     public uint EmissiveTexture;
     public uint OcclusionTexture;
+    public uint Shader;
+    public Vector4 Custom0;
+    public Vector4 Custom1;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -140,6 +143,14 @@ internal struct NativeRendererDesc
     public float SsaoBias;
     public uint SsaoSamples;
     public float SsaoDirectStrength;
+    public uint RenderPath;
+    public int DepthOfField;
+    public float DofFocusDistance;
+    public float DofFocusRange;
+    public float DofMaxBlur;
+    public int MotionBlur;
+    public float MotionBlurStrength;
+    public uint MotionBlurSamples;
 }
 
 [StructLayout(LayoutKind.Sequential)]

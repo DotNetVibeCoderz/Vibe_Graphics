@@ -1,6 +1,8 @@
 //! The wgpu backed renderer: device management, the forward scene pass and the
 //! post-processing chain.
 
+pub mod deferred;
+pub mod effects;
 pub mod pipeline;
 pub mod post;
 pub mod resources;
@@ -15,6 +17,8 @@ use wgpu::util::DeviceExt;
 use crate::camera::Camera;
 use crate::error::{Error, Result};
 use crate::math::{Aabb, Frustum, Mat4, Vec3};
+use crate::renderer::deferred::Deferred;
+use crate::renderer::effects::{Effects, EffectsSettings};
 use crate::renderer::pipeline::{DEPTH_FORMAT, HDR_FORMAT, Layouts, PipelineCache, PipelineKey};
 use crate::renderer::post::{PostProcess, PostSettings};
 use crate::renderer::resources::{DefaultTextures, MipmapGenerator, ResourceCache};
@@ -26,6 +30,27 @@ use crate::renderer::uniforms::{
 use crate::scene::{GeometryId, MaterialId, NodeId, Scene};
 
 pub use crate::renderer::post::ToneMapping;
+
+/// How opaque geometry is lit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u32)]
+pub enum RenderPath {
+    /// Every fragment is lit while it is rasterised (supports MSAA).
+    #[default]
+    Forward = 0,
+    /// Surfaces go to a G-buffer and are lit once per pixel afterwards.
+    /// Cheaper with many lights and heavy overdraw; MSAA is not applied.
+    Deferred = 1,
+}
+
+impl RenderPath {
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            1 => RenderPath::Deferred,
+            _ => RenderPath::Forward,
+        }
+    }
+}
 
 /// Adapter selection hint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -87,6 +112,22 @@ pub struct RendererConfig {
     pub ssao_samples: u32,
     /// How much AO also darkens direct light (0-1).
     pub ssao_direct_strength: f32,
+    /// Forward or deferred shading.
+    pub render_path: RenderPath,
+    /// Bokeh depth of field around a focus plane.
+    pub depth_of_field: bool,
+    /// Distance from the camera that stays sharp, in world units.
+    pub dof_focus_distance: f32,
+    /// Depth band around the focus distance that stays sharp.
+    pub dof_focus_range: f32,
+    /// Largest blur radius in pixels (at 1080p; scaled with the target height).
+    pub dof_max_blur: f32,
+    /// Camera motion blur reconstructed from depth and the previous frame's view.
+    pub motion_blur: bool,
+    /// Fraction of the frame-to-frame motion that is smeared (1 = full shutter).
+    pub motion_blur_strength: f32,
+    /// Samples along the motion vector (4-32).
+    pub motion_blur_samples: u32,
 }
 
 impl RendererConfig {
@@ -138,6 +179,14 @@ impl Default for RendererConfig {
             ssao_bias: 0.025,
             ssao_samples: 16,
             ssao_direct_strength: 0.25,
+            render_path: RenderPath::Forward,
+            depth_of_field: false,
+            dof_focus_distance: 10.0,
+            dof_focus_range: 4.0,
+            dof_max_blur: 14.0,
+            motion_blur: false,
+            motion_blur_strength: 0.6,
+            motion_blur_samples: 12,
         }
     }
 }
@@ -221,6 +270,10 @@ pub struct Renderer {
     object_bind_group: wgpu::BindGroup,
     shadow_maps: ShadowMaps,
     ssao: Ssao,
+    deferred: Deferred,
+    effects: Effects,
+    /// View-projection of the previous frame, for motion blur.
+    previous_view_projection: Option<Mat4>,
     draw_items: Vec<DrawItem>,
     caster_items: Vec<CasterItem>,
     shadow_casters: Vec<ShadowCaster>,
@@ -352,10 +405,6 @@ impl Renderer {
 
         let samples = clamp_samples(&adapter, config.msaa_samples);
         let layouts = Layouts::new(&device);
-        let scene_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("threenet.shader.scene"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/scene.wgsl").into()),
-        });
         let post_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("threenet.shader.post"),
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/post.wgsl").into()),
@@ -365,7 +414,7 @@ impl Renderer {
             source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/post.wgsl").into()),
         });
 
-        let pipelines = PipelineCache::new(&device, &layouts, scene_shader, polygon_mode_line);
+        let pipelines = PipelineCache::new(&device, &layouts, polygon_mode_line);
         let mut post = PostProcess::new(&device, post_shader);
         post.resize(&device, width, height, config.bloom);
         let mipmaps = MipmapGenerator::new(&device, post_shader_for_mips);
@@ -394,6 +443,8 @@ impl Renderer {
         let object_bind_group = create_object_bind_group(&device, &layouts, &object_buffer);
         let shadow_maps = ShadowMaps::new(&device, &layouts.object);
         let ssao = Ssao::new(&device, &queue, &layouts.object);
+        let deferred = Deferred::new(&device, &layouts);
+        let effects = Effects::new(&device);
         let frame_bind_group = create_frame_bind_group(
             &device,
             &layouts,
@@ -442,6 +493,9 @@ impl Renderer {
             object_bind_group,
             shadow_maps,
             ssao,
+            deferred,
+            effects,
+            previous_view_projection: None,
             draw_items: Vec::new(),
             caster_items: Vec::new(),
             shadow_casters: Vec::new(),
@@ -587,12 +641,18 @@ impl Renderer {
         let shadow_settings = self.config.shadow_settings();
         let ssao_settings = self.config.ssao_settings();
         self.shadow_maps.ensure_size(&self.device, &shadow_settings);
+        let deferred = self.config.render_path == RenderPath::Deferred;
+        // The forward path needs the depth prepass for its camera effects too.
+        let camera_effects = self.config.depth_of_field || self.config.motion_blur;
+        let prepass = ssao_settings.enabled || (!deferred && camera_effects);
         self.ssao.ensure_targets(
             &self.device,
+            prepass,
             ssao_settings.enabled,
             self.config.width,
             self.config.height,
         );
+        self.deferred.ensure_targets(&self.device, deferred, self.config.width, self.config.height);
 
         // ------------------------------------------------------- gpu upload
         let mut encoder = self
@@ -634,7 +694,7 @@ impl Renderer {
             &self.object_bind_group,
         );
         self.stats.shadow_layers = self.shadow_maps.layer_count() as u32;
-        if ssao_settings.enabled {
+        if prepass {
             let items: Vec<GBufferItem> = self
                 .draw_items
                 .iter()
@@ -660,7 +720,119 @@ impl Renderer {
 
         // ------------------------------------------------------- scene pass
         let background = scene.environment.background;
-        {
+        let clear = wgpu::Color {
+            r: background[0] as f64,
+            g: background[1] as f64,
+            b: background[2] as f64,
+            a: background[3] as f64,
+        };
+
+        let (draw_calls, triangles) = if deferred && let Some(gbuffer) = self.deferred.targets() {
+            // 1. Geometry: opaque surfaces into the G-buffer.
+            let mut counts = {
+                let color_attachments: Vec<Option<wgpu::RenderPassColorAttachment>> = gbuffer
+                    .colors
+                    .iter()
+                    .map(|view| {
+                        Some(wgpu::RenderPassColorAttachment {
+                            view,
+                            depth_slice: None,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })
+                    })
+                    .collect();
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("threenet.pass.gbuffer_geometry"),
+                    color_attachments: &color_attachments,
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &gbuffer.depth,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                pass.set_bind_group(0, &self.frame_bind_group, &[]);
+                draw_scene_items(
+                    &mut pass,
+                    &self.device,
+                    &mut self.pipelines,
+                    &self.resources,
+                    &self.object_bind_group,
+                    scene,
+                    &self.draw_items,
+                    1,
+                    DrawFilter::DeferredOpaque,
+                )
+            };
+
+            // 2. Lighting: clear to the background, then shade covered pixels.
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("threenet.pass.deferred_clear"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.targets.hdr,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(clear),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            self.deferred.light(&mut encoder, &self.targets.hdr, &self.frame_bind_group);
+
+            // 3. Transparent (and unlit line/point) geometry, forward shaded on top.
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("threenet.pass.deferred_forward"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &self.targets.hdr,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &gbuffer.depth,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_bind_group(0, &self.frame_bind_group, &[]);
+            let late = draw_scene_items(
+                &mut pass,
+                &self.device,
+                &mut self.pipelines,
+                &self.resources,
+                &self.object_bind_group,
+                scene,
+                &self.draw_items,
+                1,
+                DrawFilter::DeferredForward,
+            );
+            counts.0 += late.0;
+            counts.1 += late.1;
+            counts
+        } else {
             let (color_view, resolve_target) = match &self.targets.msaa {
                 Some(msaa) => (msaa, Some(&self.targets.hdr)),
                 None => (&self.targets.hdr, None),
@@ -672,12 +844,7 @@ impl Renderer {
                     depth_slice: None,
                     resolve_target,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: background[0] as f64,
-                            g: background[1] as f64,
-                            b: background[2] as f64,
-                            a: background[3] as f64,
-                        }),
+                        load: wgpu::LoadOp::Clear(clear),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -693,53 +860,54 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-
             pass.set_bind_group(0, &self.frame_bind_group, &[]);
+            draw_scene_items(
+                &mut pass,
+                &self.device,
+                &mut self.pipelines,
+                &self.resources,
+                &self.object_bind_group,
+                scene,
+                &self.draw_items,
+                self.samples,
+                DrawFilter::All,
+            )
+        };
 
-            let mut draw_calls = 0u32;
-            let mut triangles = 0u32;
-            let mut current_material = u32::MAX;
-            let mut current_pipeline = None;
+        self.stats.draw_calls = draw_calls;
+        self.stats.triangles = triangles;
+        self.stats.lights = lights.len() as u32;
 
-            for item in &self.draw_items {
-                let Some(mesh) = self.resources.mesh(item.geometry) else {
-                    continue;
-                };
-                let Some(material) = scene.material(item.material) else {
-                    continue;
-                };
-                let Some(gpu_material) = self.resources.material(item.material) else {
-                    continue;
-                };
-
-                let key =
-                    PipelineKey::for_material(material, mesh.topology, self.samples, HDR_FORMAT);
-                if current_pipeline != Some(key) {
-                    let pipeline = self.pipelines.get(&self.device, key);
-                    pass.set_pipeline(pipeline);
-                    current_pipeline = Some(key);
-                }
-                if current_material != item.material {
-                    pass.set_bind_group(1, &gpu_material.bind_group, &[]);
-                    current_material = item.material;
-                }
-                pass.set_bind_group(2, &self.object_bind_group, &[item.object_offset]);
-                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                match &mesh.index_buffer {
-                    Some(index_buffer) => {
-                        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                        pass.draw_indexed(0..mesh.index_count, 0, 0..1);
-                    }
-                    None => pass.draw(0..mesh.vertex_count, 0..1),
-                }
-                draw_calls += 1;
-                triangles += mesh.index_count / 3;
-            }
-
-            self.stats.draw_calls = draw_calls;
-            self.stats.triangles = triangles;
-            self.stats.lights = lights.len() as u32;
-        }
+        // --------------------------------------------------- camera effects
+        let view_projection = projection * view;
+        let effects_settings = EffectsSettings {
+            depth_of_field: self.config.depth_of_field,
+            focus_distance: self.config.dof_focus_distance,
+            focus_range: self.config.dof_focus_range,
+            max_blur: self.config.dof_max_blur,
+            motion_blur: self.config.motion_blur,
+            motion_strength: self.config.motion_blur_strength,
+            motion_samples: self.config.motion_blur_samples,
+            projection,
+            view_projection,
+            previous_view_projection: self.previous_view_projection.unwrap_or(view_projection),
+        };
+        self.previous_view_projection = Some(view_projection);
+        let effects_depth = if deferred {
+            self.deferred.targets().map(|t| &t.depth)
+        } else {
+            self.ssao.depth_view()
+        };
+        let hdr_source = self.effects.run(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &self.targets.hdr,
+            effects_depth,
+            self.config.width,
+            self.config.height,
+            &effects_settings,
+        );
 
         // ---------------------------------------------------- post + present
         let settings = PostSettings {
@@ -779,7 +947,7 @@ impl Renderer {
                     &self.device,
                     &self.queue,
                     &mut encoder,
-                    &self.targets.hdr,
+                    hdr_source,
                     &view,
                     self.output_format,
                     settings,
@@ -797,7 +965,7 @@ impl Renderer {
                     &self.device,
                     &self.queue,
                     &mut encoder,
-                    &self.targets.hdr,
+                    hdr_source,
                     output,
                     self.output_format,
                     settings,
@@ -1226,6 +1394,82 @@ impl Renderer {
     pub fn instance(&self) -> &wgpu::Instance {
         &self.instance
     }
+}
+
+/// Which draw items a scene pass renders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DrawFilter {
+    /// Forward rendering: everything.
+    All,
+    /// Deferred geometry pass: opaque triangle meshes.
+    DeferredOpaque,
+    /// Deferred late pass: transparent meshes, lines and points.
+    DeferredForward,
+}
+
+/// Issues the draw calls of one scene pass. Returns (draw calls, triangles).
+#[allow(clippy::too_many_arguments)]
+fn draw_scene_items(
+    pass: &mut wgpu::RenderPass<'_>,
+    device: &wgpu::Device,
+    pipelines: &mut PipelineCache,
+    resources: &ResourceCache,
+    object_bind_group: &wgpu::BindGroup,
+    scene: &Scene,
+    items: &[DrawItem],
+    samples: u32,
+    filter: DrawFilter,
+) -> (u32, u32) {
+    let mut draw_calls = 0u32;
+    let mut triangles = 0u32;
+    let mut current_material = u32::MAX;
+    let mut current_pipeline = None;
+
+    for item in items {
+        let Some(mesh) = resources.mesh(item.geometry) else {
+            continue;
+        };
+        let Some(material) = scene.material(item.material) else {
+            continue;
+        };
+        let Some(gpu_material) = resources.material(item.material) else {
+            continue;
+        };
+
+        let deferrable = !item.transparent && mesh.topology == crate::geometry::Topology::TriangleList;
+        match filter {
+            DrawFilter::DeferredOpaque if !deferrable => continue,
+            DrawFilter::DeferredForward if deferrable => continue,
+            _ => {}
+        }
+
+        let custom = material.shader.and_then(|id| scene.shader(id));
+        let mut key = PipelineKey::for_material(material, mesh.topology, samples, HDR_FORMAT, custom);
+        if filter == DrawFilter::DeferredOpaque {
+            key = key.gbuffer();
+        }
+        if current_pipeline != Some(key) {
+            pass.set_pipeline(pipelines.get(device, key, custom));
+            current_pipeline = Some(key);
+        }
+        if current_material != item.material {
+            pass.set_bind_group(1, &gpu_material.bind_group, &[]);
+            current_material = item.material;
+        }
+        pass.set_bind_group(2, object_bind_group, &[item.object_offset]);
+        pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        match &mesh.index_buffer {
+            Some(index_buffer) => {
+                pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+            }
+            None => pass.draw(0..mesh.vertex_count, 0..1),
+        }
+        draw_calls += 1;
+        triangles += mesh.index_count / 3;
+    }
+
+    (draw_calls, triangles)
 }
 
 /// Creates the wgpu instance with the platform default backends.

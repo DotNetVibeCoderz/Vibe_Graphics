@@ -61,6 +61,15 @@ public enum PowerPreference : uint
     LowPower = 1,
 }
 
+/// <summary>How opaque geometry is lit.</summary>
+public enum RenderPath : uint
+{
+    /// <summary>Every fragment is lit while rasterised; supports MSAA.</summary>
+    Forward = 0,
+    /// <summary>G-buffer then one lighting pass per pixel; MSAA is not applied.</summary>
+    Deferred = 1,
+}
+
 /// <summary>Pixel format of a texture upload.</summary>
 public enum TextureFormat : uint
 {

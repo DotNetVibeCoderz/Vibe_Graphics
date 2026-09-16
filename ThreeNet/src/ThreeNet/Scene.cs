@@ -221,6 +221,20 @@ public sealed class Scene : IDisposable
             Roughness = roughness,
         });
 
+    // -------------------------------------------------------------- shaders
+
+    /// <summary>
+    /// Compiles custom shader hooks (see <see cref="Shader"/>). Throws a
+    /// <see cref="ThreeNetException"/> carrying the compiler message when the
+    /// source does not translate or validate.
+    /// </summary>
+    public Shader CreateShader(string source, ShaderLanguage language = ShaderLanguage.Wgsl, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        uint id = NativeMethods.tn_shader_create(Handle, (uint)language, source, name);
+        return new Shader(this, NativeError.CheckHandle(id));
+    }
+
     // ------------------------------------------------------------- textures
 
     /// <summary>Loads a PNG / JPEG / BMP / TGA / HDR image from disk.</summary>

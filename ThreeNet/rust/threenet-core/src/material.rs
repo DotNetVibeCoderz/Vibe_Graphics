@@ -2,7 +2,7 @@
 //! selected per draw call through a specialisation constant-like flag.
 
 use crate::math::{Vec2, Vec3, Vec4};
-use crate::scene::TextureId;
+use crate::scene::{ShaderId, TextureId};
 
 /// Shading models available out of the box, mirroring the Three.js material set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -115,6 +115,10 @@ pub struct Material {
     /// Rendering order override for transparent objects (higher renders later).
     pub render_order: i32,
     pub textures: MaterialTextures,
+    /// Custom shader hooks (`None` = built-in shading).
+    pub shader: Option<ShaderId>,
+    /// Eight free parameters readable by custom shaders as `custom0` / `custom1`.
+    pub custom: [f32; 8],
     pub(crate) version: u32,
 }
 
@@ -143,6 +147,8 @@ impl Default for Material {
             wireframe: false,
             render_order: 0,
             textures: MaterialTextures::default(),
+            shader: None,
+            custom: [0.0; 8],
             version: 1,
         }
     }

@@ -7,6 +7,7 @@ use crate::geometry::Geometry;
 use crate::light::Light;
 use crate::material::Material;
 use crate::math::{Aabb, Mat4, Transform, Vec3};
+use crate::shader::CustomShader;
 use crate::texture::Texture;
 
 /// Generic slot arena. Identifiers are 1-based so that `0` is a null handle on
@@ -99,6 +100,7 @@ pub type NodeId = u32;
 pub type GeometryId = u32;
 pub type MaterialId = u32;
 pub type TextureId = u32;
+pub type ShaderId = u32;
 
 /// Geometry + material pair rendered at a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -206,6 +208,7 @@ pub struct Scene {
     geometries: Arena<Geometry>,
     materials: Arena<Material>,
     textures: Arena<Texture>,
+    shaders: Arena<CustomShader>,
     root: NodeId,
     /// Camera used when the caller does not pass one explicitly.
     active_camera: Option<NodeId>,
@@ -230,6 +233,7 @@ impl Scene {
             geometries: Arena::default(),
             materials: Arena::default(),
             textures: Arena::default(),
+            shaders: Arena::default(),
             root,
             active_camera: None,
         }
@@ -531,6 +535,32 @@ impl Scene {
     #[inline]
     pub fn texture_mut(&mut self, id: TextureId) -> Option<&mut Texture> {
         self.textures.get_mut(id)
+    }
+
+    // -------------------------------------------------------------- shaders
+
+    pub fn add_shader(&mut self, shader: CustomShader) -> ShaderId {
+        self.shaders.insert(shader)
+    }
+
+    /// Replaces the source of an existing shader; materials using it pick the
+    /// new version up on the next frame.
+    pub fn replace_shader(&mut self, id: ShaderId, mut shader: CustomShader) -> bool {
+        let Some(existing) = self.shaders.get_mut(id) else {
+            return false;
+        };
+        shader.version = existing.version.wrapping_add(1).max(1);
+        *existing = shader;
+        true
+    }
+
+    pub fn remove_shader(&mut self, id: ShaderId) -> bool {
+        self.shaders.remove(id).is_some()
+    }
+
+    #[inline]
+    pub fn shader(&self, id: ShaderId) -> Option<&CustomShader> {
+        self.shaders.get(id)
     }
 
     #[inline]

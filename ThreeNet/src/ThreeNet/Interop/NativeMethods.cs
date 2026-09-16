@@ -218,6 +218,18 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint tn_texture_load_file(nint scene, string path, int srgb);
 
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint tn_shader_create(nint scene, uint language, string source, string? name);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_shader_update(nint scene, uint shader, uint language, string source);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_shader_get_wgsl(nint scene, uint shader, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_shader_destroy(nint scene, uint shader);
+
     [LibraryImport(Library)]
     internal static partial uint tn_texture_load_memory(nint scene, byte* bytes, uint length, int srgb);
 

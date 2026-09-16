@@ -14,6 +14,8 @@
 use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char, c_void};
 
+use crate::renderer::RenderPath;
+use crate::shader::{CustomShader, ShaderLanguage};
 use crate::camera::{Camera, Projection};
 use crate::error::Error;
 use crate::geometry::{Geometry, Topology, Vertex, primitives};
@@ -278,6 +280,10 @@ pub struct TnMaterialDesc {
     pub metallic_roughness_texture: u32,
     pub emissive_texture: u32,
     pub occlusion_texture: u32,
+    /// Custom shader id, `0` for the built-in shading.
+    pub shader: u32,
+    /// Free parameters exposed to custom shaders as `custom0` and `custom1`.
+    pub custom: [f32; 8],
 }
 
 impl Default for TnMaterialDesc {
@@ -314,6 +320,8 @@ impl From<Material> for TnMaterialDesc {
             metallic_roughness_texture: value.textures.metallic_roughness.unwrap_or(0),
             emissive_texture: value.textures.emissive.unwrap_or(0),
             occlusion_texture: value.textures.occlusion.unwrap_or(0),
+            shader: value.shader.unwrap_or(0),
+            custom: value.custom,
         }
     }
 }
@@ -348,6 +356,8 @@ impl TnMaterialDesc {
             emissive: slot(self.emissive_texture),
             occlusion: slot(self.occlusion_texture),
         };
+        material.shader = slot(self.shader);
+        material.custom = self.custom;
         material.touch();
     }
 }
@@ -525,6 +535,14 @@ pub struct TnRendererDesc {
     pub ssao_bias: f32,
     pub ssao_samples: u32,
     pub ssao_direct_strength: f32,
+    pub render_path: u32,
+    pub depth_of_field: i32,
+    pub dof_focus_distance: f32,
+    pub dof_focus_range: f32,
+    pub dof_max_blur: f32,
+    pub motion_blur: i32,
+    pub motion_blur_strength: f32,
+    pub motion_blur_samples: u32,
 }
 
 impl From<TnRendererDesc> for RendererConfig {
@@ -553,6 +571,14 @@ impl From<TnRendererDesc> for RendererConfig {
             ssao_bias: value.ssao_bias,
             ssao_samples: value.ssao_samples,
             ssao_direct_strength: value.ssao_direct_strength,
+            render_path: RenderPath::from_u32(value.render_path),
+            depth_of_field: value.depth_of_field != 0,
+            dof_focus_distance: value.dof_focus_distance,
+            dof_focus_range: value.dof_focus_range,
+            dof_max_blur: value.dof_max_blur,
+            motion_blur: value.motion_blur != 0,
+            motion_blur_strength: value.motion_blur_strength,
+            motion_blur_samples: value.motion_blur_samples,
         }
     }
 }
@@ -1566,6 +1592,92 @@ pub unsafe extern "C" fn tn_texture_set_sampler(
             set_last_error("invalid texture handle");
             status::INVALID_HANDLE
         }
+    }
+}
+
+// ------------------------------------------------------------------ shaders
+
+/// Creates a custom shader from WGSL (`language` 0) or GLSL (1) hook
+/// functions. Returns 0 and sets the last error (with the compiler message)
+/// when the source does not translate or validate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_shader_create(
+    scene: *mut Scene,
+    language: u32,
+    source: *const c_char,
+    name: *const c_char,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let Some(source) = (unsafe { str_from_ptr(source) }) else {
+        set_last_error("shader source is null or not valid UTF-8");
+        return 0;
+    };
+    let name = unsafe { str_from_ptr(name) }.unwrap_or("custom");
+    match CustomShader::new(name, ShaderLanguage::from_u32(language), source) {
+        Ok(shader) => scene.add_shader(shader),
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+/// Replaces the source of a shader; every material using it switches on the
+/// next frame. On error the previous version stays active.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_shader_update(
+    scene: *mut Scene,
+    shader: u32,
+    language: u32,
+    source: *const c_char,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(source) = (unsafe { str_from_ptr(source) }) else {
+        set_last_error("shader source is null or not valid UTF-8");
+        return status::NULL_POINTER;
+    };
+    let name = match scene.shader(shader) {
+        Some(existing) => existing.name.clone(),
+        None => {
+            set_last_error("invalid shader handle");
+            return status::INVALID_HANDLE;
+        }
+    };
+    match CustomShader::new(name, ShaderLanguage::from_u32(language), source) {
+        Ok(compiled) => {
+            scene.replace_shader(shader, compiled);
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Copies the WGSL hooks a shader compiled to (useful to inspect GLSL output).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_shader_get_wgsl(
+    scene: *mut Scene,
+    shader: u32,
+    buffer: *mut c_char,
+    capacity: i32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.shader(shader) {
+        Some(existing) => unsafe { copy_string(&existing.hooks, buffer, capacity) },
+        None => {
+            set_last_error("invalid shader handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_shader_destroy(scene: *mut Scene, shader: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.remove_shader(shader) {
+        status::OK
+    } else {
+        set_last_error("invalid shader handle");
+        status::INVALID_HANDLE
     }
 }
 

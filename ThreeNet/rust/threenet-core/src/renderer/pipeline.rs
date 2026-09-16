@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::geometry::{Topology, Vertex};
 use crate::material::{CullMode, Material};
+use crate::shader::{CustomShader, ShaderPass, compose};
 use crate::renderer::uniforms::{
     FrameUniform, LightsUniform, MaterialUniform, ObjectUniform, ShadowUniform,
 };
@@ -133,9 +134,22 @@ impl Layouts {
     }
 }
 
+/// Which pass a scene pipeline renders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PipelinePass {
+    /// Lit colour into the HDR target.
+    Forward,
+    /// Surface attributes into the deferred G-buffer.
+    GBuffer,
+}
+
+/// Formats of the five deferred G-buffer targets.
+pub const GBUFFER_FORMATS: [wgpu::TextureFormat; 5] = [wgpu::TextureFormat::Rgba16Float; 5];
+
 /// Everything that forces a distinct pipeline object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PipelineKey {
+    pub pass: PipelinePass,
     pub topology: Topology,
     pub cull: CullMode,
     pub blend: bool,
@@ -144,6 +158,9 @@ pub struct PipelineKey {
     pub wireframe: bool,
     pub samples: u32,
     pub format: wgpu::TextureFormat,
+    /// Custom shader id (0 = built-in) and its version.
+    pub shader: u32,
+    pub shader_version: u32,
 }
 
 impl PipelineKey {
@@ -152,9 +169,12 @@ impl PipelineKey {
         topology: Topology,
         samples: u32,
         format: wgpu::TextureFormat,
+        shader: Option<&CustomShader>,
     ) -> Self {
         let blend = material.is_transparent();
+        let shader_id = if shader.is_some() { material.shader.unwrap_or(0) } else { 0 };
         Self {
+            pass: PipelinePass::Forward,
             topology,
             cull: material.cull_mode,
             blend,
@@ -164,25 +184,31 @@ impl PipelineKey {
             wireframe: material.wireframe,
             samples,
             format,
+            shader: shader_id,
+            shader_version: shader.map_or(0, CustomShader::version),
         }
+    }
+
+    /// The deferred G-buffer variant of this key (single sample, no blending).
+    pub fn gbuffer(mut self) -> Self {
+        self.pass = PipelinePass::GBuffer;
+        self.blend = false;
+        self.samples = 1;
+        self.format = GBUFFER_FORMATS[0];
+        self
     }
 }
 
 #[derive(Debug)]
 pub struct PipelineCache {
-    shader: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
+    modules: HashMap<(u32, u32, PipelinePass), wgpu::ShaderModule>,
     pipelines: HashMap<PipelineKey, wgpu::RenderPipeline>,
     polygon_mode_line: bool,
 }
 
 impl PipelineCache {
-    pub fn new(
-        device: &wgpu::Device,
-        layouts: &Layouts,
-        shader: wgpu::ShaderModule,
-        polygon_mode_line: bool,
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, layouts: &Layouts, polygon_mode_line: bool) -> Self {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("threenet.pipeline_layout.scene"),
             bind_group_layouts: &[
@@ -193,8 +219,8 @@ impl PipelineCache {
             immediate_size: 0,
         });
         Self {
-            shader,
             pipeline_layout,
+            modules: HashMap::new(),
             pipelines: HashMap::new(),
             polygon_mode_line,
         }
@@ -204,30 +230,72 @@ impl PipelineCache {
         self.pipelines.clear();
     }
 
-    pub fn get(&mut self, device: &wgpu::Device, key: PipelineKey) -> &wgpu::RenderPipeline {
+    /// Returns (and builds on first use) the pipeline for `key`. `shader` must be
+    /// the custom shader named by `key.shader`, if any.
+    pub fn get(
+        &mut self,
+        device: &wgpu::Device,
+        key: PipelineKey,
+        shader: Option<&CustomShader>,
+    ) -> &wgpu::RenderPipeline {
+        let module_key = (key.shader, key.shader_version, key.pass);
+        if !self.modules.contains_key(&module_key) {
+            let pass = match key.pass {
+                PipelinePass::Forward => ShaderPass::Forward,
+                PipelinePass::GBuffer => ShaderPass::DeferredGBuffer,
+            };
+            let source = compose(pass, shader.map(|s| s.hooks.as_str()));
+            let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(if key.shader == 0 {
+                    "threenet.shader.scene"
+                } else {
+                    "threenet.shader.custom"
+                }),
+                source: wgpu::ShaderSource::Wgsl(source.into()),
+            });
+            // Old versions of an edited custom shader are dropped.
+            self.modules
+                .retain(|(id, version, _), _| *id != key.shader || *version == key.shader_version);
+            self.pipelines
+                .retain(|k, _| k.shader != key.shader || k.shader_version == key.shader_version);
+            self.modules.insert(module_key, module);
+        }
+
         let polygon_mode_line = self.polygon_mode_line;
-        let shader = &self.shader;
+        let module = &self.modules[&module_key];
         let pipeline_layout = &self.pipeline_layout;
         self.pipelines.entry(key).or_insert_with(|| {
             let wireframe = key.wireframe && polygon_mode_line;
             let blend = key.blend.then_some(wgpu::BlendState::ALPHA_BLENDING);
+            let forward_target = [Some(wgpu::ColorTargetState {
+                format: key.format,
+                blend,
+                write_mask: wgpu::ColorWrites::ALL,
+            })];
+            let gbuffer_targets = GBUFFER_FORMATS.map(|format| {
+                Some(wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })
+            });
+            let (entry_point, targets): (&str, &[Option<wgpu::ColorTargetState>]) = match key.pass {
+                PipelinePass::Forward => ("fs_main", &forward_target),
+                PipelinePass::GBuffer => ("fs_gbuffer", &gbuffer_targets),
+            };
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("threenet.pipeline.scene"),
                 layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
-                    module: shader,
+                    module,
                     entry_point: Some("vs_main"),
                     buffers: &[Some(Vertex::LAYOUT)],
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: shader,
-                    entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: key.format,
-                        blend,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
+                    module,
+                    entry_point: Some(entry_point),
+                    targets,
                     compilation_options: Default::default(),
                 }),
                 primitive: wgpu::PrimitiveState {

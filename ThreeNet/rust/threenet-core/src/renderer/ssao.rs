@@ -87,6 +87,9 @@ pub struct Ssao {
     linear_sampler: wgpu::Sampler,
     kernel: [[f32; 4]; MAX_SSAO_SAMPLES],
     targets: Option<SizedTargets>,
+    /// False when only the normal/depth prepass is wanted (depth of field,
+    /// motion blur) and the occlusion passes are skipped.
+    occlusion: bool,
     generation: u64,
 }
 
@@ -318,6 +321,7 @@ impl Ssao {
             linear_sampler,
             kernel,
             targets: None,
+            occlusion: false,
             generation: 0,
         }
     }
@@ -331,7 +335,13 @@ impl Ssao {
     /// The blurred occlusion texture, once targets exist.
     #[inline]
     pub fn ao_view(&self) -> Option<&wgpu::TextureView> {
-        self.targets.as_ref().map(|t| &t.ao)
+        self.targets.as_ref().filter(|_| self.occlusion).map(|t| &t.ao)
+    }
+
+    /// Single sample depth of the prepass, for effects that need scene depth.
+    #[inline]
+    pub fn depth_view(&self) -> Option<&wgpu::TextureView> {
+        self.targets.as_ref().map(|t| &t.depth)
     }
 
     #[inline]
@@ -344,9 +354,14 @@ impl Ssao {
         &mut self,
         device: &wgpu::Device,
         enabled: bool,
+        occlusion: bool,
         width: u32,
         height: u32,
     ) {
+        if occlusion != self.occlusion {
+            self.occlusion = occlusion;
+            self.generation += 1;
+        }
         if !enabled {
             if self.targets.take().is_some() {
                 self.generation += 1;
@@ -541,7 +556,7 @@ impl Ssao {
                     view: &targets.depth,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
@@ -569,6 +584,10 @@ impl Ssao {
                 }
                 draw_calls += 1;
             }
+        }
+
+        if !self.occlusion {
+            return draw_calls;
         }
 
         // ----------------------------------------------------- occlusion + blur

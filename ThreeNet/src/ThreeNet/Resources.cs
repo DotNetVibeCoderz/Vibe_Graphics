@@ -198,6 +198,12 @@ public struct MaterialOptions
     public Texture? MetallicRoughnessMap;
     public Texture? EmissiveMap;
     public Texture? OcclusionMap;
+    /// <summary>Custom shader hooks; null uses the built-in shading.</summary>
+    public Shader? Shader;
+    /// <summary>Free parameters readable by custom shaders as <c>custom0</c>.</summary>
+    public Vector4 Custom0;
+    /// <summary>Free parameters readable by custom shaders as <c>custom1</c>.</summary>
+    public Vector4 Custom1;
 
     /// <summary>Sensible physically based defaults.</summary>
     public static MaterialOptions Default => new();
@@ -269,6 +275,9 @@ public struct MaterialOptions
         MetallicRoughnessTexture = MetallicRoughnessMap?.Id ?? 0,
         EmissiveTexture = EmissiveMap?.Id ?? 0,
         OcclusionTexture = OcclusionMap?.Id ?? 0,
+        Shader = Shader?.Id ?? 0,
+        Custom0 = Custom0,
+        Custom1 = Custom1,
     };
 
     internal static MaterialOptions FromNative(Scene scene, in NativeMaterialDesc desc)
@@ -305,6 +314,9 @@ public struct MaterialOptions
         MetallicRoughnessMap = Slot(desc.MetallicRoughnessTexture),
         EmissiveMap = Slot(desc.EmissiveTexture),
         OcclusionMap = Slot(desc.OcclusionTexture),
+        Shader = desc.Shader == 0 ? null : new Shader(scene, desc.Shader),
+        Custom0 = desc.Custom0,
+        Custom1 = desc.Custom1,
         };
     }
 }

@@ -44,6 +44,22 @@ public struct RendererOptions
     public int SsaoSamples;
     /// <summary>How much occlusion also darkens direct light (0 = ambient only, 1 = everything).</summary>
     public float SsaoDirectStrength;
+    /// <summary>Forward (default, supports MSAA) or deferred shading (cheaper with many lights).</summary>
+    public RenderPath RenderPath;
+    /// <summary>Bokeh depth of field around <see cref="DofFocusDistance"/>.</summary>
+    public bool DepthOfField;
+    /// <summary>Distance from the camera that stays sharp, in world units.</summary>
+    public float DofFocusDistance;
+    /// <summary>Depth band around the focus distance that stays sharp.</summary>
+    public float DofFocusRange;
+    /// <summary>Largest blur radius in pixels (at 1080p, scaled with the target height).</summary>
+    public float DofMaxBlur;
+    /// <summary>Camera motion blur reconstructed from depth and the previous frame's view.</summary>
+    public bool MotionBlur;
+    /// <summary>Fraction of the frame-to-frame motion that is smeared (1 = full shutter).</summary>
+    public float MotionBlurStrength;
+    /// <summary>Samples along the motion vector (4-32).</summary>
+    public int MotionBlurSamples;
 
     /// <summary>Balanced defaults: 720p, vsync on, 4x MSAA, ACES tone mapping.</summary>
     public static RendererOptions Default => new();
@@ -73,6 +89,14 @@ public struct RendererOptions
         SsaoBias = 0.025f;
         SsaoSamples = 16;
         SsaoDirectStrength = 0.25f;
+        RenderPath = RenderPath.Forward;
+        DepthOfField = false;
+        DofFocusDistance = 10f;
+        DofFocusRange = 4f;
+        DofMaxBlur = 14f;
+        MotionBlur = false;
+        MotionBlurStrength = 0.6f;
+        MotionBlurSamples = 12;
     }
 
     internal NativeRendererDesc ToNative() => new()
@@ -100,6 +124,14 @@ public struct RendererOptions
         SsaoBias = SsaoBias,
         SsaoSamples = (uint)Math.Clamp(SsaoSamples, 4, 32),
         SsaoDirectStrength = SsaoDirectStrength,
+        RenderPath = (uint)RenderPath,
+        DepthOfField = DepthOfField ? 1 : 0,
+        DofFocusDistance = DofFocusDistance,
+        DofFocusRange = DofFocusRange,
+        DofMaxBlur = DofMaxBlur,
+        MotionBlur = MotionBlur ? 1 : 0,
+        MotionBlurStrength = MotionBlurStrength,
+        MotionBlurSamples = (uint)Math.Clamp(MotionBlurSamples, 4, 32),
     };
 }
 

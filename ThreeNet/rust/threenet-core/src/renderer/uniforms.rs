@@ -9,7 +9,7 @@ use crate::math::{Mat3, Mat4, Vec3, Vec4};
 use crate::scene::Environment;
 
 /// Maximum number of lights uploaded per frame; matches `MAX_LIGHTS` in the shader.
-pub const MAX_LIGHTS: usize = 64;
+pub const MAX_LIGHTS: usize = 128;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -155,6 +155,9 @@ pub struct MaterialUniform {
     pub texture_flags: [f32; 4],
     /// `x` = occlusion map flag, `yzw` reserved.
     pub texture_flags2: [f32; 4],
+    /// Free parameters for custom shaders.
+    pub custom0: [f32; 4],
+    pub custom1: [f32; 4],
 }
 
 impl Default for MaterialUniform {
@@ -201,6 +204,8 @@ impl From<&Material> for MaterialUniform {
                 flag(material.textures.emissive.is_some()),
             ],
             texture_flags2: [flag(material.textures.occlusion.is_some()), 0.0, 0.0, 0.0],
+            custom0: [material.custom[0], material.custom[1], material.custom[2], material.custom[3]],
+            custom1: [material.custom[4], material.custom[5], material.custom[6], material.custom[7]],
         }
     }
 }
