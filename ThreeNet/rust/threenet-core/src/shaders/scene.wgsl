@@ -4,6 +4,7 @@
 
 const PI: f32 = 3.141592653589793;
 const MAX_LIGHTS: u32 = 64u;
+const MAX_SHADOW_LAYERS: u32 = 8u;
 
 const SHADING_BASIC: f32 = 0.0;
 const SHADING_LAMBERT: f32 = 1.0;
@@ -33,6 +34,8 @@ struct Frame {
     fog_params: vec4<f32>,
     // x = light count, y = has environment map, z = near, w = far
     misc: vec4<f32>,
+    // xy = target size, z = SSAO enabled, w = SSAO strength on direct light
+    screen: vec4<f32>,
 };
 
 struct Light {
@@ -44,6 +47,10 @@ struct Light {
     color: vec4<f32>,
     // x = cos(inner), y = cos(outer), z = width, w = height
     params: vec4<f32>,
+    // x = first shadow layer (-1 = none), y = cascades, z = depth bias, w = normal bias
+    shadow: vec4<f32>,
+    // x = shadow strength
+    shadow_extra: vec4<f32>,
 };
 
 struct LightBuffer {
@@ -71,12 +78,28 @@ struct MaterialData {
 struct ObjectData {
     model: mat4x4<f32>,
     normal_matrix: mat4x4<f32>,
+    // x = receives shadows
+    flags: vec4<f32>,
+};
+
+struct ShadowData {
+    matrices: array<mat4x4<f32>, MAX_SHADOW_LAYERS>,
+    cascade_splits: vec4<f32>,
+    // x = texel size, y = PCF radius, z = cascade blend, w = enabled
+    params: vec4<f32>,
+    // World space size of one shadow texel, per layer (8 values).
+    texel_world: array<vec4<f32>, 2>,
 };
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var<uniform> light_buffer: LightBuffer;
 @group(0) @binding(2) var environment_texture: texture_2d<f32>;
 @group(0) @binding(3) var environment_sampler: sampler;
+@group(0) @binding(4) var shadow_map: texture_depth_2d_array;
+@group(0) @binding(5) var shadow_sampler: sampler_comparison;
+@group(0) @binding(6) var<uniform> shadows: ShadowData;
+@group(0) @binding(7) var ao_texture: texture_2d<f32>;
+@group(0) @binding(8) var ao_sampler: sampler;
 
 @group(1) @binding(0) var<uniform> material: MaterialData;
 @group(1) @binding(1) var base_color_texture: texture_2d<f32>;
@@ -102,6 +125,9 @@ struct VertexOutput {
     @location(2) uv: vec2<f32>,
     @location(3) world_tangent: vec4<f32>,
     @location(4) view_distance: f32,
+    // Linear depth along the camera axis, used to pick a shadow cascade.
+    @location(5) view_depth: f32,
+    @location(6) receive_shadow: f32,
 };
 
 @vertex
@@ -120,6 +146,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     out.world_tangent = vec4<f32>(tangent, input.tangent.w);
     out.uv = input.uv * material.uv_transform.xy + material.uv_transform.zw;
     out.view_distance = length(world_position.xyz - frame.camera_position.xyz);
+    out.view_depth = -(frame.view * world_position).z;
+    out.receive_shadow = object.flags.x;
     return out;
 }
 
@@ -200,11 +228,78 @@ struct Surface {
     f0: vec3<f32>,
 };
 
+// ------------------------------------------------------------------ shadows
+
+fn sample_shadow_layer(layer: i32, world_position: vec3<f32>, bias: f32) -> f32 {
+    let clip = shadows.matrices[layer] * vec4<f32>(world_position, 1.0);
+    let ndc = clip.xyz / clip.w;
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0)) || ndc.z < 0.0 || ndc.z > 1.0) {
+        return 1.0;
+    }
+
+    // Percentage closer filtering over a (2r+1)^2 texel footprint.
+    let reference = ndc.z - bias;
+    let radius = i32(shadows.params.y);
+    let texel = shadows.params.x;
+    var lit = 0.0;
+    var taps = 0.0;
+    for (var y: i32 = -radius; y <= radius; y = y + 1) {
+        for (var x: i32 = -radius; x <= radius; x = x + 1) {
+            let offset = vec2<f32>(f32(x), f32(y)) * texel;
+            lit = lit + textureSampleCompareLevel(shadow_map, shadow_sampler, uv + offset, layer, reference);
+            taps = taps + 1.0;
+        }
+    }
+    return lit / max(taps, 1.0);
+}
+
+fn shadow_visibility(light: Light, world_position: vec3<f32>, normal: vec3<f32>, view_depth: f32, receive: f32) -> f32 {
+    if (shadows.params.w < 0.5 || light.shadow.x < 0.0 || receive < 0.5) {
+        return 1.0;
+    }
+
+    let kind = light.position.w;
+    var to_light = -normalize(light.direction.xyz);
+    if (kind != LIGHT_DIRECTIONAL) {
+        to_light = normalize(light.position.xyz - world_position);
+    }
+    let n_dot_l = clamp(dot(normal, to_light), 0.0, 1.0);
+
+    var layer = i32(light.shadow.x);
+    let cascades = i32(light.shadow.y);
+    var fade = 0.0;
+
+    if (kind == LIGHT_DIRECTIONAL) {
+        let last_split = shadows.cascade_splits[max(cascades - 1, 0)];
+        if (view_depth > last_split) {
+            return 1.0;
+        }
+        var cascade = 0;
+        for (var i: i32 = 0; i < cascades - 1; i = i + 1) {
+            if (view_depth > shadows.cascade_splits[i]) {
+                cascade = i + 1;
+            }
+        }
+        layer = layer + cascade;
+        // Fade the far edge of the last cascade instead of cutting it off.
+        fade = smoothstep(last_split * (1.0 - shadows.params.z), last_split, view_depth);
+    }
+
+    // Normal offset, measured in shadow texels of the chosen layer and grown at
+    // grazing angles where acne shows first.
+    let texel_world = shadows.texel_world[layer / 4][layer % 4];
+    let offset = normal * light.shadow.w * texel_world * (1.5 - n_dot_l);
+    let visibility = sample_shadow_layer(layer, world_position + offset, light.shadow.z);
+    return mix(1.0, mix(visibility, 1.0, fade), light.shadow_extra.x);
+}
+
 fn evaluate_light(
     light: Light,
     surface: Surface,
     world_position: vec3<f32>,
     shading_model: f32,
+    visibility: f32,
 ) -> vec3<f32> {
     let kind = light.position.w;
     var to_light = -normalize(light.direction.xyz);
@@ -234,11 +329,11 @@ fn evaluate_light(
     }
 
     let n_dot_l = dot(surface.normal, to_light);
-    if (n_dot_l <= 0.0 || attenuation <= 0.0) {
+    if (n_dot_l <= 0.0 || attenuation <= 0.0 || visibility <= 0.0) {
         return vec3<f32>(0.0);
     }
 
-    let radiance = light.color.rgb * light.color.w * attenuation;
+    let radiance = light.color.rgb * light.color.w * attenuation * visibility;
 
     if (shading_model == SHADING_LAMBERT) {
         return surface.albedo * radiance * n_dot_l;
@@ -318,8 +413,16 @@ fn fs_main(input: VertexOutput, @builtin(front_facing) front_facing: bool) -> @l
             if (light.position.w == LIGHT_AMBIENT) {
                 ambient_light = ambient_light + light.color.rgb * light.color.w;
             } else {
-                lit = lit + evaluate_light(light, surface, input.world_position, shading_model);
+                let visibility = shadow_visibility(light, input.world_position, surface.normal, input.view_depth, input.receive_shadow);
+                lit = lit + evaluate_light(light, surface, input.world_position, shading_model, visibility);
             }
+        }
+
+        // Screen space ambient occlusion from the SSAO pass (1.0 when disabled).
+        var ao = 1.0;
+        if (frame.screen.z > 0.5) {
+            ao = textureSampleLevel(ao_texture, ao_sampler, input.clip_position.xy / frame.screen.xy, 0.0).r;
+            surface.occlusion = surface.occlusion * ao;
         }
 
         var ambient = ambient_light * surface.albedo * surface.occlusion;
@@ -339,7 +442,7 @@ fn fs_main(input: VertexOutput, @builtin(front_facing) front_facing: bool) -> @l
                 * intensity;
         }
 
-        color = lit + ambient;
+        color = lit * mix(1.0, ao, frame.screen.w) + ambient;
     }
 
     var emissive = material.emissive.rgb * material.emissive.w;

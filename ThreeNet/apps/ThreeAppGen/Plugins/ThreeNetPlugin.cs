@@ -150,12 +150,17 @@ public sealed class ThreeNetPlugin
 
         ["light"] = """
             Light (struct): Type (Directional | Point | Spot | Area | Ambient), Color (linear RGB), Intensity,
-            Range (0 = infinite), InnerConeAngle, OuterConeAngle, Size, CastShadow, Enabled.
+            Range (0 = infinite), InnerConeAngle, OuterConeAngle, Size, CastShadow, Enabled,
+            ShadowBias, ShadowNormalBias, ShadowStrength.
             Factories: Light.Directional(color, intensity), Light.Point(color, intensity, range),
                        Light.Spot(color, intensity, range, innerAngle, outerAngle), Light.Ambient(color, intensity).
 
             A light is attached to a node and emits along the node -Z axis, so aim it with node.LookAt(target).
             Up to 64 lights are uploaded per frame.
+
+            Shadows: set CastShadow on the light AND Shadows = true in RendererOptions. Directional lights get
+            cascaded shadow maps, spot lights one perspective map, point lights none yet (8 layers per frame).
+            Per mesh: node.CastShadow / node.ReceiveShadow (both default to true).
             """,
 
         ["camera"] = """
@@ -168,14 +173,17 @@ public sealed class ThreeNetPlugin
         ["renderer"] = """
             RendererOptions (struct): Width, Height, VSync, MsaaSamples (1/2/4/8), Exposure,
             ToneMapping (None | Reinhard | Aces | Filmic), Bloom, BloomIntensity, BloomThreshold,
-            FrustumCulling, PowerPreference, BgraOutput (offscreen only).
+            FrustumCulling, PowerPreference, BgraOutput (offscreen only),
+            Shadows, ShadowMapSize (256-8192), ShadowDistance, ShadowCascades (1-4), ShadowSoftness (0-3),
+            Ssao, SsaoRadius, SsaoIntensity, SsaoBias, SsaoSamples (4-32), SsaoDirectStrength.
 
             Renderer: CreateOffscreen(options), CreateForWin32(hwnd, options), CreateForX11(...), CreateForAppKit(...).
                 void Render(Scene scene, Node? camera = null)
                 void Resize(int width, int height)      RendererOptions Options { get; set; }
                 FrameStats Stats { get; }               string AdapterName { get; }
                 byte[] ReadPixels() / int ReadPixels(Span<byte>)   // offscreen only
-            FrameStats: DrawCalls, Triangles, VisibleNodes, CulledNodes, Lights, CpuTimeMs.
+            FrameStats: DrawCalls, Triangles, VisibleNodes, CulledNodes, Lights, CpuTimeMs,
+            ShadowLayers, ShadowDrawCalls.
             """,
 
         ["window"] = """
@@ -234,6 +242,9 @@ public sealed class ThreeNetPlugin
                     ToneMapping = ToneMapping.Aces, Exposure = 1.2f, MsaaSamples = 4 }
             Emissive materials above 1.0 are what the bloom bright pass picks up:
                 MaterialOptions.Basic(color) with { Emissive = colorRgb, EmissiveIntensity = 4f }
+            SSAO adds contact darkening in creases; it is applied to ambient and image based lighting, and to
+            direct light scaled by SsaoDirectStrength:
+                RendererOptions.Default with { Ssao = true, SsaoRadius = 0.6f, SsaoIntensity = 1.5f }
             """,
     };
 }

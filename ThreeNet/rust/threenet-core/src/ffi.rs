@@ -365,6 +365,12 @@ pub struct TnLightDesc {
     pub height: f32,
     pub cast_shadow: i32,
     pub enabled: i32,
+    /// Depth bias in normalised shadow map depth.
+    pub shadow_bias: f32,
+    /// Normal offset in shadow map texels.
+    pub shadow_normal_bias: f32,
+    /// 0 = no darkening, 1 = fully dark shadows.
+    pub shadow_strength: f32,
 }
 
 impl From<TnLightDesc> for Light {
@@ -379,6 +385,9 @@ impl From<TnLightDesc> for Light {
             size: (value.width, value.height),
             cast_shadow: value.cast_shadow != 0,
             enabled: value.enabled != 0,
+            shadow_bias: value.shadow_bias,
+            shadow_normal_bias: value.shadow_normal_bias,
+            shadow_strength: value.shadow_strength.clamp(0.0, 1.0),
         }
     }
 }
@@ -396,6 +405,9 @@ impl From<Light> for TnLightDesc {
             height: value.size.1,
             cast_shadow: i32::from(value.cast_shadow),
             enabled: i32::from(value.enabled),
+            shadow_bias: value.shadow_bias,
+            shadow_normal_bias: value.shadow_normal_bias,
+            shadow_strength: value.shadow_strength,
         }
     }
 }
@@ -502,6 +514,17 @@ pub struct TnRendererDesc {
     pub power_preference: u32,
     /// Offscreen only: emit BGRA pixels for UI toolkit bitmaps.
     pub bgra_output: i32,
+    pub shadows: i32,
+    pub shadow_map_size: u32,
+    pub shadow_distance: f32,
+    pub shadow_cascades: u32,
+    pub shadow_softness: u32,
+    pub ssao: i32,
+    pub ssao_radius: f32,
+    pub ssao_intensity: f32,
+    pub ssao_bias: f32,
+    pub ssao_samples: u32,
+    pub ssao_direct_strength: f32,
 }
 
 impl From<TnRendererDesc> for RendererConfig {
@@ -519,6 +542,17 @@ impl From<TnRendererDesc> for RendererConfig {
             frustum_culling: value.frustum_culling != 0,
             power_preference: PowerPreference::from_u32(value.power_preference),
             bgra_output: value.bgra_output != 0,
+            shadows: value.shadows != 0,
+            shadow_map_size: value.shadow_map_size,
+            shadow_distance: value.shadow_distance,
+            shadow_cascades: value.shadow_cascades,
+            shadow_softness: value.shadow_softness,
+            ssao: value.ssao != 0,
+            ssao_radius: value.ssao_radius,
+            ssao_intensity: value.ssao_intensity,
+            ssao_bias: value.ssao_bias,
+            ssao_samples: value.ssao_samples,
+            ssao_direct_strength: value.ssao_direct_strength,
         }
     }
 }
@@ -532,6 +566,8 @@ pub struct TnFrameStats {
     pub culled_nodes: u32,
     pub lights: u32,
     pub cpu_time_ms: f32,
+    pub shadow_layers: u32,
+    pub shadow_draw_calls: u32,
 }
 
 #[repr(C)]
@@ -610,7 +646,9 @@ pub extern "C" fn tn_init_logging(level: u32) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_last_error_message(buffer: *mut c_char, capacity: i32) -> i32 {
     LAST_ERROR.with(|slot| match slot.borrow().as_ref() {
-        Some(message) => unsafe { copy_string(message.to_string_lossy().as_ref(), buffer, capacity) },
+        Some(message) => unsafe {
+            copy_string(message.to_string_lossy().as_ref(), buffer, capacity)
+        },
         None => unsafe { copy_string("", buffer, capacity) },
     })
 }
@@ -782,7 +820,11 @@ pub unsafe extern "C" fn tn_node_get_transform(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn tn_node_set_position(scene: *mut Scene, node: u32, position: TnVec3) -> i32 {
+pub unsafe extern "C" fn tn_node_set_position(
+    scene: *mut Scene,
+    node: u32,
+    position: TnVec3,
+) -> i32 {
     let scene = scene_ref!(scene);
     node_mut!(scene, node).transform.translation = position.into();
     scene.mark_dirty(node);
@@ -790,7 +832,11 @@ pub unsafe extern "C" fn tn_node_set_position(scene: *mut Scene, node: u32, posi
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn tn_node_set_rotation(scene: *mut Scene, node: u32, rotation: TnVec4) -> i32 {
+pub unsafe extern "C" fn tn_node_set_rotation(
+    scene: *mut Scene,
+    node: u32,
+    rotation: TnVec4,
+) -> i32 {
     let scene = scene_ref!(scene);
     node_mut!(scene, node).transform.rotation =
         Quat::from_xyzw(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
@@ -806,7 +852,9 @@ pub unsafe extern "C" fn tn_node_set_euler_angles(
     angles: TnVec3,
 ) -> i32 {
     let scene = scene_ref!(scene);
-    node_mut!(scene, node).transform.set_euler_angles(angles.into());
+    node_mut!(scene, node)
+        .transform
+        .set_euler_angles(angles.into());
     scene.mark_dirty(node);
     status::OK
 }
@@ -865,7 +913,11 @@ pub unsafe extern "C" fn tn_node_set_layers(scene: *mut Scene, node: u32, layers
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn tn_node_set_user_data(scene: *mut Scene, node: u32, user_data: u64) -> i32 {
+pub unsafe extern "C" fn tn_node_set_user_data(
+    scene: *mut Scene,
+    node: u32,
+    user_data: u64,
+) -> i32 {
     let scene = scene_ref!(scene);
     node_mut!(scene, node).user_data = user_data;
     status::OK
@@ -942,7 +994,10 @@ pub unsafe extern "C" fn tn_node_get_parent(scene: *mut Scene, node: u32) -> u32
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_node_get_child_count(scene: *mut Scene, node: u32) -> u32 {
     let scene = scene_ref!(scene, 0);
-    scene.node(node).map(|n| n.children().len() as u32).unwrap_or(0)
+    scene
+        .node(node)
+        .map(|n| n.children().len() as u32)
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -976,6 +1031,48 @@ pub unsafe extern "C" fn tn_node_attach_mesh(
         cast_shadow: true,
         receive_shadow: true,
     });
+    status::OK
+}
+
+/// Sets whether the mesh at `node` casts and receives shadows.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_set_shadow_flags(
+    scene: *mut Scene,
+    node: u32,
+    cast_shadow: i32,
+    receive_shadow: i32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    match node_mut!(scene, node).mesh.as_mut() {
+        Some(mesh) => {
+            mesh.cast_shadow = cast_shadow != 0;
+            mesh.receive_shadow = receive_shadow != 0;
+            status::OK
+        }
+        None => {
+            set_last_error("node has no mesh");
+            status::INVALID_ARGUMENT
+        }
+    }
+}
+
+/// Reads the shadow flags of the mesh at `node` (bit 0 = cast, bit 1 = receive).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_get_shadow_flags(
+    scene: *mut Scene,
+    node: u32,
+    out_flags: *mut u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_flags.is_null() {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    }
+    let flags = node_mut!(scene, node)
+        .mesh
+        .map(|mesh| u32::from(mesh.cast_shadow) | (u32::from(mesh.receive_shadow) << 1))
+        .unwrap_or(0);
+    unsafe { *out_flags = flags };
     status::OK
 }
 
@@ -1275,10 +1372,7 @@ pub unsafe extern "C" fn tn_geometry_grid(scene: *mut Scene, size: f32, division
 // ------------------------------------------------------------------ material
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn tn_material_create(
-    scene: *mut Scene,
-    desc: *const TnMaterialDesc,
-) -> u32 {
+pub unsafe extern "C" fn tn_material_create(scene: *mut Scene, desc: *const TnMaterialDesc) -> u32 {
     let scene = scene_ref!(scene, 0);
     let mut material = Material::default();
     if let Some(desc) = unsafe { desc.as_ref() } {
@@ -1490,11 +1584,7 @@ pub unsafe extern "C" fn tn_renderer_create_win32(
         window.hinstance = std::num::NonZeroIsize::new(hinstance as isize);
         let display = RawDisplayHandle::Windows(WindowsDisplayHandle::new());
         match unsafe {
-            Renderer::new_with_raw_handles(
-                display,
-                RawWindowHandle::Win32(window),
-                (*desc).into(),
-            )
+            Renderer::new_with_raw_handles(display, RawWindowHandle::Win32(window), (*desc).into())
         } {
             Ok(renderer) => Box::into_raw(Box::new(renderer)),
             Err(error) => {
@@ -1529,8 +1619,7 @@ pub unsafe extern "C" fn tn_renderer_create_xlib(
             return std::ptr::null_mut();
         };
         let window_handle = XlibWindowHandle::new(window);
-        let display_handle =
-            XlibDisplayHandle::new(std::ptr::NonNull::new(display), screen);
+        let display_handle = XlibDisplayHandle::new(std::ptr::NonNull::new(display), screen);
         match unsafe {
             Renderer::new_with_raw_handles(
                 RawDisplayHandle::Xlib(display_handle),
@@ -1683,6 +1772,8 @@ pub unsafe extern "C" fn tn_renderer_get_stats(
             culled_nodes: stats.culled_nodes,
             lights: stats.lights,
             cpu_time_ms: stats.cpu_time_ms,
+            shadow_layers: stats.shadow_layers,
+            shadow_draw_calls: stats.shadow_draw_calls,
         }
     };
     status::OK
@@ -1700,10 +1791,7 @@ pub unsafe extern "C" fn tn_renderer_get_adapter_name(
 
 // ------------------------------------------------------------------- loaders
 
-unsafe fn write_import_result(
-    out: *mut TnImportResult,
-    result: &crate::loaders::ImportResult,
-) {
+unsafe fn write_import_result(out: *mut TnImportResult, result: &crate::loaders::ImportResult) {
     if out.is_null() {
         return;
     }
@@ -1943,10 +2031,7 @@ impl AppHandler for CallbackHandler {
 /// Opens a window and runs the render loop until it closes. Blocks the calling
 /// thread, which must be the process main thread on Windows and macOS.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn tn_app_run(
-    desc: *const TnWindowDesc,
-    callbacks: TnAppCallbacks,
-) -> i32 {
+pub unsafe extern "C" fn tn_app_run(desc: *const TnWindowDesc, callbacks: TnAppCallbacks) -> i32 {
     let Some(desc) = (unsafe { desc.as_ref() }) else {
         set_last_error("window descriptor is null");
         return status::NULL_POINTER;

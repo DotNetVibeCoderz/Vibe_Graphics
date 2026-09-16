@@ -17,6 +17,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -29,6 +30,7 @@ scene.add(ambient);
 
 const sun = new THREE.DirectionalLight(0xfff1dd, 2.5);
 sun.position.set(5, 10, 4);
+sun.castShadow = true;
 scene.add(sun);
 
 const glow = new THREE.PointLight(0x4fd1e5, 30, 20);
@@ -45,6 +47,7 @@ const groundGeometry = new THREE.PlaneGeometry(40, 40);
 const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x8b93a7, roughness: 0.9, map: checker });
 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
 scene.add(ground);
 
 // Centre piece

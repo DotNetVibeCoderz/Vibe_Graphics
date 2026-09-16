@@ -143,6 +143,84 @@ public class RendererTests
         }
     }
 
+    private static float Luminance(byte[] pixels, int x, int y, int width = 128)
+    {
+        int i = ((y * width) + x) * 4;
+        return (0.2126f * pixels[i]) + (0.7152f * pixels[i + 1]) + (0.0722f * pixels[i + 2]);
+    }
+
+    [Fact]
+    public void DirectionalLightCastsShadowsWhenEnabled()
+    {
+        using Renderer? renderer = TryCreateRenderer();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        using Scene scene = new()
+        {
+            Environment = SceneEnvironment.Default with { Background = new Vector4(0f, 0f, 0f, 1f), AmbientIntensity = 0f },
+        };
+        Material white = scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.8f, 0.8f, 0.8f, 1f), 0f, 0.9f));
+        // A wall facing the camera and a cube floating two units in front of it.
+        scene.AddMesh(scene.CreatePlaneGeometry(20f, 20f), white, name: "wall");
+        Node cube = scene.AddMesh(scene.CreateBoxGeometry(), white, name: "cube");
+        cube.Position = new Vector3(0f, 0f, 2f);
+
+        Node sun = scene.AddLight(Light.Directional(Vector3.One, 3f) with { CastShadow = true });
+        sun.LookAt(new Vector3(1f, 0f, -1f));
+        Node camera = scene.AddCamera(Camera.Perspective(45f.ToRadians()), new Vector3(0f, 0f, 10f));
+
+        // Wall x = +2 (in the shadow) and x = -2 (lit) at the image centre row.
+        float halfWidth = 10f * MathF.Tan(MathF.PI / 8f);
+        int Column(float x) => (int)(((x / halfWidth * 0.5f) + 0.5f) * 128f);
+
+        renderer.Render(scene, camera);
+        byte[] withoutShadows = renderer.ReadPixels();
+        Assert.Equal(0, renderer.Stats.ShadowLayers);
+
+        renderer.Options = renderer.Options with { Shadows = true, ShadowMapSize = 1024 };
+        renderer.Render(scene, camera);
+        byte[] withShadows = renderer.ReadPixels();
+
+        float lit = Luminance(withShadows, Column(-2f), 64);
+        float shadowed = Luminance(withShadows, Column(2f), 64);
+        Assert.True(lit > 40f, $"the wall should be lit, got {lit}");
+        Assert.True(shadowed < lit * 0.35f, $"the shadow should be dark: {shadowed} vs {lit}");
+        Assert.True(Math.Abs(Luminance(withoutShadows, Column(2f), 64) - lit) < 8f, "no shadow when disabled");
+        Assert.Equal(3, renderer.Stats.ShadowLayers);
+
+        // Opting the cube out of casting removes the shadow again.
+        Assert.True(cube.CastShadow);
+        cube.CastShadow = false;
+        Assert.False(cube.CastShadow);
+        Assert.True(cube.ReceiveShadow);
+        renderer.Render(scene, camera);
+        Assert.True(Math.Abs(Luminance(renderer.ReadPixels(), Column(2f), 64) - lit) < 8f, "CastShadow = false");
+    }
+
+    [Fact]
+    public void SsaoRendersWithoutErrors()
+    {
+        using Renderer? renderer = TryCreateRenderer();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        (Scene scene, Node camera, _) = BuildScene();
+        using (scene)
+        {
+            renderer.Options = renderer.Options with { Ssao = true, SsaoSamples = 32, Shadows = true };
+            renderer.Render(scene, camera);
+            byte[] pixels = renderer.ReadPixels();
+            int center = ((64 * 128) + 64) * 4;
+            Assert.True(pixels[center] > 60, "the sphere should still be visible with SSAO on");
+            Assert.True(renderer.Stats.ShadowDrawCalls >= 1, "the SSAO prepass draws the sphere");
+        }
+    }
+
     [Fact]
     public void ReadPixelsRejectsATooSmallBuffer()
     {

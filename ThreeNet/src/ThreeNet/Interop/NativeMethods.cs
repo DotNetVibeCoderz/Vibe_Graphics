@@ -125,6 +125,12 @@ internal static unsafe partial class NativeMethods
     internal static partial int tn_node_detach_mesh(nint scene, uint node);
 
     [LibraryImport(Library)]
+    internal static partial int tn_node_set_shadow_flags(nint scene, uint node, int castShadow, int receiveShadow);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_get_shadow_flags(nint scene, uint node, out uint flags);
+
+    [LibraryImport(Library)]
     internal static partial int tn_node_set_light(nint scene, uint node, in NativeLightDesc desc);
 
     [LibraryImport(Library)]

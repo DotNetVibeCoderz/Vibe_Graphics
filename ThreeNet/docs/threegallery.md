@@ -12,6 +12,8 @@ dotnet run --project apps/ThreeGallery
 | Bloom & tone mapping | PBR sweep |
 |---|---|
 | ![Bloom](images/gallery-bloom.png) | ![PBR sweep](images/gallery-pbr.png) |
+| **Shadows & SSAO** | |
+| ![Shadows and SSAO](images/gallery-shadows.png) | |
 
 ## Layout / Tata letak
 
@@ -28,7 +30,7 @@ dotnet run --project apps/ThreeGallery
 |---|---|
 | Basics | Primitives |
 | Materials | Shading models, PBR sweep, Textures, Transparency |
-| Lighting | Lights |
+| Lighting | Lights, Shadows & SSAO |
 | Post-processing | Bloom & tone mapping |
 | Environment | Fog & depth |
 | Scene graph | Scene graph (solar system) |

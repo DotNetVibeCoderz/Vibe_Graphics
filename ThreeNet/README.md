@@ -17,6 +17,8 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | ![ThreeAppGen](docs/images/appgen-main.png) | ![Converter](docs/images/appgen-converter.png) |
 | **Converted Three.js app (desktop)** | **Hello Cube sample** |
 | ![Converted Crystal Garden](docs/images/converted-crystal-garden.png) | ![Hello Cube](docs/images/hello-cube.png) |
+| **Shadow maps + SSAO** | |
+| ![Shadows and SSAO](docs/images/gallery-shadows.png) | |
 
 ---
 
@@ -26,11 +28,11 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 
 | Part | Path | Status |
 |---|---|---|
-| Native core (Rust, wgpu 30): renderer, scene graph, PBR, bloom + tone mapping, glTF/OBJ, raycasting, windowing, C ABI | `rust/threenet-core` | working, tested |
+| Native core (Rust, wgpu 30): renderer, scene graph, PBR, shadow maps + SSAO, bloom + tone mapping, glTF/OBJ, raycasting, windowing, C ABI | `rust/threenet-core` | working, tested |
 | .NET 10 binding (`ThreeNet`) | `src/ThreeNet` | working, tested |
 | Native packaging (`ThreeNet.Native`) | `src/ThreeNet.Native` | builds the Rust core automatically |
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
-| **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 12 samples |
+| **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 13 samples |
 | **ThreeAppGen** - AI code editor (Jack - The Code Bender) + Three.js converter | `apps/ThreeAppGen` | working |
 | Samples | `samples/` | Hello Cube, Three.js demo project |
 | Tests | `tests/`, `rust/threenet-core/tests` | Rust, .NET and converter tests |
@@ -100,11 +102,11 @@ development log in [Progress.md](Progress.md).
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Inti native (Rust, wgpu 30): renderer, scene graph, PBR, bloom + tone mapping, glTF/OBJ, raycasting, window, C ABI | `rust/threenet-core` | berjalan, teruji |
+| Inti native (Rust, wgpu 30): renderer, scene graph, PBR, shadow map + SSAO, bloom + tone mapping, glTF/OBJ, raycasting, window, C ABI | `rust/threenet-core` | berjalan, teruji |
 | Binding .NET 10 (`ThreeNet`) | `src/ThreeNet` | berjalan, teruji |
 | Paket native (`ThreeNet.Native`) | `src/ThreeNet.Native` | otomatis mem-build inti Rust |
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |
-| **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 12 contoh |
+| **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 13 contoh |
 | **ThreeAppGen** - editor kode AI (Jack - The Code Bender) + konverter Three.js | `apps/ThreeAppGen` | berjalan |
 | Contoh | `samples/` | Hello Cube, project demo Three.js |
 | Test | `tests/`, `rust/threenet-core/tests` | test Rust, .NET dan konverter |

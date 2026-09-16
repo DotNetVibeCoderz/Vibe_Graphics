@@ -28,9 +28,12 @@ pub struct FrameUniform {
     pub fog_params: [f32; 4],
     /// `x` = light count, `y` = has environment map, `z` = near, `w` = far.
     pub misc: [f32; 4],
+    /// `xy` = render target size in pixels, `z` = SSAO enabled, `w` = SSAO strength on direct light.
+    pub screen: [f32; 4],
 }
 
 impl FrameUniform {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         view: Mat4,
         projection: Mat4,
@@ -42,6 +45,7 @@ impl FrameUniform {
         near: f32,
         far: f32,
         time: f32,
+        screen: [f32; 4],
     ) -> Self {
         let view_projection = projection * view;
         Self {
@@ -70,6 +74,7 @@ impl FrameUniform {
                 near,
                 far,
             ],
+            screen,
         }
     }
 }
@@ -85,6 +90,10 @@ pub struct LightUniform {
     pub color: [f32; 4],
     /// `x` = cos(inner), `y` = cos(outer), `z` = width, `w` = height.
     pub params: [f32; 4],
+    /// `x` = first shadow map layer (`-1` = no shadow), `y` = cascade count, `z` = depth bias, `w` = normal bias.
+    pub shadow: [f32; 4],
+    /// `x` = shadow strength, `yzw` reserved.
+    pub shadow_extra: [f32; 4],
 }
 
 impl Default for LightUniform {
@@ -110,6 +119,8 @@ impl LightUniform {
                 light.size.0,
                 light.size.1,
             ],
+            shadow: [-1.0, 0.0, light.shadow_bias, light.shadow_normal_bias],
+            shadow_extra: [light.shadow_strength, 0.0, 0.0, 0.0],
         }
     }
 }
@@ -173,7 +184,10 @@ impl From<&Material> for MaterialUniform {
                 material.alpha_cutoff,
                 material.shading as u32 as f32,
             ],
-            specular: material.specular.extend(material.alpha_mode as u32 as f32).to_array(),
+            specular: material
+                .specular
+                .extend(material.alpha_mode as u32 as f32)
+                .to_array(),
             uv_transform: [
                 material.uv_scale.x,
                 material.uv_scale.y,
@@ -197,6 +211,8 @@ pub struct ObjectUniform {
     pub model: [[f32; 4]; 4],
     /// Inverse transpose of the model matrix, padded to `mat4` for alignment.
     pub normal_matrix: [[f32; 4]; 4],
+    /// `x` = receives shadows (0 or 1), `yzw` reserved.
+    pub flags: [f32; 4],
 }
 
 impl Default for ObjectUniform {
@@ -204,12 +220,13 @@ impl Default for ObjectUniform {
         Self {
             model: Mat4::IDENTITY.to_cols_array_2d(),
             normal_matrix: Mat4::IDENTITY.to_cols_array_2d(),
+            flags: [1.0, 0.0, 0.0, 0.0],
         }
     }
 }
 
 impl ObjectUniform {
-    pub fn new(model: &Mat4) -> Self {
+    pub fn new(model: &Mat4, receive_shadow: bool) -> Self {
         let normal = Mat3::from_mat4(*model).inverse().transpose();
         Self {
             model: model.to_cols_array_2d(),
@@ -220,10 +237,66 @@ impl ObjectUniform {
                 Vec4::W,
             )
             .to_cols_array_2d(),
+            flags: [if receive_shadow { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
         }
     }
 }
 
+/// Shadow map layers available per frame; matches `MAX_SHADOW_LAYERS` in the shader.
+pub const MAX_SHADOW_LAYERS: usize = 8;
+
+/// Maximum cascades for one directional light.
+pub const MAX_CASCADES: usize = 4;
+
+/// Everything the lighting shader needs to sample the shadow map array.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct ShadowUniform {
+    /// World to shadow clip space, one per shadow map layer.
+    pub matrices: [[[f32; 4]; 4]; MAX_SHADOW_LAYERS],
+    /// View space far distance of each directional cascade.
+    pub cascade_splits: [f32; 4],
+    /// `x` = texel size (1 / map size), `y` = PCF radius in texels, `z` = cascade blend width (0..1), `w` = enabled.
+    pub params: [f32; 4],
+    /// World space size of one shadow texel for each layer, used to scale the normal bias.
+    pub texel_world: [[f32; 4]; 2],
+}
+
+impl Default for ShadowUniform {
+    fn default() -> Self {
+        Self::zeroed()
+    }
+}
+
+/// View-projection used while rendering one shadow map layer.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct ShadowPassUniform {
+    pub view_projection: [[f32; 4]; 4],
+}
+
+/// SSAO kernel size; matches `MAX_SSAO_SAMPLES` in the shader.
+pub const MAX_SSAO_SAMPLES: usize = 32;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct SsaoUniform {
+    pub projection: [[f32; 4]; 4],
+    /// Hemisphere samples in tangent space (`xyz`), `w` unused.
+    pub kernel: [[f32; 4]; MAX_SSAO_SAMPLES],
+    /// `x` = radius, `y` = bias, `z` = intensity (power), `w` = sample count.
+    pub params: [f32; 4],
+    /// `xy` = noise uv scale (target size / noise size), `zw` = texel size of the AO target.
+    pub noise: [f32; 4],
+}
+
+/// Parameters of one bilateral blur pass.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
+pub struct BlurUniform {
+    /// `xy` = texel step (direction scaled by texel size), `z` = depth sharpness, `w` unused.
+    pub params: [f32; 4],
+}
 /// Parameters shared by the post-processing passes.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]

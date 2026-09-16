@@ -16,11 +16,7 @@ fn build_scene() -> (Scene, u32) {
     scene.environment.background = [0.0, 0.0, 0.0, 1.0];
 
     let geometry = scene.add_geometry(primitives::sphere(1.0, 32, 16));
-    let material = scene.add_material(Material::pbr(
-        Vec4::new(0.9, 0.2, 0.15, 1.0),
-        0.0,
-        0.35,
-    ));
+    let material = scene.add_material(Material::pbr(Vec4::new(0.9, 0.2, 0.15, 1.0), 0.0, 0.35));
     scene.add_mesh(None, geometry, material).unwrap();
 
     let light_node = scene.create_node(None).unwrap();

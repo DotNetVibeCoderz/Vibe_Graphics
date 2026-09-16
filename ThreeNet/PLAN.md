@@ -22,9 +22,10 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | HDR pipeline + tone mapping (ACES, Reinhard, Filmic) | ✅ | Rgba16Float target |
 | Bloom | ✅ | Soft knee bright pass + separable blur |
 | Fog, image based lighting (equirect) | ✅ | Exponential squared fog |
-| SSAO, depth of field, motion blur | ⬜ | Post chain is ready for more passes |
+| SSAO | ✅ | Normal/depth prepass, half res hemisphere kernel, bilateral blur |
+| Depth of field, motion blur | ⬜ | Post chain is ready for more passes |
 | Deferred renderer | ⬜ | |
-| Shadow maps | ⬜ | Light `CastShadow` flag reserved |
+| Shadow maps | ✅ | Directional cascades (up to 4) + spot, PCF, 8 layers, per node cast/receive |
 | Modular shaders / custom shader injection (WGSL, GLSL/HLSL via naga) | ⬜ | |
 
 ## Phase 3 - Asset pipeline
@@ -72,7 +73,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 
 | Item | Status | Notes |
 |---|---|---|
-| ThreeGallery (Avalonia) | ✅ | 12 samples, live source, stats, screenshots |
+| ThreeGallery (Avalonia) | ✅ | 13 samples, live source, stats, screenshots |
 | ThreeAppGen - AI code editor (Jack - The Code Bender) | ✅ | Semantic Kernel, OpenAI/Azure, Claude, Gemini, Ollama, tools |
 | Three.js → Three.Net converter (desktop / web / mobile) | ✅ | Static inventory + LLM + build validation + auto-fix |
 | Scene editor / inspector | ⬜ | |
@@ -82,8 +83,8 @@ Made by Gravicode Studios, led by Kang Fadhil.
 
 ## Next up / Berikutnya
 
-1. Shadow maps (directional + spot) and SSAO.
-2. glTF animation playback (keyframes, then skinning).
+1. glTF animation playback (keyframes, then skinning).
+2. Point light (cube map) shadows and contact hardening.
 3. CI for Linux (Vulkan) and macOS (Metal); multi-RID native packaging and NuGet publish.
 4. WebGPU (wasm32) build of the core so converted web apps run in the browser.
 5. Android build of the core (`aarch64-linux-android`) for the mobile heads.

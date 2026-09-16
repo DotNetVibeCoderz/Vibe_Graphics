@@ -4,6 +4,8 @@
 pub mod pipeline;
 pub mod post;
 pub mod resources;
+pub mod shadows;
+pub mod ssao;
 pub mod uniforms;
 
 use std::time::Instant;
@@ -12,10 +14,12 @@ use wgpu::util::DeviceExt;
 
 use crate::camera::Camera;
 use crate::error::{Error, Result};
-use crate::math::{Frustum, Mat4, Vec3};
+use crate::math::{Aabb, Frustum, Mat4, Vec3};
 use crate::renderer::pipeline::{DEPTH_FORMAT, HDR_FORMAT, Layouts, PipelineCache, PipelineKey};
 use crate::renderer::post::{PostProcess, PostSettings};
 use crate::renderer::resources::{DefaultTextures, MipmapGenerator, ResourceCache};
+use crate::renderer::shadows::{LightSource, ShadowCaster, ShadowMaps, ShadowSettings};
+use crate::renderer::ssao::{GBufferItem, Ssao, SsaoSettings};
 use crate::renderer::uniforms::{
     FrameUniform, LightUniform, LightsUniform, MAX_LIGHTS, ObjectUniform,
 };
@@ -65,6 +69,47 @@ pub struct RendererConfig {
     /// Offscreen renderers only: produce BGRA instead of RGBA pixels, which is
     /// what most UI toolkits (Avalonia, WPF, WinForms) expect from a bitmap.
     pub bgra_output: bool,
+    /// Enables shadow maps for lights with `cast_shadow` set.
+    pub shadows: bool,
+    /// Resolution of each shadow map layer (256-8192).
+    pub shadow_map_size: u32,
+    /// How far from the camera directional light shadows reach.
+    pub shadow_distance: f32,
+    /// Cascades per directional light (1-4).
+    pub shadow_cascades: u32,
+    /// PCF radius in texels: 0 = hard, 1 = 3x3, 2 = 5x5, 3 = 7x7.
+    pub shadow_softness: u32,
+    /// Screen space ambient occlusion.
+    pub ssao: bool,
+    pub ssao_radius: f32,
+    pub ssao_intensity: f32,
+    pub ssao_bias: f32,
+    pub ssao_samples: u32,
+    /// How much AO also darkens direct light (0-1).
+    pub ssao_direct_strength: f32,
+}
+
+impl RendererConfig {
+    pub fn shadow_settings(&self) -> ShadowSettings {
+        ShadowSettings {
+            enabled: self.shadows,
+            map_size: self.shadow_map_size,
+            distance: self.shadow_distance,
+            cascades: self.shadow_cascades,
+            softness: self.shadow_softness,
+        }
+    }
+
+    pub fn ssao_settings(&self) -> SsaoSettings {
+        SsaoSettings {
+            enabled: self.ssao,
+            radius: self.ssao_radius,
+            bias: self.ssao_bias,
+            intensity: self.ssao_intensity,
+            samples: self.ssao_samples,
+            direct_strength: self.ssao_direct_strength,
+        }
+    }
 }
 
 impl Default for RendererConfig {
@@ -82,6 +127,17 @@ impl Default for RendererConfig {
             frustum_culling: true,
             power_preference: PowerPreference::HighPerformance,
             bgra_output: false,
+            shadows: false,
+            shadow_map_size: 2048,
+            shadow_distance: 60.0,
+            shadow_cascades: 3,
+            shadow_softness: 1,
+            ssao: false,
+            ssao_radius: 0.5,
+            ssao_intensity: 1.5,
+            ssao_bias: 0.025,
+            ssao_samples: 16,
+            ssao_direct_strength: 0.25,
         }
     }
 }
@@ -94,6 +150,10 @@ pub struct FrameStats {
     pub visible_nodes: u32,
     pub culled_nodes: u32,
     pub lights: u32,
+    /// Shadow map layers rendered this frame.
+    pub shadow_layers: u32,
+    /// Draw calls spent in the shadow and SSAO passes.
+    pub shadow_draw_calls: u32,
     pub cpu_time_ms: f32,
 }
 
@@ -105,7 +165,19 @@ struct DrawItem {
     depth: f32,
     transparent: bool,
     render_order: i32,
+    receive_shadow: bool,
     object_offset: u32,
+}
+
+/// A shadow caster that may or may not be visible to the camera.
+#[derive(Debug, Clone, Copy)]
+struct CasterItem {
+    geometry: GeometryId,
+    world: Mat4,
+    center: Vec3,
+    radius: f32,
+    /// Index into `draw_items` when the camera also draws it.
+    draw_index: Option<usize>,
 }
 
 /// Render targets that depend on the surface size.
@@ -143,9 +215,17 @@ pub struct Renderer {
     object_capacity: u32,
     object_stride: u32,
     frame_bind_group: wgpu::BindGroup,
-    frame_bind_group_environment: Option<u32>,
+    /// Environment map, shadow map generation and SSAO generation the frame
+    /// bind group was built with.
+    frame_bind_group_key: Option<(Option<u32>, u64, u64)>,
     object_bind_group: wgpu::BindGroup,
+    shadow_maps: ShadowMaps,
+    ssao: Ssao,
     draw_items: Vec<DrawItem>,
+    caster_items: Vec<CasterItem>,
+    shadow_casters: Vec<ShadowCaster>,
+    caster_bounds: Aabb,
+    light_sources: Vec<LightSource>,
     object_data: Vec<u8>,
     stats: FrameStats,
     start: Instant,
@@ -312,6 +392,8 @@ impl Renderer {
         });
 
         let object_bind_group = create_object_bind_group(&device, &layouts, &object_buffer);
+        let shadow_maps = ShadowMaps::new(&device, &layouts.object);
+        let ssao = Ssao::new(&device, &queue, &layouts.object);
         let frame_bind_group = create_frame_bind_group(
             &device,
             &layouts,
@@ -319,9 +401,19 @@ impl Renderer {
             &lights_buffer,
             &defaults.black_srgb,
             &defaults.sampler,
+            &shadow_maps,
+            &defaults.white_linear,
+            ssao.linear_sampler(),
         );
 
-        let targets = create_targets(&device, width, height, samples, output_format, surface.is_none());
+        let targets = create_targets(
+            &device,
+            width,
+            height,
+            samples,
+            output_format,
+            surface.is_none(),
+        );
 
         Ok(Self {
             instance,
@@ -346,9 +438,15 @@ impl Renderer {
             object_capacity,
             object_stride,
             frame_bind_group,
-            frame_bind_group_environment: None,
+            frame_bind_group_key: None,
             object_bind_group,
+            shadow_maps,
+            ssao,
             draw_items: Vec::new(),
+            caster_items: Vec::new(),
+            shadow_casters: Vec::new(),
+            caster_bounds: Aabb::EMPTY,
+            light_sources: Vec::new(),
             object_data: Vec::new(),
             stats: FrameStats::default(),
             start: Instant::now(),
@@ -410,8 +508,12 @@ impl Renderer {
                 surface.configure(&self.device, surface_config);
             }
         }
-        self.post
-            .resize(&self.device, self.config.width, self.config.height, self.config.bloom);
+        self.post.resize(
+            &self.device,
+            self.config.width,
+            self.config.height,
+            self.config.bloom,
+        );
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -427,7 +529,8 @@ impl Renderer {
             surface.configure(&self.device, surface_config);
         }
         self.rebuild_targets();
-        self.post.resize(&self.device, width, height, self.config.bloom);
+        self.post
+            .resize(&self.device, width, height, self.config.bloom);
     }
 
     fn rebuild_targets(&mut self) {
@@ -468,7 +571,10 @@ impl Renderer {
             .node(camera_node)
             .and_then(|node| node.camera)
             .unwrap_or_else(|| Camera::perspective(std::f32::consts::FRAC_PI_4, 0.1, 1000.0));
-        let camera_layers = scene.node(camera_node).map(|n| n.layers).unwrap_or(u32::MAX);
+        let camera_layers = scene
+            .node(camera_node)
+            .map(|n| n.layers)
+            .unwrap_or(u32::MAX);
 
         let view = camera_world.inverse();
         let projection = camera.projection_matrix(self.aspect_ratio());
@@ -476,8 +582,17 @@ impl Renderer {
         let camera_position = camera_world.w_axis.truncate();
 
         // ---------------------------------------------------------- gather
-        let lights = self.collect_lights(scene);
+        let mut lights = self.collect_lights(scene);
         self.collect_draw_items(scene, &frustum, camera_position, camera_layers);
+        let shadow_settings = self.config.shadow_settings();
+        let ssao_settings = self.config.ssao_settings();
+        self.shadow_maps.ensure_size(&self.device, &shadow_settings);
+        self.ssao.ensure_targets(
+            &self.device,
+            ssao_settings.enabled,
+            self.config.width,
+            self.config.height,
+        );
 
         // ------------------------------------------------------- gpu upload
         let mut encoder = self
@@ -488,6 +603,17 @@ impl Renderer {
 
         self.resources.retain_live(scene);
         self.upload_resources(scene, &mut encoder);
+        let aspect = self.aspect_ratio();
+        self.shadow_maps.plan(
+            &self.queue,
+            &shadow_settings,
+            &self.light_sources,
+            &mut lights,
+            &camera,
+            &camera_world,
+            aspect,
+            &self.caster_bounds,
+        );
         self.upload_frame_uniforms(
             scene,
             &view,
@@ -498,6 +624,39 @@ impl Renderer {
             &lights,
         );
         self.upload_object_uniforms();
+
+        // ------------------------------------------------ shadow + AO passes
+        let mut shadow_draw_calls = self.shadow_maps.render(
+            &self.queue,
+            &mut encoder,
+            &self.shadow_casters,
+            &self.resources,
+            &self.object_bind_group,
+        );
+        self.stats.shadow_layers = self.shadow_maps.layer_count() as u32;
+        if ssao_settings.enabled {
+            let items: Vec<GBufferItem> = self
+                .draw_items
+                .iter()
+                .filter(|item| !item.transparent)
+                .map(|item| GBufferItem {
+                    geometry: item.geometry,
+                    object_offset: item.object_offset,
+                })
+                .collect();
+            shadow_draw_calls += self.ssao.render(
+                &self.device,
+                &self.queue,
+                &mut encoder,
+                &ssao_settings,
+                &projection,
+                &self.frame_buffer,
+                &self.object_bind_group,
+                &items,
+                &self.resources,
+            );
+        }
+        self.stats.shadow_draw_calls = shadow_draw_calls;
 
         // ------------------------------------------------------- scene pass
         let background = scene.environment.background;
@@ -553,12 +712,8 @@ impl Renderer {
                     continue;
                 };
 
-                let key = PipelineKey::for_material(
-                    material,
-                    mesh.topology,
-                    self.samples,
-                    HDR_FORMAT,
-                );
+                let key =
+                    PipelineKey::for_material(material, mesh.topology, self.samples, HDR_FORMAT);
                 if current_pipeline != Some(key) {
                     let pipeline = self.pipelines.get(&self.device, key);
                     pass.set_pipeline(pipeline);
@@ -657,16 +812,21 @@ impl Renderer {
 
     fn collect_lights(&mut self, scene: &Scene) -> Vec<LightUniform> {
         let mut lights = Vec::new();
+        self.light_sources.clear();
         for (id, node) in scene.nodes() {
             let Some(light) = node.light else { continue };
             if !light.enabled || !scene.is_visible_in_hierarchy(id) {
                 continue;
             }
             if lights.len() >= MAX_LIGHTS {
-                log::warn!("more than {MAX_LIGHTS} lights in the scene, the extra ones are ignored");
+                log::warn!(
+                    "more than {MAX_LIGHTS} lights in the scene, the extra ones are ignored"
+                );
                 break;
             }
-            lights.push(LightUniform::new(&light, &node.world_matrix()));
+            let world = node.world_matrix();
+            lights.push(LightUniform::new(&light, &world));
+            self.light_sources.push(LightSource { light, world });
         }
         lights
     }
@@ -679,6 +839,9 @@ impl Renderer {
         camera_layers: u32,
     ) {
         self.draw_items.clear();
+        self.caster_items.clear();
+        self.caster_bounds = Aabb::EMPTY;
+        let shadows = self.config.shadows;
         let mut visible = 0u32;
         let mut culled = 0u32;
 
@@ -698,6 +861,22 @@ impl Renderer {
             }
             let world = node.world_matrix();
             let bounds = geometry.bounds.transformed(&world);
+            // Casters are gathered before culling: an object behind the camera
+            // can still throw a shadow into the view.
+            let casts = shadows
+                && binding.cast_shadow
+                && !material.is_transparent()
+                && geometry.topology == crate::geometry::Topology::TriangleList;
+            if casts {
+                self.caster_bounds = self.caster_bounds.union(&bounds);
+                self.caster_items.push(CasterItem {
+                    geometry: binding.geometry,
+                    world,
+                    center: bounds.center(),
+                    radius: bounds.radius(),
+                    draw_index: None,
+                });
+            }
             if self.config.frustum_culling
                 && !bounds.is_empty()
                 && !frustum.intersects_sphere(bounds.center(), bounds.radius())
@@ -713,8 +892,18 @@ impl Renderer {
                 depth: (bounds.center() - camera_position).length_squared(),
                 transparent: material.is_transparent(),
                 render_order: material.render_order,
+                receive_shadow: binding.receive_shadow,
                 object_offset: 0,
             });
+            if casts && let Some(caster) = self.caster_items.last_mut() {
+                // The unsorted index for now; remapped after sorting below.
+                caster.draw_index = Some(self.draw_items.len() - 1);
+            }
+        }
+
+        // Remember the pre-sort position so casters can find their draw item.
+        for (index, item) in self.draw_items.iter_mut().enumerate() {
+            item.object_offset = index as u32;
         }
 
         // Opaque front to back (early z), transparent back to front (blending).
@@ -731,8 +920,13 @@ impl Renderer {
                 })
         });
 
-        for (index, item) in self.draw_items.iter_mut().enumerate() {
-            item.object_offset = index as u32;
+        let mut sorted_position = vec![0usize; self.draw_items.len()];
+        for (sorted, item) in self.draw_items.iter_mut().enumerate() {
+            sorted_position[item.object_offset as usize] = sorted;
+            item.object_offset = sorted as u32;
+        }
+        for caster in &mut self.caster_items {
+            caster.draw_index = caster.draw_index.map(|index| sorted_position[index]);
         }
         self.stats.visible_nodes = visible;
         self.stats.culled_nodes = culled;
@@ -775,6 +969,12 @@ impl Renderer {
             }
         }
 
+        for caster in &self.caster_items {
+            if let Some(geometry) = scene.geometry(caster.geometry) {
+                self.resources
+                    .ensure_mesh(&self.device, &self.queue, caster.geometry, geometry);
+            }
+        }
         let items: Vec<(GeometryId, MaterialId)> = self
             .draw_items
             .iter()
@@ -798,8 +998,14 @@ impl Renderer {
             }
         }
 
-        // Rebuild the frame bind group when the environment map changes.
-        if self.frame_bind_group_environment != scene.environment.environment_map {
+        // Rebuild the frame bind group when the environment map, the shadow
+        // maps or the SSAO targets change.
+        let key = (
+            scene.environment.environment_map,
+            self.shadow_maps.generation(),
+            self.ssao.generation(),
+        );
+        if self.frame_bind_group_key != Some(key) {
             let environment_view = scene
                 .environment
                 .environment_map
@@ -819,8 +1025,11 @@ impl Renderer {
                 &self.lights_buffer,
                 environment_view,
                 environment_sampler,
+                &self.shadow_maps,
+                self.ssao.ao_view().unwrap_or(&self.defaults.white_linear),
+                self.ssao.linear_sampler(),
             );
-            self.frame_bind_group_environment = scene.environment.environment_map;
+            self.frame_bind_group_key = Some(key);
         }
     }
 
@@ -847,6 +1056,16 @@ impl Renderer {
             near,
             far,
             self.start.elapsed().as_secs_f32(),
+            [
+                self.config.width as f32,
+                self.config.height as f32,
+                if self.ssao.ao_view().is_some() {
+                    1.0
+                } else {
+                    0.0
+                },
+                self.config.ssao_direct_strength.clamp(0.0, 1.0),
+            ],
         );
         self.queue
             .write_buffer(&self.frame_buffer, 0, bytemuck::bytes_of(&frame));
@@ -858,7 +1077,13 @@ impl Renderer {
     }
 
     fn upload_object_uniforms(&mut self) {
-        let count = self.draw_items.len() as u32;
+        let extra_casters = self
+            .caster_items
+            .iter()
+            .filter(|caster| caster.draw_index.is_none())
+            .count();
+        let count = (self.draw_items.len() + extra_casters) as u32;
+        self.shadow_casters.clear();
         if count == 0 {
             return;
         }
@@ -877,13 +1102,34 @@ impl Renderer {
 
         let stride = self.object_stride as usize;
         self.object_data.clear();
-        self.object_data.resize(stride * self.draw_items.len(), 0);
+        self.object_data.resize(stride * count as usize, 0);
         for (index, item) in self.draw_items.iter_mut().enumerate() {
-            let uniform = ObjectUniform::new(&item.world);
+            let uniform = ObjectUniform::new(&item.world, item.receive_shadow);
             let offset = index * stride;
             self.object_data[offset..offset + size_of::<ObjectUniform>()]
                 .copy_from_slice(bytemuck::bytes_of(&uniform));
             item.object_offset = (offset) as u32;
+        }
+        // Off screen casters get their own slots after the draw items.
+        let mut next_slot = self.draw_items.len();
+        for caster in &self.caster_items {
+            let object_offset = match caster.draw_index {
+                Some(index) => self.draw_items[index].object_offset,
+                None => {
+                    let offset = next_slot * stride;
+                    let uniform = ObjectUniform::new(&caster.world, false);
+                    self.object_data[offset..offset + size_of::<ObjectUniform>()]
+                        .copy_from_slice(bytemuck::bytes_of(&uniform));
+                    next_slot += 1;
+                    offset as u32
+                }
+            };
+            self.shadow_casters.push(ShadowCaster {
+                geometry: caster.geometry,
+                object_offset,
+                center: caster.center,
+                radius: caster.radius,
+            });
         }
         self.queue
             .write_buffer(&self.object_buffer, 0, &self.object_data);
@@ -999,9 +1245,7 @@ fn create_instance() -> wgpu::Instance {
 }
 
 fn clamp_samples(adapter: &wgpu::Adapter, requested: u32) -> u32 {
-    let flags = adapter
-        .get_texture_format_features(HDR_FORMAT)
-        .flags;
+    let flags = adapter.get_texture_format_features(HDR_FORMAT).flags;
     let mut samples = match requested {
         0 | 1 => 1,
         2 | 3 => 2,
@@ -1039,6 +1283,7 @@ fn create_object_bind_group(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_frame_bind_group(
     device: &wgpu::Device,
     layouts: &Layouts,
@@ -1046,6 +1291,9 @@ fn create_frame_bind_group(
     lights: &wgpu::Buffer,
     environment: &wgpu::TextureView,
     sampler: &wgpu::Sampler,
+    shadow_maps: &ShadowMaps,
+    ao: &wgpu::TextureView,
+    ao_sampler: &wgpu::Sampler,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("threenet.bind_group.frame"),
@@ -1066,6 +1314,26 @@ fn create_frame_bind_group(
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Sampler(sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(shadow_maps.array_view()),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::Sampler(shadow_maps.sampler()),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: shadow_maps.uniform_buffer().as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::TextureView(ao),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: wgpu::BindingResource::Sampler(ao_sampler),
             },
         ],
     })
@@ -1158,4 +1426,3 @@ impl FrameUniform {
         bytemuck::Zeroable::zeroed()
     }
 }
-

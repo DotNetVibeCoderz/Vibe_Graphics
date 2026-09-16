@@ -114,6 +114,12 @@ public sealed class SceneObjectDef
 
     /// <summary>Asset path of a loaded model (GLTF, GLB, OBJ).</summary>
     public string? ModelPath { get; set; }
+
+    /// <summary>`object.castShadow = true` in the source (Three.js defaults to false).</summary>
+    public bool CastShadow { get; set; }
+
+    /// <summary>`object.receiveShadow = true` in the source.</summary>
+    public bool ReceiveShadow { get; set; }
 }
 
 /// <summary>A per frame change found in the animation loop, normalised to units per second.</summary>
@@ -157,6 +163,9 @@ public sealed class SceneInventory
     public bool Antialias { get; set; } = true;
 
     public bool Bloom { get; set; }
+
+    /// <summary>`renderer.shadowMap.enabled = true`.</summary>
+    public bool Shadows { get; set; }
 
     public float BloomStrength { get; set; } = 1f;
 

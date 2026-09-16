@@ -71,7 +71,6 @@ public static partial class SceneInventoryExtractor
         ["PositionalAudio"] = "Positional audio: spatial audio is on the roadmap (phase 6).",
         ["AudioListener"] = "Audio: not converted; spatial audio is on the roadmap (phase 6).",
         ["VRButton"] = "WebXR: OpenXR support is on the roadmap (phase 6).",
-        ["castShadow"] = "Shadows: shadow maps are not rendered yet; lighting is kept without shadows.",
         ["cannon"] = "cannon-es physics: port the simulation to C# or a .NET physics engine (for example BepuPhysics).",
         ["rapier"] = "Rapier physics: port the simulation to C# or BepuPhysics.",
         ["lil-gui"] = "lil-gui panel: rebuild the controls with Avalonia widgets.",
@@ -328,6 +327,31 @@ public static partial class SceneInventoryExtractor
         if (exposure.Success && EvaluateNumber(exposure.Groups["value"].Value, constants) is { } e)
         {
             inventory.Exposure = e;
+        }
+
+        if (ShadowMapEnabled().IsMatch(code))
+        {
+            inventory.Shadows = true;
+        }
+
+        foreach (Match match in ShadowFlag().Matches(code))
+        {
+            if (Find(inventory, match.Groups["var"].Value) is not { } target)
+            {
+                continue;
+            }
+
+            if (match.Groups["prop"].Value == "castShadow")
+            {
+                target.CastShadow = true;
+                // A caster implies the app enabled the shadow map, even when the
+                // renderer line lives in another file.
+                inventory.Shadows = true;
+            }
+            else
+            {
+                target.ReceiveShadow = true;
+            }
         }
 
         Match bloom = BloomPass().Match(code);
@@ -1025,6 +1049,12 @@ public static partial class SceneInventoryExtractor
 
     [GeneratedRegex(@"\b(?<var>[A-Za-z_$][\w$]*)\.scale\.setScalar\s*\(")]
     private static partial Regex ScaleScalar();
+
+    [GeneratedRegex(@"\.shadowMap\s*\.\s*enabled\s*=\s*true")]
+    private static partial Regex ShadowMapEnabled();
+
+    [GeneratedRegex(@"\b(?<var>[A-Za-z_$][\w$]*)\.(?<prop>castShadow|receiveShadow)\s*=\s*true")]
+    private static partial Regex ShadowFlag();
 
     [GeneratedRegex(@"\b(?<var>[A-Za-z_$][\w$]*)\.lookAt\s*\(")]
     private static partial Regex LookAtCall();

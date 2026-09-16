@@ -185,6 +185,14 @@ public static class BaselineCodeGenerator
                 build.AppendLine($"        {id}.LookAt(Vector3.Zero);");
             }
 
+            // Three.js meshes cast and receive nothing unless asked; Three.Net
+            // defaults to both, so the flags are written out explicitly.
+            if (inventory.Shadows && item.Kind == SceneObjectKind.Mesh)
+            {
+                build.AppendLine($"        {id}.CastShadow = {(item.CastShadow ? "true" : "false")};");
+                build.AppendLine($"        {id}.ReceiveShadow = {(item.ReceiveShadow ? "true" : "false")};");
+            }
+
             build.AppendLine();
         }
 
@@ -245,6 +253,7 @@ public static class BaselineCodeGenerator
                     Bloom = {(inventory.Bloom ? "true" : "false")},
                     BloomIntensity = {F(inventory.BloomStrength)},
                     BloomThreshold = {F(inventory.BloomThreshold)},
+                    Shadows = {(inventory.Shadows ? "true" : "false")},
                 {"}"}
             """;
 
@@ -426,7 +435,7 @@ public static class BaselineCodeGenerator
     private static string LightExpression(SceneObjectDef light)
     {
         string color = $"new Vector3({V3(light.LightColor)})";
-        return light.LightType switch
+        string factory = light.LightType switch
         {
             "Ambient" => $"Light.Ambient({color}, {F(light.Intensity)})",
             "Point" => $"Light.Point({color}, {F(light.Intensity)}, {F(light.Range)})",
@@ -434,6 +443,12 @@ public static class BaselineCodeGenerator
             "Area" => $"Light.Default with {{ Type = LightType.Area, Color = {color}, Intensity = {F(light.Intensity)} }}",
             _ => $"Light.Directional({color}, {F(light.Intensity)})",
         };
+
+        // Point lights have no shadow map yet, so only directional and spot
+        // lights carry the flag over.
+        return light.CastShadow && light.LightType is "Directional" or "Spot"
+            ? $"{factory} with {{ CastShadow = true }}"
+            : factory;
     }
 
     private static List<SceneObjectDef> OrderByHierarchy(IReadOnlyList<SceneObjectDef> objects)

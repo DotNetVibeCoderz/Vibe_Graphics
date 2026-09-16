@@ -22,8 +22,19 @@ public struct Light
     public float OuterConeAngle;
     /// <summary>Size of an area light.</summary>
     public Vector2 Size;
+    /// <summary>
+    /// Renders this light into a shadow map. Directional lights use cascaded
+    /// shadow maps, spot lights a perspective map; point lights do not cast
+    /// shadows yet. Requires <see cref="RendererOptions.Shadows"/>.
+    /// </summary>
     public bool CastShadow;
     public bool Enabled;
+    /// <summary>Constant depth offset (normalised shadow depth) that prevents shadow acne.</summary>
+    public float ShadowBias;
+    /// <summary>Offset along the surface normal in shadow map texels; raise it on acne at grazing angles.</summary>
+    public float ShadowNormalBias;
+    /// <summary>0 = shadows have no effect, 1 = shadowed areas get no direct light.</summary>
+    public float ShadowStrength;
 
     /// <summary>A white directional light of unit intensity.</summary>
     public static Light Default => new();
@@ -39,6 +50,9 @@ public struct Light
         Size = Vector2.One;
         CastShadow = false;
         Enabled = true;
+        ShadowBias = 0.0005f;
+        ShadowNormalBias = 1.5f;
+        ShadowStrength = 1f;
     }
 
     /// <summary>Sun style light; aim it by rotating the node it sits on.</summary>
@@ -77,6 +91,9 @@ public struct Light
         Height = Size.Y,
         CastShadow = CastShadow ? 1 : 0,
         Enabled = Enabled ? 1 : 0,
+        ShadowBias = ShadowBias,
+        ShadowNormalBias = ShadowNormalBias,
+        ShadowStrength = ShadowStrength,
     };
 }
 

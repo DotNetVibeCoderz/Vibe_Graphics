@@ -46,7 +46,8 @@ lights face -Z.
 ## Lighting and cameras
 
 - `Light` (struct): `Type`, `Color`, `Intensity`, `Range`, `InnerConeAngle`, `OuterConeAngle`, `Size`,
-  `CastShadow`, `Enabled`; factories `Directional`, `Point`, `Spot`, `Ambient`.
+  `CastShadow`, `Enabled`, `ShadowBias`, `ShadowNormalBias`, `ShadowStrength`;
+  factories `Directional`, `Point`, `Spot`, `Ambient`.
 - `Camera` (struct): `Perspective(fov, near, far)`, `Orthographic(height, near, far)`, `AspectRatio` (0 = auto).
 - `SceneEnvironment` (struct): `Background`, `AmbientColor`, `AmbientIntensity`, `FogColor`, `FogDensity`,
   `FogStart`, `FogEnd`, `EnvironmentMap`, `EnvironmentIntensity`.
@@ -62,7 +63,44 @@ lights face -Z.
 | `Stats` (`FrameStats`), `AdapterName`, `IsOffscreen` | Diagnostics |
 
 `RendererOptions`: `Width`, `Height`, `VSync`, `MsaaSamples`, `Exposure`, `ToneMapping`, `Bloom`,
-`BloomIntensity`, `BloomThreshold`, `FrustumCulling`, `PowerPreference`, `BgraOutput`.
+`BloomIntensity`, `BloomThreshold`, `FrustumCulling`, `PowerPreference`, `BgraOutput`,
+`Shadows`, `ShadowMapSize`, `ShadowDistance`, `ShadowCascades`, `ShadowSoftness`,
+`Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`.
+
+`FrameStats`: `DrawCalls`, `Triangles`, `VisibleNodes`, `CulledNodes`, `Lights`, `CpuTimeMs`,
+`ShadowLayers`, `ShadowDrawCalls`.
+
+## Shadows and ambient occlusion
+
+Shadows need two switches: `RendererOptions.Shadows` and `Light.CastShadow`.
+
+```csharp
+renderer.Options = renderer.Options with
+{
+    Shadows = true,
+    ShadowMapSize = 2048,      // per layer
+    ShadowCascades = 3,        // per directional light
+    ShadowDistance = 60f,      // how far directional shadows reach
+    ShadowSoftness = 1,        // PCF radius in texels (0 = hard)
+    Ssao = true,
+    SsaoRadius = 0.6f,
+    SsaoIntensity = 1.5f,
+    SsaoDirectStrength = 0.25f,
+};
+
+Node sun = scene.AddLight(Light.Directional(Vector3.One, 3f) with { CastShadow = true });
+sun.LookAt(Vector3.Zero);
+floor.CastShadow = false;      // receives only
+```
+
+- Directional lights use cascaded shadow maps fitted to the camera frustum, spot lights one perspective
+  map; point lights do not cast shadows yet. Eight layers are available per frame (a 3-cascade sun plus
+  five spot lights, for example), and lights beyond that keep lighting the scene without shadows.
+- Acne and peter-panning are tuned per light with `ShadowBias` (normalised depth) and `ShadowNormalBias`
+  (in shadow map texels); `ShadowStrength` fades a shadow out.
+- Every mesh node exposes `CastShadow` and `ReceiveShadow` (both default to `true`).
+- SSAO runs a normal/depth prepass plus a half resolution occlusion pass and a bilateral blur. It darkens
+  ambient and image based lighting fully, and direct lighting by `SsaoDirectStrength`.
 
 ## AppWindow
 

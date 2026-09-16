@@ -16,6 +16,7 @@ dotnet build <proj> -p:SkipRustBuild=true                    # skip cargo when t
 cargo build --release --manifest-path rust/threenet-core/Cargo.toml
 cargo test  --manifest-path rust/threenet-core/Cargo.toml    # includes offscreen GPU render tests
 cargo run   --manifest-path rust/threenet-core/Cargo.toml --example offscreen   # writes offscreen.png
+cargo run --release --manifest-path rust/threenet-core/Cargo.toml --example shadows -- docs/images/gallery-shadows.png
 
 dotnet test tests/ThreeNet.Tests                             # binding + renderer tests (GPU tests self-skip)
 dotnet test tests/ThreeNet.Tests --filter "FullyQualifiedName~RendersALitSphereOffscreen"   # single test
@@ -31,7 +32,8 @@ dotnet run --project apps/ThreeAppGen            # add `-- --convert <folder>` t
 ## Architecture (big picture)
 
 - `rust/threenet-core`: scene graph as generational arenas (`scene.rs`), forward renderer with HDR target,
-  bloom + tone mapping (`renderer/`), uber WGSL shader (`shaders/`), glTF/OBJ loaders, raycast, winit host
+  shadow maps (`renderer/shadows.rs`, cascades + spot), SSAO (`renderer/ssao.rs`), bloom + tone mapping
+  (`renderer/`), uber WGSL shader (`shaders/`), glTF/OBJ loaders, raycast, winit host
   (`window.rs`), and `ffi.rs` — the only public surface. Ids are 1-based `u32` (0 = null); failures return a
   negative status and set a thread-local message.
 - `src/ThreeNet`: `Interop/NativeMethods.cs` mirrors `ffi.rs` 1:1 with `LibraryImport`; `Interop/NativeTypes.cs`

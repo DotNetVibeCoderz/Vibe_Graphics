@@ -252,6 +252,12 @@ public sealed partial class LlmCodeConverter(AppSettings settings)
               `clock.getElapsedTime()` -> `totalSeconds`; `clock.getDelta()` -> `deltaSeconds`.
             - Loaders: TextureLoader/GLTFLoader/OBJLoader calls become ThreeJsCompat.TryLoadTexture/TryLoadModel with the
               path relative to the assets root. Loading is synchronous: move `onLoad` callback bodies inline.
+            - `renderer.shadowMap.enabled = true` -> RendererOptions `Shadows = true` (plus ShadowMapSize,
+              ShadowCascades, ShadowDistance, ShadowSoftness). `light.castShadow = true` -> the light's `CastShadow`;
+              `mesh.castShadow` / `mesh.receiveShadow` -> `node.CastShadow` / `node.ReceiveShadow` (both default to
+              true in Three.Net, so set them explicitly to false where the source leaves them off). PointLight
+              shadows are not rendered yet. `light.shadow.bias` -> ShadowBias, `shadow.normalBias` -> ShadowNormalBias.
+            - SSAOPass / N8AO -> RendererOptions `Ssao = true` with SsaoRadius / SsaoIntensity.
             - EffectComposer + UnrealBloomPass -> RendererOptions Bloom/BloomIntensity/BloomThreshold.
               renderer.toneMapping -> ToneMapping (ACESFilmic -> Aces, Reinhard -> Reinhard, none -> None);
               toneMappingExposure -> Exposure; antialias -> MsaaSamples = 4.

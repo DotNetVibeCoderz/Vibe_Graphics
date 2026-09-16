@@ -103,6 +103,7 @@ public static class SampleCatalog
         new TexturesSample(),
         new TransparencySample(),
         new LightsSample(),
+        new ShadowsSample(),
         new BloomSample(),
         new FogSample(),
         new HierarchySample(),

@@ -45,7 +45,14 @@ pub struct Light {
     pub outer_cone_angle: f32,
     /// Width and height of an area light.
     pub size: (f32, f32),
+    /// Renders this light into a shadow map (directional and spot lights).
     pub cast_shadow: bool,
+    /// Constant depth offset in normalised shadow map depth, against acne.
+    pub shadow_bias: f32,
+    /// Offset along the surface normal in shadow map texels, against acne on grazing angles.
+    pub shadow_normal_bias: f32,
+    /// 0 = no darkening, 1 = full shadow.
+    pub shadow_strength: f32,
     pub enabled: bool,
 }
 
@@ -60,6 +67,9 @@ impl Default for Light {
             outer_cone_angle: std::f32::consts::FRAC_PI_4,
             size: (1.0, 1.0),
             cast_shadow: false,
+            shadow_bias: 0.0005,
+            shadow_normal_bias: 1.5,
+            shadow_strength: 1.0,
             enabled: true,
         }
     }

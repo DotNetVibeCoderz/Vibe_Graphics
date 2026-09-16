@@ -183,6 +183,29 @@ public sealed class Node : IEquatable<Node>
     public void AttachMesh(Geometry geometry, Material material) =>
         NativeError.Check(NativeMethods.tn_node_attach_mesh(Scene.Handle, Id, geometry.Id, material.Id));
 
+    /// <summary>
+    /// Whether the mesh on this node renders into shadow maps. Defaults to true;
+    /// has no effect on nodes without a mesh.
+    /// </summary>
+    public bool CastShadow
+    {
+        get => (GetShadowFlags() & 1) != 0;
+        set => NativeError.Check(NativeMethods.tn_node_set_shadow_flags(Scene.Handle, Id, value ? 1 : 0, ReceiveShadow ? 1 : 0));
+    }
+
+    /// <summary>Whether the mesh on this node is darkened by shadows. Defaults to true.</summary>
+    public bool ReceiveShadow
+    {
+        get => (GetShadowFlags() & 2) != 0;
+        set => NativeError.Check(NativeMethods.tn_node_set_shadow_flags(Scene.Handle, Id, CastShadow ? 1 : 0, value ? 1 : 0));
+    }
+
+    private uint GetShadowFlags()
+    {
+        NativeError.Check(NativeMethods.tn_node_get_shadow_flags(Scene.Handle, Id, out uint flags));
+        return flags;
+    }
+
     /// <summary>Removes the mesh from this node, keeping the node itself.</summary>
     public void DetachMesh() => NativeError.Check(NativeMethods.tn_node_detach_mesh(Scene.Handle, Id));
 

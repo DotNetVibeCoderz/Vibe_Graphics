@@ -80,6 +80,27 @@ public sealed class ConverterTests(ITestOutputHelper output)
         Assert.Equal(new System.Numerics.Vector2(8f, 8f), inventory.TextureRepeats["checker"]);
     }
 
+    [Fact]
+    public void ShadowFlagsSurviveTheConversion()
+    {
+        ThreeJsProject project = ThreeJsProjectAnalyzer.Analyze(SampleFolder);
+        SceneInventory inventory = SceneInventoryExtractor.Extract(project);
+
+        Assert.True(inventory.Shadows, "renderer.shadowMap.enabled should turn shadows on");
+        Assert.True(inventory.Objects.Single(o => o.Var == "sun").CastShadow);
+        SceneObjectDef ground = inventory.Objects.Single(o => o.Var == "ground");
+        Assert.True(ground.ReceiveShadow);
+        Assert.False(ground.CastShadow);
+        Assert.DoesNotContain(inventory.Unsupported, note => note.StartsWith("Shadows:", StringComparison.Ordinal));
+
+        string code = BaselineCodeGenerator.GenerateConvertedScene("Demo", inventory, project);
+        Assert.Contains("Shadows = true", code, StringComparison.Ordinal);
+        Assert.Contains("CastShadow = true", code, StringComparison.Ordinal);
+        // The ground only receives; Three.js meshes never cast unless asked.
+        Assert.Contains("_ground.CastShadow = false;", code, StringComparison.Ordinal);
+        Assert.Contains("_ground.ReceiveShadow = true;", code, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("0xff0000", 1f, 0f, 0f)]
     [InlineData("'#00ff00'", 0f, 1f, 0f)]

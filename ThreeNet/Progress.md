@@ -3,6 +3,25 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-16 - Phase 2: shadows & SSAO / Bayangan & SSAO
+
+- **Shadow maps**: cascaded shadow maps for directional lights (1-4 cascades, sphere fit with texel snapping
+  so shadows do not shimmer), one perspective map per spot light, 8 layers per frame in a `Depth32Float`
+  texture array. PCF filtering with a comparison sampler (`ShadowSoftness` 0-3), depth + normal offset bias
+  per light (`ShadowBias`, `ShadowNormalBias`, `ShadowStrength`), off screen casters are collected before
+  frustum culling, and every mesh node has `CastShadow` / `ReceiveShadow`.
+- **SSAO**: view normal + linear depth prepass, half resolution hemisphere kernel (up to 32 samples, tiled
+  4x4 noise), depth aware separable blur. Applied to ambient and IBL, and to direct light scaled by
+  `SsaoDirectStrength`.
+- `RendererOptions`: `Shadows`, `ShadowMapSize`, `ShadowDistance`, `ShadowCascades`, `ShadowSoftness`,
+  `Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`;
+  `FrameStats` gained `ShadowLayers` and `ShadowDrawCalls`. **ABI bumped to 2.**
+- ThreeGallery: new "Shadows & SSAO" sample (sweeping sun, spot light, pillars).
+- ThreeAppGen converter: `renderer.shadowMap.enabled`, `light.castShadow`, `mesh.castShadow` /
+  `receiveShadow` now convert instead of being reported as unsupported.
+- Tests: 14 Rust (4 new GPU tests for cascade fitting, directional/spot shadows and SSAO), 19 .NET
+  binding, 11 fast converter tests.
+
 ## 2026-09-16 - First release / Rilis pertama (0.1.0)
 
 - Published to NuGet: `ThreeNet`, `ThreeNet.Native` (win-x64, linux-x64, osx-arm64) and `ThreeNet.Avalonia` 0.1.0,
@@ -58,4 +77,4 @@ Catatan pengembangan Three.Net. Terbaru di atas.
 
 - Only Windows (DX12) is verified on real hardware so far.
 - Web and mobile heads compile, but the native core for WebAssembly and Android is not built yet (phase 5).
-- No shadows, SSAO, skeletal animation or custom shaders yet (see PLAN.md).
+- Point lights do not cast shadows yet; skeletal animation and custom shaders are still open (see PLAN.md).

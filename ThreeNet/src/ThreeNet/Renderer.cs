@@ -22,6 +22,28 @@ public struct RendererOptions
     /// which is the layout UI toolkit bitmaps expect.
     /// </summary>
     public bool BgraOutput;
+    /// <summary>Enables shadow maps for lights with <see cref="Light.CastShadow"/> set.</summary>
+    public bool Shadows;
+    /// <summary>Resolution of each shadow map layer (256-8192).</summary>
+    public int ShadowMapSize;
+    /// <summary>How far from the camera directional shadows reach, in world units.</summary>
+    public float ShadowDistance;
+    /// <summary>Cascades per directional light (1-4); more cascades keep near shadows sharp.</summary>
+    public int ShadowCascades;
+    /// <summary>PCF filter radius in texels: 0 = hard, 1 = 3x3, 2 = 5x5, 3 = 7x7.</summary>
+    public int ShadowSoftness;
+    /// <summary>Screen space ambient occlusion: contact shadows in creases and corners.</summary>
+    public bool Ssao;
+    /// <summary>SSAO sampling radius in world units.</summary>
+    public float SsaoRadius;
+    /// <summary>Contrast exponent of the occlusion term.</summary>
+    public float SsaoIntensity;
+    /// <summary>Depth bias against self occlusion on flat surfaces.</summary>
+    public float SsaoBias;
+    /// <summary>Kernel samples per pixel (4-32).</summary>
+    public int SsaoSamples;
+    /// <summary>How much occlusion also darkens direct light (0 = ambient only, 1 = everything).</summary>
+    public float SsaoDirectStrength;
 
     /// <summary>Balanced defaults: 720p, vsync on, 4x MSAA, ACES tone mapping.</summary>
     public static RendererOptions Default => new();
@@ -40,6 +62,17 @@ public struct RendererOptions
         FrustumCulling = true;
         PowerPreference = PowerPreference.HighPerformance;
         BgraOutput = false;
+        Shadows = false;
+        ShadowMapSize = 2048;
+        ShadowDistance = 60f;
+        ShadowCascades = 3;
+        ShadowSoftness = 1;
+        Ssao = false;
+        SsaoRadius = 0.5f;
+        SsaoIntensity = 1.5f;
+        SsaoBias = 0.025f;
+        SsaoSamples = 16;
+        SsaoDirectStrength = 0.25f;
     }
 
     internal NativeRendererDesc ToNative() => new()
@@ -56,6 +89,17 @@ public struct RendererOptions
         FrustumCulling = FrustumCulling ? 1 : 0,
         PowerPreference = (uint)PowerPreference,
         BgraOutput = BgraOutput ? 1 : 0,
+        Shadows = Shadows ? 1 : 0,
+        ShadowMapSize = (uint)Math.Clamp(ShadowMapSize, 256, 8192),
+        ShadowDistance = ShadowDistance,
+        ShadowCascades = (uint)Math.Clamp(ShadowCascades, 1, 4),
+        ShadowSoftness = (uint)Math.Clamp(ShadowSoftness, 0, 3),
+        Ssao = Ssao ? 1 : 0,
+        SsaoRadius = SsaoRadius,
+        SsaoIntensity = SsaoIntensity,
+        SsaoBias = SsaoBias,
+        SsaoSamples = (uint)Math.Clamp(SsaoSamples, 4, 32),
+        SsaoDirectStrength = SsaoDirectStrength,
     };
 }
 
@@ -66,7 +110,9 @@ public readonly record struct FrameStats(
     int VisibleNodes,
     int CulledNodes,
     int Lights,
-    float CpuTimeMs);
+    float CpuTimeMs,
+    int ShadowLayers = 0,
+    int ShadowDrawCalls = 0);
 
 /// <summary>
 /// Draws a <see cref="Scene"/>. A renderer either owns a swap chain for a
@@ -133,7 +179,9 @@ public sealed class Renderer : IDisposable
                 (int)stats.VisibleNodes,
                 (int)stats.CulledNodes,
                 (int)stats.Lights,
-                stats.CpuTimeMs);
+                stats.CpuTimeMs,
+                (int)stats.ShadowLayers,
+                (int)stats.ShadowDrawCalls);
         }
     }
 

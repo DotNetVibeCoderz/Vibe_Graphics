@@ -84,6 +84,9 @@ internal struct NativeLightDesc
     public float Height;
     public int CastShadow;
     public int Enabled;
+    public float ShadowBias;
+    public float ShadowNormalBias;
+    public float ShadowStrength;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -126,6 +129,17 @@ internal struct NativeRendererDesc
     public int FrustumCulling;
     public uint PowerPreference;
     public int BgraOutput;
+    public int Shadows;
+    public uint ShadowMapSize;
+    public float ShadowDistance;
+    public uint ShadowCascades;
+    public uint ShadowSoftness;
+    public int Ssao;
+    public float SsaoRadius;
+    public float SsaoIntensity;
+    public float SsaoBias;
+    public uint SsaoSamples;
+    public float SsaoDirectStrength;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -137,6 +151,8 @@ internal struct NativeFrameStats
     public uint CulledNodes;
     public uint Lights;
     public float CpuTimeMs;
+    public uint ShadowLayers;
+    public uint ShadowDrawCalls;
 }
 
 [StructLayout(LayoutKind.Sequential)]

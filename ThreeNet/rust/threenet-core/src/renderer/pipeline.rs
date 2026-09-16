@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::geometry::{Topology, Vertex};
 use crate::material::{CullMode, Material};
-use crate::renderer::uniforms::{FrameUniform, LightsUniform, MaterialUniform, ObjectUniform};
+use crate::renderer::uniforms::{
+    FrameUniform, LightsUniform, MaterialUniform, ObjectUniform, ShadowUniform,
+};
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
@@ -66,6 +68,32 @@ impl Layouts {
                 ),
                 texture(2),
                 sampler(3),
+                // Shadow map array + comparison sampler + cascade matrices.
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+                uniform(
+                    6,
+                    wgpu::ShaderStages::FRAGMENT,
+                    size_of::<ShadowUniform>() as u64,
+                    false,
+                ),
+                // Blurred SSAO term.
+                texture(7),
+                sampler(8),
             ],
         });
 
