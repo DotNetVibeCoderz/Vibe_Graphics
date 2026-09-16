@@ -374,6 +374,31 @@ impl ResourceCache {
             return;
         }
 
+        if let Some(compressed) = &texture.compressed {
+            match crate::compressed::resolve(compressed, texture.width, texture.height, device.features()) {
+                Ok(crate::compressed::Resolved::Blocks { format, levels }) => {
+                    self.upload_blocks(device, queue, id, texture, format, &levels);
+                    return;
+                }
+                Ok(crate::compressed::Resolved::Rgba8(pixels)) => {
+                    let mut decoded = texture.clone();
+                    decoded.compressed = None;
+                    decoded.pixels = pixels;
+                    decoded.format = match texture.format {
+                        crate::texture::TextureFormat::Rgba8UnormSrgb => crate::texture::TextureFormat::Rgba8UnormSrgb,
+                        _ => crate::texture::TextureFormat::Rgba8Unorm,
+                    };
+                    return self.ensure_texture(device, queue, encoder, mipmaps, id, &decoded);
+                }
+                Err(error) => {
+                    log::error!("texture '{}' could not be decoded: {error}", texture.name);
+                    let mut fallback = crate::texture::Texture::solid([255, 0, 255, 255], true);
+                    fallback.version = texture.version();
+                    return self.ensure_texture(device, queue, encoder, mipmaps, id, &fallback);
+                }
+            }
+        }
+
         let format = texture.format.to_wgpu();
         let mip_level_count = texture.mip_level_count();
         // Mip generation renders into the higher levels, so they need to be
@@ -418,6 +443,78 @@ impl ResourceCache {
         );
         if mip_level_count > 1 {
             mipmaps.generate(device, encoder, &gpu_texture, format, mip_level_count);
+        }
+
+        let view = gpu_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = create_sampler(device, &texture.sampler, mip_level_count);
+        self.textures.insert(
+            id,
+            GpuTexture {
+                texture: gpu_texture,
+                view,
+                sampler,
+                version: texture.version(),
+            },
+        );
+    }
+
+    /// Uploads a block compressed mip chain as is.
+    fn upload_blocks(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        id: TextureId,
+        texture: &Texture,
+        format: crate::compressed::CompressedFormat,
+        levels: &[Vec<u8>],
+    ) {
+        let srgb = texture.format == crate::texture::TextureFormat::Rgba8UnormSrgb;
+        // Only the levels a full chain would have, and never more than supplied.
+        let max_levels = 32 - texture.width.max(texture.height).leading_zeros();
+        let mip_level_count = (levels.len() as u32).clamp(1, max_levels);
+        let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(if texture.name.is_empty() { "threenet.texture.compressed" } else { texture.name.as_str() }),
+            size: wgpu::Extent3d {
+                width: texture.width,
+                height: texture.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: format.to_wgpu(srgb),
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        for (level, data) in levels.iter().take(mip_level_count as usize).enumerate() {
+            let width = (texture.width >> level).max(1);
+            let height = (texture.height >> level).max(1);
+            let (blocks_x, blocks_y) = (width.div_ceil(4), height.div_ceil(4));
+            let expected = blocks_x as usize * blocks_y as usize * format.block_bytes();
+            if data.len() < expected {
+                log::warn!("compressed level {level} of '{}' is short; remaining levels skipped", texture.name);
+                break;
+            }
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &gpu_texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &data[..expected],
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(blocks_x * format.block_bytes() as u32),
+                    rows_per_image: Some(blocks_y),
+                },
+                // Copies of block formats use the physical (block aligned) size.
+                wgpu::Extent3d {
+                    width: blocks_x * 4,
+                    height: blocks_y * 4,
+                    depth_or_array_layers: 1,
+                },
+            );
         }
 
         let view = gpu_texture.create_view(&wgpu::TextureViewDescriptor::default());

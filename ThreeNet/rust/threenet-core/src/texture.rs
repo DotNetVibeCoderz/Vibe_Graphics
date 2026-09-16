@@ -97,6 +97,8 @@ pub struct Texture {
     /// Tightly packed pixels, `width * height * format.bytes_per_pixel()`.
     pub pixels: Vec<u8>,
     pub sampler: SamplerDesc,
+    /// Block compressed or Basis Universal payload; `pixels` is empty then.
+    pub compressed: Option<crate::compressed::CompressedData>,
     pub(crate) version: u32,
 }
 
@@ -118,6 +120,7 @@ impl Texture {
             format,
             pixels,
             sampler: SamplerDesc::default(),
+            compressed: None,
             version: 1,
         })
     }
@@ -138,6 +141,7 @@ impl Texture {
                 mipmaps: false,
                 ..Default::default()
             },
+            compressed: None,
             version: 1,
         }
     }
@@ -145,6 +149,24 @@ impl Texture {
     /// Decodes PNG / JPEG / BMP / TGA / HDR from an in-memory buffer.
     /// HDR images are kept as `Rgba32Float`, everything else becomes RGBA8.
     pub fn from_encoded_bytes(bytes: &[u8], srgb: bool) -> Result<Self> {
+        if crate::compressed::is_ktx2(bytes) {
+            return Self::from_decoded(crate::compressed::parse_ktx2(bytes)?, srgb);
+        }
+        if crate::compressed::is_basis(bytes) {
+            let (width, height, levels) = crate::compressed::basis_info(bytes)?;
+            return Self::from_decoded(
+                crate::compressed::DecodedImage {
+                    width,
+                    height,
+                    srgb,
+                    content: crate::compressed::DecodedContent::Compressed(crate::compressed::CompressedData::Basis {
+                        file: std::sync::Arc::new(bytes.to_vec()),
+                        levels,
+                    }),
+                },
+                srgb,
+            );
+        }
         let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
             .with_guessed_format()
             .map_err(|e| Error::Asset(format!("cannot detect image format: {e}")))?;
@@ -163,6 +185,7 @@ impl Texture {
                 format: TextureFormat::Rgba32Float,
                 pixels: bytemuck::cast_slice(rgba.as_raw()).to_vec(),
                 sampler: SamplerDesc::default(),
+                compressed: None,
                 version: 1,
             })
         } else {
@@ -178,9 +201,32 @@ impl Texture {
                 },
                 pixels: rgba.into_raw(),
                 sampler: SamplerDesc::default(),
+                compressed: None,
                 version: 1,
             })
         }
+    }
+
+    /// Wraps a KTX2 / Basis decode result. The caller decides the colour space
+    /// from how the texture is used (colour vs. data), as for PNG or JPEG.
+    fn from_decoded(image: crate::compressed::DecodedImage, srgb: bool) -> Result<Self> {
+        use crate::compressed::DecodedContent;
+        let format = if srgb { TextureFormat::Rgba8UnormSrgb } else { TextureFormat::Rgba8Unorm };
+        let (format, pixels, compressed) = match image.content {
+            DecodedContent::Rgba8(pixels) => (format, pixels, None),
+            DecodedContent::RgbaFloat(pixels) => (TextureFormat::Rgba32Float, pixels, None),
+            DecodedContent::Compressed(data) => (format, Vec::new(), Some(data)),
+        };
+        Ok(Self {
+            name: String::new(),
+            width: image.width,
+            height: image.height,
+            format,
+            pixels,
+            sampler: SamplerDesc::default(),
+            compressed,
+            version: 1,
+        })
     }
 
     pub fn from_file(path: &str, srgb: bool) -> Result<Self> {

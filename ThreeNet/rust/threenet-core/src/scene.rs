@@ -214,6 +214,7 @@ pub struct Scene {
     pub(crate) animations: Arena<crate::animation::AnimationClip>,
     pub(crate) skins: Arena<crate::animation::Skin>,
     pub(crate) players: Arena<crate::animation::AnimationPlayer>,
+    pub(crate) assets: crate::assets::AssetManager,
     root: NodeId,
     /// Camera used when the caller does not pass one explicitly.
     active_camera: Option<NodeId>,
@@ -242,6 +243,7 @@ impl Scene {
             animations: Arena::default(),
             skins: Arena::default(),
             players: Arena::default(),
+            assets: Default::default(),
             root,
             active_camera: None,
         }
@@ -532,6 +534,7 @@ impl Scene {
     }
 
     pub fn remove_texture(&mut self, id: TextureId) -> bool {
+        self.assets.forget_texture(id);
         self.textures.remove(id).is_some()
     }
 

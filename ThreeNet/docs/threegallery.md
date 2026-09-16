@@ -12,8 +12,10 @@ dotnet run --project apps/ThreeGallery
 | Bloom & tone mapping | PBR sweep |
 |---|---|
 | ![Bloom](images/gallery-bloom.png) | ![PBR sweep](images/gallery-pbr.png) |
-| **Shadows & SSAO** | |
-| ![Shadows and SSAO](images/gallery-shadows.png) | |
+| **Shadows & SSAO** | **Custom shaders** |
+| ![Shadows and SSAO](images/gallery-shadows.png) | ![Custom shaders](images/gallery-custom-shaders.png) |
+| **Deferred: 100 lights** | **Depth of field & motion blur** |
+| ![Deferred lights](images/gallery-deferred-lights.png) | ![Depth of field](images/gallery-dof.png) |
 
 ## Layout / Tata letak
 
@@ -29,12 +31,12 @@ dotnet run --project apps/ThreeGallery
 | Category | Sample |
 |---|---|
 | Basics | Primitives |
-| Materials | Shading models, PBR sweep, Textures, Transparency |
-| Lighting | Lights, Shadows & SSAO |
-| Post-processing | Bloom & tone mapping |
+| Materials | Shading models, PBR sweep, Textures, Texture streaming & KTX2, Custom shaders, Transparency |
+| Lighting | Lights, Shadows & SSAO, Deferred: 100 lights |
+| Post-processing | Bloom & tone mapping, Depth of field & motion blur |
 | Environment | Fog & depth |
 | Scene graph | Scene graph (solar system) |
-| Animation | Animated geometry (96×96 height field) |
+| Animation | Animated geometry (96×96 height field), Keyframe & skeletal animation |
 | Interaction | Raycast picking |
 | Performance | 1000 objects |
 

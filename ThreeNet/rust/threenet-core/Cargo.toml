@@ -23,8 +23,13 @@ glam = { version = "0.33.7", features = ["bytemuck"] }
 gltf = { version = "1.4.1", features = ["import", "utils", "names"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "bmp", "tga"] }
 log = "0.4.34"
-# zlib for compressed FBX arrays.
+# zlib for compressed FBX arrays and KTX2 supercompression.
 miniz_oxide = "0.8.9"
+# KTX2 zstd supercompression.
+ruzstd = "0.9.0"
+# Basis Universal transcoder (ETC1S / UASTC) and CPU fallback block decoding.
+basis-universal = "0.3.1"
+texture2ddecoder = "0.1.2"
 # Same naga as wgpu: validates custom shaders and translates GLSL hooks to WGSL.
 naga = { version = "30.0.1", features = ["wgsl-in", "wgsl-out", "glsl-in"] }
 pollster = "1.0.1"
@@ -32,3 +37,7 @@ raw-window-handle = "0.6.2"
 thiserror = "2.0.20"
 wgpu = "30.0.1"
 winit = "0.30.13"
+
+[dev-dependencies]
+# The compression tests encode real ETC1S / UASTC data.
+basis-universal = "0.3.1"

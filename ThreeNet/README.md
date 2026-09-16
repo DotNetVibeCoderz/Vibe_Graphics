@@ -19,6 +19,8 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | ![Converted Crystal Garden](docs/images/converted-crystal-garden.png) | ![Hello Cube](docs/images/hello-cube.png) |
 | **Shadow maps + SSAO** | **Motocross sample (Rodin rider & bike)** |
 | ![Shadows and SSAO](docs/images/gallery-shadows.png) | ![Motocross](docs/images/moto-rodin.png) |
+| **Custom WGSL / GLSL shaders** | **Deferred renderer - 100 lights** |
+| ![Custom shaders](docs/images/gallery-custom-shaders.png) | ![Deferred lights](docs/images/gallery-deferred-lights.png) |
 | **Home Complex CAD - estate** | **Home Complex CAD - show unit interior** |
 | ![Estate](docs/images/cad-estate.png) | ![Interior](docs/images/cad-interior.png) |
 
@@ -30,11 +32,11 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 
 | Part | Path | Status |
 |---|---|---|
-| Native core (Rust, wgpu 30): renderer, scene graph, PBR, shadow maps + SSAO, bloom + tone mapping, glTF/OBJ, raycasting, windowing, C ABI | `rust/threenet-core` | working, tested |
+| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, depth of field + motion blur, bloom + tone mapping, keyframe/skeletal animation, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, C ABI | `rust/threenet-core` | working, tested |
 | .NET 10 binding (`ThreeNet`) | `src/ThreeNet` | working, tested |
 | Native packaging (`ThreeNet.Native`) | `src/ThreeNet.Native` | builds the Rust core automatically |
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
-| **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 13 samples |
+| **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 18 samples |
 | **ThreeAppGen** - AI code editor (Jack - The Code Bender) + Three.js converter | `apps/ThreeAppGen` | working |
 | **Home Complex CAD Viewer** - housing estate explorer (interiors, day/night, land & building info) | `apps/HomeComplexCad` | working |
 | Samples | `samples/` | Hello Cube, **Motocross** game, Three.js demo project |
@@ -93,7 +95,8 @@ scene deterministically, the LLM translates behaviour, and the result is compile
 
 ### Documentation
 
-Everything is in [`docs/`](docs/README.md): getting started, architecture, API reference, the native core,
+Everything is in [`docs/`](docs/README.md): getting started, architecture, API reference, advanced rendering
+(custom shaders, deferred, animation, FBX, KTX2, streaming), the native core,
 ThreeGallery, ThreeAppGen and the Three.js converter. The roadmap is in [PLAN.md](PLAN.md) and the
 development log in [Progress.md](Progress.md).
 
@@ -105,11 +108,11 @@ development log in [Progress.md](Progress.md).
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Inti native (Rust, wgpu 30): renderer, scene graph, PBR, shadow map + SSAO, bloom + tone mapping, glTF/OBJ, raycasting, window, C ABI | `rust/threenet-core` | berjalan, teruji |
+| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, depth of field + motion blur, bloom + tone mapping, animasi keyframe/skeletal, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, C ABI | `rust/threenet-core` | berjalan, teruji |
 | Binding .NET 10 (`ThreeNet`) | `src/ThreeNet` | berjalan, teruji |
 | Paket native (`ThreeNet.Native`) | `src/ThreeNet.Native` | otomatis mem-build inti Rust |
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |
-| **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 13 contoh |
+| **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 18 contoh |
 | **ThreeAppGen** - editor kode AI (Jack - The Code Bender) + konverter Three.js | `apps/ThreeAppGen` | berjalan |
 | **Home Complex CAD Viewer** - penjelajah kompleks perumahan (interior, siang/malam, info tanah & bangunan) | `apps/HomeComplexCad` | berjalan |
 | Contoh | `samples/` | Hello Cube, game **Motocross**, project demo Three.js |
@@ -139,7 +142,8 @@ diperbaiki otomatis. Lihat [docs/threejs-conversion.md](docs/threejs-conversion.
 
 ### Dokumentasi
 
-Semua ada di [`docs/`](docs/README.md). Roadmap ada di [PLAN.md](PLAN.md) dan catatan progres di
+Semua ada di [`docs/`](docs/README.md), termasuk rendering lanjutan (shader kustom, deferred, animasi, FBX,
+KTX2, streaming) di [docs/advanced-rendering.md](docs/advanced-rendering.md). Roadmap ada di [PLAN.md](PLAN.md) dan catatan progres di
 [Progress.md](Progress.md).
 
 ---

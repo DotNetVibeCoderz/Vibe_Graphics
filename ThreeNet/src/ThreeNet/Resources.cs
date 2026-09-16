@@ -155,6 +155,20 @@ public sealed class Texture : IEquatable<Texture>
     /// <summary>Destroys the texture and frees its GPU memory.</summary>
     public void Destroy() => NativeMethods.tn_texture_destroy(Scene.Handle, Id);
 
+    /// <summary>Streaming state; textures not loaded with <see cref="Scene.LoadTextureAsync"/> are <see cref="TextureState.Ready"/>.</summary>
+    public TextureState State => (TextureState)NativeMethods.tn_texture_get_state(Scene.Handle, Id);
+
+    /// <summary>Why a streamed texture failed to load, or <see langword="null"/>.</summary>
+    public unsafe string? LoadError
+    {
+        get
+        {
+            string message = NativeError.ReadString((buffer, capacity) =>
+                NativeMethods.tn_texture_get_error(Scene.Handle, Id, (byte*)buffer, capacity));
+            return message.Length == 0 ? null : message;
+        }
+    }
+
     public bool Equals(Texture? other) => other is not null && Id == other.Id && ReferenceEquals(Scene, other.Scene);
 
     public override bool Equals(object? obj) => Equals(obj as Texture);
@@ -320,6 +334,27 @@ public struct MaterialOptions
         };
     }
 }
+
+/// <summary>Loading state of a texture.</summary>
+public enum TextureState
+{
+    /// <summary>The handle no longer refers to a texture.</summary>
+    Missing = 0,
+    /// <summary>A placeholder is shown while the image loads in the background.</summary>
+    Loading = 1,
+    Ready = 2,
+    /// <summary>Loading failed; the placeholder stays (see <see cref="Texture.LoadError"/>).</summary>
+    Failed = 3,
+}
+
+/// <summary>Texture streaming and asset cache counters.</summary>
+public readonly record struct AssetStats(
+    int PendingTextures,
+    int CachedTextures,
+    int CachedModels,
+    long CacheHits,
+    long CacheMisses,
+    long StreamedTextures);
 
 /// <summary>Result of importing an asset file.</summary>
 public readonly record struct ImportResult(

@@ -21,14 +21,21 @@ Outputs: `threenet_core.dll` (Windows), `libthreenet_core.so` (Linux), `libthree
 | `math.rs` | `Transform`, `Aabb`, `Frustum` (on glam 0.33) |
 | `geometry.rs` | 48 byte interleaved `Vertex`, normals/tangents, primitives |
 | `material.rs`, `light.rs`, `camera.rs`, `texture.rs` | Component data |
+| `compressed.rs` | KTX2 / Basis Universal parsing, transcoding and CPU block decoding |
+| `assets.rs` | Texture streaming worker pool, texture and model cache |
+| `animation.rs` | Clips, channels, players, CPU skinning |
+| `fbx.rs` | Binary / ASCII FBX parser and importer |
+| `shader.rs` | Custom shader hooks: GLSL translation (naga), composition, validation |
 | `scene.rs` | Generational `Arena<T>`, node graph, world matrices, resources |
 | `renderer/mod.rs` | Instance/adapter/device, targets, draw collection, render, readback |
 | `renderer/pipeline.rs` | Bind group layouts, pipeline cache |
 | `renderer/resources.rs` | GPU caches, default textures, mipmap generator |
 | `renderer/post.rs` | Bloom and tone mapping |
+| `renderer/shadows.rs`, `renderer/ssao.rs` | Shadow maps, SSAO (and the depth prepass) |
+| `renderer/deferred.rs`, `renderer/effects.rs` | G-buffer lighting pass, depth of field and motion blur |
 | `renderer/uniforms.rs` | `#[repr(C)]` uniform blocks matching the WGSL |
-| `shaders/scene.wgsl`, `shaders/post.wgsl` | Uber shader and post passes |
-| `loaders.rs` | glTF / GLB (with KHR_lights_punctual), OBJ |
+| `shaders/common.wgsl`, `material.wgsl`, `forward.wgsl`, `deferred_gbuffer.wgsl`, `deferred_lighting.wgsl`, `effects.wgsl`, `post.wgsl` | Modular shaders and post passes |
+| `loaders.rs` | glTF / GLB (with KHR_lights_punctual, skins, animations), OBJ |
 | `raycast.rs` | Ray / AABB / triangle intersection |
 | `window.rs` | winit 0.30 application host, input translation |
 | `ffi.rs` | The C ABI |

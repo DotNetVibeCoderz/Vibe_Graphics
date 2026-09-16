@@ -23,10 +23,10 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Bloom | ✅ | Soft knee bright pass + separable blur |
 | Fog, image based lighting (equirect) | ✅ | Exponential squared fog |
 | SSAO | ✅ | Normal/depth prepass, half res hemisphere kernel, bilateral blur |
-| Depth of field, motion blur | ⬜ | Post chain is ready for more passes |
-| Deferred renderer | ⬜ | |
+| Depth of field, motion blur | ✅ | Golden angle bokeh DoF, depth reprojection camera motion blur (HDR, both paths) |
+| Deferred renderer | ✅ | `RenderPath.Deferred`: 5 target G-buffer + fullscreen lighting, up to 128 lights; transparents forward |
 | Shadow maps | ✅ | Directional cascades (up to 4) + spot, PCF, 8 layers, per node cast/receive |
-| Modular shaders / custom shader injection (WGSL, GLSL/HLSL via naga) | ⬜ | |
+| Modular shaders / custom shader injection (WGSL, GLSL/HLSL via naga) | ✅ | `user_vertex` / `user_surface` hooks in WGSL or GLSL (naga), CPU validation, hot reload. HLSL input is not offered by naga |
 
 ## Phase 3 - Asset pipeline
 
@@ -35,9 +35,9 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | glTF / GLB loader (meshes, PBR materials, textures, cameras, punctual lights) | ✅ | |
 | OBJ loader | ✅ | |
 | PNG / JPEG / BMP / TGA / HDR textures | ✅ | |
-| FBX loader | ⬜ | |
-| Keyframe / skeletal animation playback | ⬜ | |
-| Texture streaming, compression (KTX2/Basis), asset cache manager | ⬜ | |
+| FBX loader | ✅ | Binary + ASCII, materials, textures, transform stack, skins, animation stacks |
+| Keyframe / skeletal animation playback | ✅ | Step / linear / cubic spline clips, players with speed/weight/loop, CPU skinning; glTF + FBX + code |
+| Texture streaming, compression (KTX2/Basis), asset cache manager | ✅ | KTX2 (raw, BC, ETC2, ASTC, zstd/zlib) + Basis ETC1S/UASTC transcoded per GPU; async loads with placeholders and a per-frame budget; texture + model cache |
 
 ## Phase 4 - Interactivity
 

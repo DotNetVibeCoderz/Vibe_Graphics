@@ -2478,3 +2478,144 @@ pub unsafe extern "C" fn tn_load_fbx_memory(
         Err(error) => fail(error),
     }
 }
+
+// ------------------------------------------------------- streaming and cache
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnAssetStats {
+    pub pending_textures: u32,
+    pub cached_textures: u32,
+    pub cached_models: u32,
+    pub _padding: u32,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub streamed_textures: u64,
+}
+
+/// Starts loading an image in the background; the returned texture shows a
+/// placeholder until the renderer (or `tn_scene_poll_streaming`) swaps it in.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_load_async(scene: *mut Scene, path: *const c_char, srgb: i32) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return 0;
+    };
+    match scene.load_texture_async(path, srgb != 0) {
+        Ok(id) => id,
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+/// Loads an image once per path and colour space.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_load_cached(scene: *mut Scene, path: *const c_char, srgb: i32) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return 0;
+    };
+    match scene.load_texture_cached(path, srgb != 0) {
+        Ok(id) => id,
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+/// Returns the streaming state (0 missing, 1 loading, 2 ready, 3 failed).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_get_state(scene: *mut Scene, texture: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.texture_state(texture) as i32
+}
+
+/// Copies the error of a failed streamed texture (empty when none).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_get_error(
+    scene: *mut Scene,
+    texture: u32,
+    buffer: *mut c_char,
+    capacity: i32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let message = scene.texture_error(texture).unwrap_or("");
+    unsafe { copy_string(message, buffer, capacity) }
+}
+
+/// Applies finished background loads; returns how many were applied.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_poll_streaming(scene: *mut Scene) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.poll_streaming() as i32
+}
+
+/// Blocks until all streamed textures are applied; returns 1 when done, 0 on timeout.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_finish_streaming(scene: *mut Scene, timeout_ms: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.finish_streaming(std::time::Duration::from_millis(timeout_ms as u64)) as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_set_streaming_budget(scene: *mut Scene, uploads_per_frame: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.set_streaming_uploads_per_frame(uploads_per_frame as usize);
+    status::OK
+}
+
+/// Places a model, importing the file only once (animated models excepted).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_model_cached(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match scene.load_model_cached(path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_get_asset_stats(scene: *mut Scene, out_stats: *mut TnAssetStats) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_stats.is_null() {
+        set_last_error("stats pointer is null");
+        return status::NULL_POINTER;
+    }
+    let stats = scene.asset_stats();
+    unsafe {
+        *out_stats = TnAssetStats {
+            pending_textures: stats.pending_textures,
+            cached_textures: stats.cached_textures,
+            cached_models: stats.cached_models,
+            _padding: 0,
+            cache_hits: stats.cache_hits,
+            cache_misses: stats.cache_misses,
+            streamed_textures: stats.streamed_textures,
+        };
+    }
+    status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_clear_asset_cache(scene: *mut Scene) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.clear_asset_cache();
+    status::OK
+}

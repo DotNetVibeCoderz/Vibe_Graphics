@@ -178,6 +178,18 @@ internal struct NativeRayHit
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct NativeAssetStats
+{
+    public uint PendingTextures;
+    public uint CachedTextures;
+    public uint CachedModels;
+    public uint Padding;
+    public ulong CacheHits;
+    public ulong CacheMisses;
+    public ulong StreamedTextures;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct NativeImportResult
 {
     public uint Root;

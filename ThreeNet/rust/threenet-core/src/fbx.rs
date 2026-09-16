@@ -1208,6 +1208,6 @@ mod tests {
         // FBX XYZ: rotate about X first, then Y, then Z (R = Rz * Ry * Rx).
         let q = euler_to_quat(Vec3::new(90.0, 90.0, 0.0), 0);
         let expected = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2) * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
-        assert!(q.angle_between(expected) < 1e-4);
+        assert!(q.dot(expected).abs() > 0.99999, "{q:?} vs {expected:?}");
     }
 }

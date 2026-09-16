@@ -281,6 +281,60 @@ public sealed class Scene : IDisposable
         }
     }
 
+    /// <summary>
+    /// Loads an image (PNG, JPEG, HDR, KTX2, Basis, ...) on background threads and
+    /// returns immediately. The texture shows a grey placeholder until the
+    /// renderer swaps the decoded image in at the start of a frame. Requests
+    /// for the same path and colour space return the same texture.
+    /// </summary>
+    public Texture LoadTextureAsync(string path, bool srgb = true) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_texture_load_async(Handle, path, srgb ? 1 : 0)));
+
+    /// <summary>Loads an image once; later calls with the same path and colour space return the same texture.</summary>
+    public Texture LoadTextureCached(string path, bool srgb = true) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_texture_load_cached(Handle, path, srgb ? 1 : 0)));
+
+    /// <summary>Applies finished background loads now (rendering does this automatically). Returns how many were applied.</summary>
+    public int PollStreaming() => NativeMethods.tn_scene_poll_streaming(Handle);
+
+    /// <summary>Waits until every streamed texture is applied. Returns <see langword="false"/> on timeout.</summary>
+    public bool FinishStreaming(TimeSpan timeout) =>
+        NativeMethods.tn_scene_finish_streaming(Handle, (uint)Math.Clamp(timeout.TotalMilliseconds, 0, uint.MaxValue)) == 1;
+
+    /// <summary>How many finished textures are swapped in per frame (default 4).</summary>
+    public void SetStreamingBudget(int uploadsPerFrame) =>
+        NativeError.Check(NativeMethods.tn_scene_set_streaming_budget(Handle, (uint)Math.Max(1, uploadsPerFrame)));
+
+    /// <summary>
+    /// Places a model, importing the file only the first time. Later calls clone
+    /// a hidden prototype and share its geometry, materials and textures, so
+    /// the counts in the result are only non-zero for the first import. Models
+    /// with animations or skins are imported every time.
+    /// </summary>
+    public ImportResult LoadModelCached(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_model_cached(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    public AssetStats AssetStats
+    {
+        get
+        {
+            NativeError.Check(NativeMethods.tn_scene_get_asset_stats(Handle, out NativeAssetStats stats));
+            return new AssetStats(
+                (int)stats.PendingTextures,
+                (int)stats.CachedTextures,
+                (int)stats.CachedModels,
+                (long)stats.CacheHits,
+                (long)stats.CacheMisses,
+                (long)stats.StreamedTextures);
+        }
+    }
+
+    /// <summary>Forgets cached paths and removes hidden model prototypes; placed instances stay.</summary>
+    public void ClearAssetCache() => NativeError.Check(NativeMethods.tn_scene_clear_asset_cache(Handle));
+
     /// <summary>Uploads raw pixels; the buffer must be tightly packed.</summary>
     public unsafe Texture CreateTexture(int width, int height, ReadOnlySpan<byte> pixels, TextureFormat format = TextureFormat.Rgba8UnormSrgb)
     {

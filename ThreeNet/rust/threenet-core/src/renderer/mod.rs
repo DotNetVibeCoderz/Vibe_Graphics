@@ -357,6 +357,12 @@ impl Renderer {
         if polygon_mode_line {
             features |= wgpu::Features::POLYGON_MODE_LINE;
         }
+        // Compressed texture formats are uploaded natively whenever the adapter
+        // supports them (KTX2 blocks, transcoded Basis Universal).
+        features |= adapter.features()
+            & (wgpu::Features::TEXTURE_COMPRESSION_BC
+                | wgpu::Features::TEXTURE_COMPRESSION_ETC2
+                | wgpu::Features::TEXTURE_COMPRESSION_ASTC);
 
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("threenet.device"),
@@ -606,6 +612,7 @@ impl Renderer {
     /// Renders `scene` from `camera_node` (or the scene active camera).
     pub fn render(&mut self, scene: &mut Scene, camera_node: Option<NodeId>) -> Result<()> {
         let cpu_start = Instant::now();
+        scene.poll_streaming();
         let camera_node = camera_node
             .or_else(|| scene.active_camera())
             .or_else(|| {

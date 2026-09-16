@@ -24,7 +24,10 @@ lights face -Z.
 | `CreatePlaneGeometry`, `CreateBoxGeometry`, `CreateSphereGeometry`, `CreateCylinderGeometry`, `CreateConeGeometry`, `CreateTorusGeometry`, `CreateGridGeometry` | Primitives |
 | `CreateMaterial(in MaterialOptions)`, `CreateMaterial(color, metallic, roughness)` | Materials |
 | `LoadTexture(path, srgb)`, `LoadTexture(bytes, srgb)`, `CreateTexture(width, height, pixels, format)` | Textures |
-| `LoadGltf(path or bytes, parent?)`, `LoadObj(path, parent?)` | Asset import, returns `ImportResult` |
+| `LoadTextureAsync(path, srgb)`, `LoadTextureCached(path, srgb)`, `PollStreaming()`, `FinishStreaming(timeout)`, `SetStreamingBudget(n)`, `AssetStats`, `ClearAssetCache()` | Streaming and cache |
+| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included) |
+| `CreateShader(source, language, name?)` | Custom shader hooks (WGSL / GLSL) |
+| `Animations`, `CreateAnimation(name)`, `UpdateAnimations(delta)` | Animation clips |
 | `Raycast(ray, options?, maxHits)`, `CreateCameraRay(camera, ndcX, ndcY, aspect)` | Picking |
 
 ## Node
@@ -43,11 +46,15 @@ lights face -Z.
 
 - `Geometry`: `Counts`, `Update(vertices, indices)`, `ComputeNormals()`, `ComputeTangents()`, `Destroy()`.
 - `Material`: `Options` (get/set), `Update(Func<MaterialOptions, MaterialOptions>)`, `BaseColor`, `Destroy()`.
-- `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `Destroy()`.
+- `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `State` (`TextureState`), `LoadError`, `Destroy()`.
+- `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.
+- `AnimationClip`: `Name`, `Duration`, `AddTranslation`, `AddRotation`, `AddScale`, `AddChannel(node, path, interpolation, times, values)`, `Play(loop)`, `Destroy()`.
+- `AnimationPlayer`: `Time`, `Speed`, `Weight`, `Loop`, `IsPlaying`, `Stop()`.
 - `MaterialOptions` (struct): `Shading`, `AlphaMode`, `CullMode`, `BaseColor`, `Emissive`, `EmissiveIntensity`,
   `Metallic`, `Roughness`, `Specular`, `Shininess`, `Reflectance`, `NormalScale`, `OcclusionStrength`,
   `AlphaCutoff`, `UvScale`, `UvOffset`, `DepthWrite`, `DepthTest`, `Wireframe`, `RenderOrder`, `BaseColorMap`,
-  `NormalMap`, `MetallicRoughnessMap`, `EmissiveMap`, `OcclusionMap`; factories `Pbr`, `Basic`, `Phong`, `Lambert`.
+  `NormalMap`, `MetallicRoughnessMap`, `EmissiveMap`, `OcclusionMap`, `Shader`, `Custom0`, `Custom1`;
+  factories `Pbr`, `Basic`, `Phong`, `Lambert`.
 
 ## Lighting and cameras
 
@@ -71,7 +78,12 @@ lights face -Z.
 `RendererOptions`: `Width`, `Height`, `VSync`, `MsaaSamples`, `Exposure`, `ToneMapping`, `Bloom`,
 `BloomIntensity`, `BloomThreshold`, `FrustumCulling`, `PowerPreference`, `BgraOutput`,
 `Shadows`, `ShadowMapSize`, `ShadowDistance`, `ShadowCascades`, `ShadowSoftness`,
-`Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`.
+`Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`,
+`RenderPath` (`Forward` / `Deferred`), `DepthOfField`, `DofFocusDistance`, `DofFocusRange`, `DofMaxBlur`,
+`MotionBlur`, `MotionBlurStrength`, `MotionBlurSamples`.
+
+Custom shaders, deferred rendering, DoF / motion blur, animation, FBX, KTX2 / Basis and streaming are
+explained with examples in [advanced-rendering.md](advanced-rendering.md).
 
 `FrameStats`: `DrawCalls`, `Triangles`, `VisibleNodes`, `CulledNodes`, `Lights`, `CpuTimeMs`,
 `ShadowLayers`, `ShadowDrawCalls`.

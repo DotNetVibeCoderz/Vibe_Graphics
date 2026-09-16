@@ -33,10 +33,13 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 
 ## Architecture (big picture)
 
-- `rust/threenet-core`: scene graph as generational arenas (`scene.rs`), forward renderer with HDR target,
-  shadow maps (`renderer/shadows.rs`, cascades + spot), SSAO (`renderer/ssao.rs`), bloom + tone mapping
-  (`renderer/`), uber WGSL shader (`shaders/`), glTF/OBJ loaders, raycast, winit host
-  (`window.rs`), and `ffi.rs` — the only public surface. Ids are 1-based `u32` (0 = null); failures return a
+- `rust/threenet-core`: scene graph as generational arenas (`scene.rs`), forward and deferred renderer
+  (`RenderPath`, `renderer/deferred.rs`) with HDR target, shadow maps (`renderer/shadows.rs`, cascades + spot),
+  SSAO (`renderer/ssao.rs`), DoF + motion blur (`renderer/effects.rs`), bloom + tone mapping, modular WGSL
+  (`shaders/common|material|forward|deferred_gbuffer.wgsl`) with custom `user_vertex`/`user_surface` hooks
+  (`shader.rs`, GLSL via naga), animation + CPU skinning (`animation.rs`), glTF/OBJ (`loaders.rs`) and FBX
+  (`fbx.rs`) loaders, KTX2/Basis (`compressed.rs`), texture streaming + asset cache (`assets.rs`), raycast,
+  winit host (`window.rs`), and `ffi.rs` — the only public surface. Ids are 1-based `u32` (0 = null); failures return a
   negative status and set a thread-local message.
 - `src/ThreeNet`: `Interop/NativeMethods.cs` mirrors `ffi.rs` 1:1 with `LibraryImport`; `Interop/NativeTypes.cs`
   mirrors every `#[repr(C)]` struct (field order must match exactly). The assembly uses
@@ -72,6 +75,11 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 - Avalonia 12: no `GetVisualRoot()` (use `TopLevel.GetTopLevel`), `PlaceholderText` not `Watermark`, don't define
   your own `InitializeComponent`, Android uses `AvaloniaAndroidApplication<TApp>` + non-generic `AvaloniaMainActivity`.
 - PowerShell `Set-Content -Encoding utf8` writes a BOM, which breaks WGSL; write files with the editor tools.
+- `basis-universal` compiles C++ in `build.rs`: the native build needs a C++ toolchain. Regenerate the
+  compressed test files with `cargo test --test compressed -- --ignored`.
+- Arena ids are reused after removal: anything keyed by a texture id (streaming, cache) must be forgotten in
+  `Scene::remove_texture`.
+- The ThreeGallery `Assets/` folder (RiggedSimple.glb, KTX2/Basis checkers) is copied to the output dir.
 
 ## Conventions
 

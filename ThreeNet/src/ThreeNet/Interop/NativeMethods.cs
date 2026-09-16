@@ -278,6 +278,36 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library)]
     internal static partial int tn_texture_destroy(nint scene, uint texture);
 
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint tn_texture_load_async(nint scene, string path, int srgb);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint tn_texture_load_cached(nint scene, string path, int srgb);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_texture_get_state(nint scene, uint texture);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_texture_get_error(nint scene, uint texture, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_poll_streaming(nint scene);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_finish_streaming(nint scene, uint timeoutMs);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_set_streaming_budget(nint scene, uint uploadsPerFrame);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_model_cached(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_get_asset_stats(nint scene, out NativeAssetStats stats);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_clear_asset_cache(nint scene);
+
     // ------------------------------------------------------------ renderer
 
     [LibraryImport(Library)]

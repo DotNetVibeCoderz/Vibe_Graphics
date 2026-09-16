@@ -3,6 +3,29 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-17 - Phase 2 & 3 complete / Fase 2 & 3 selesai (0.3.0)
+
+- **Custom shaders**: the uber shader is now modular (`common`, `material`, `forward`, `deferred_gbuffer`);
+  `Scene.CreateShader` takes `user_vertex` / `user_surface` hooks in WGSL or GLSL (translated with naga),
+  validates them on the CPU and supports hot reload (`Shader.Update`). Materials gained `Shader`, `Custom0`,
+  `Custom1`.
+- **Deferred renderer** (`RenderPath.Deferred`): G-buffer + fullscreen lighting pass, transparents forward,
+  128 lights in both paths.
+- **Depth of field** (bokeh) and **camera motion blur** on the HDR image, forward and deferred.
+- **Animation**: clips with step / linear / cubic spline channels, players (speed, weight, loop), CPU
+  skinning; imported from glTF and FBX or built in code (`AnimationClip`, `Scene.UpdateAnimations`).
+- **FBX importer**: binary and ASCII, materials, textures, transform stack, skins, animation stacks;
+  `Scene.LoadModel` picks the loader by extension.
+- **KTX2 / Basis Universal**: raw, BC1-7, ETC2, ASTC and zstd/zlib supercompression; ETC1S and UASTC
+  transcoded to BC7 / ETC2 / ASTC depending on the GPU, CPU decode fallback.
+- **Texture streaming** (`LoadTextureAsync`, `Texture.State`, `SetStreamingBudget`, `FinishStreaming`) and
+  **asset cache** (`LoadTextureCached`, `LoadModelCached`, `AssetStats`, `ClearAssetCache`).
+- ThreeGallery: 5 new samples (custom shaders, deferred 100 lights, depth of field & motion blur, keyframe &
+  skeletal animation, texture streaming & KTX2) - 18 in total. New doc: `docs/advanced-rendering.md`.
+- **ABI 5.** The native build now compiles the Basis Universal C++ transcoder (needs a C++ toolchain).
+- Tests: Rust 22 unit + 23 integration (deferred, effects, animation, FBX, KTX2/Basis incl. GPU render,
+  streaming/cache), .NET 30.
+
 ## 2026-09-16 - Sample apps / Aplikasi contoh
 
 - **Motocross** (`samples/ThreeNet.Samples.MotoCross`): procedural circuit with jumps, whoops and berms, analytic
@@ -90,4 +113,4 @@ Catatan pengembangan Three.Net. Terbaru di atas.
 
 - Only Windows (DX12) is verified on real hardware so far.
 - Web and mobile heads compile, but the native core for WebAssembly and Android is not built yet (phase 5).
-- Point lights do not cast shadows yet; skeletal animation and custom shaders are still open (see PLAN.md).
+- Point lights do not cast shadows yet; skinning runs on the CPU (see PLAN.md).
