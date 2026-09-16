@@ -109,6 +109,8 @@ pub struct MeshBinding {
     pub material: MaterialId,
     pub cast_shadow: bool,
     pub receive_shadow: bool,
+    /// Skeleton deforming the geometry, if the mesh is skinned.
+    pub skin: Option<crate::animation::SkinId>,
 }
 
 #[derive(Debug, Clone)]
@@ -204,11 +206,14 @@ impl Default for Environment {
 #[derive(Debug)]
 pub struct Scene {
     pub environment: Environment,
-    nodes: Arena<Node>,
-    geometries: Arena<Geometry>,
+    pub(crate) nodes: Arena<Node>,
+    pub(crate) geometries: Arena<Geometry>,
     materials: Arena<Material>,
     textures: Arena<Texture>,
     shaders: Arena<CustomShader>,
+    pub(crate) animations: Arena<crate::animation::AnimationClip>,
+    pub(crate) skins: Arena<crate::animation::Skin>,
+    pub(crate) players: Arena<crate::animation::AnimationPlayer>,
     root: NodeId,
     /// Camera used when the caller does not pass one explicitly.
     active_camera: Option<NodeId>,
@@ -234,6 +239,9 @@ impl Scene {
             materials: Arena::default(),
             textures: Arena::default(),
             shaders: Arena::default(),
+            animations: Arena::default(),
+            skins: Arena::default(),
+            players: Arena::default(),
             root,
             active_camera: None,
         }
@@ -592,6 +600,7 @@ impl Scene {
             material,
             cast_shadow: true,
             receive_shadow: true,
+            skin: None,
         });
         Ok(id)
     }

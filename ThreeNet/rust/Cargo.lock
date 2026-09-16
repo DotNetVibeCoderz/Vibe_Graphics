@@ -2096,6 +2096,7 @@ dependencies = [
  "gltf",
  "image",
  "log",
+ "miniz_oxide 0.8.9",
  "naga",
  "pollster",
  "raw-window-handle",

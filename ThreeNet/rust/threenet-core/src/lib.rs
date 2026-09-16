@@ -6,8 +6,10 @@
 //!
 //! Made by Gravicode Studios - led by Kang Fadhil.
 
+pub mod animation;
 pub mod camera;
 pub mod error;
+pub mod fbx;
 pub mod ffi;
 pub mod geometry;
 pub mod light;

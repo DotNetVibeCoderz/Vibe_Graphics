@@ -14,6 +14,7 @@
 use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char, c_void};
 
+use crate::animation::{AnimationClip, AnimationPlayer, Channel, Interpolation, TargetPath};
 use crate::renderer::RenderPath;
 use crate::shader::{CustomShader, ShaderLanguage};
 use crate::camera::{Camera, Projection};
@@ -615,6 +616,8 @@ pub struct TnImportResult {
     pub geometry_count: u32,
     pub material_count: u32,
     pub texture_count: u32,
+    pub animation_count: u32,
+    pub skin_count: u32,
 }
 
 #[repr(C)]
@@ -1070,6 +1073,7 @@ pub unsafe extern "C" fn tn_node_attach_mesh(
         material,
         cast_shadow: true,
         receive_shadow: true,
+        skin: None,
     });
     status::OK
 }
@@ -1953,6 +1957,8 @@ unsafe fn write_import_result(out: *mut TnImportResult, result: &crate::loaders:
             geometry_count: result.geometries.len() as u32,
             material_count: result.materials.len() as u32,
             texture_count: result.textures.len() as u32,
+            animation_count: result.animations.len() as u32,
+            skin_count: result.skins.len() as u32,
         }
     };
 }
@@ -2199,6 +2205,276 @@ pub unsafe extern "C" fn tn_app_run(desc: *const TnWindowDesc, callbacks: TnAppC
     };
     match crate::window::run_app(config, CallbackHandler { callbacks }) {
         Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+// ---------------------------------------------------------------- animation
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnPlayerDesc {
+    pub time: f32,
+    pub speed: f32,
+    pub weight: f32,
+    pub looping: i32,
+    pub playing: i32,
+}
+
+impl From<AnimationPlayer> for TnPlayerDesc {
+    fn from(value: AnimationPlayer) -> Self {
+        Self {
+            time: value.time,
+            speed: value.speed,
+            weight: value.weight,
+            looping: i32::from(value.looping),
+            playing: i32::from(value.playing),
+        }
+    }
+}
+
+impl TnPlayerDesc {
+    fn apply(&self, player: &mut AnimationPlayer) {
+        player.time = self.time;
+        player.speed = self.speed;
+        player.weight = self.weight.clamp(0.0, 1.0);
+        player.looping = self.looping != 0;
+        player.playing = self.playing != 0;
+    }
+}
+
+/// Copies up to `capacity` animation clip ids into `out_ids`; returns the total count.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_get_animations(scene: *mut Scene, out_ids: *mut u32, capacity: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    let ids = scene.animation_ids();
+    if !out_ids.is_null() {
+        let count = ids.len().min(capacity as usize);
+        unsafe { std::ptr::copy_nonoverlapping(ids.as_ptr(), out_ids, count) };
+    }
+    ids.len() as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_animation_get_name(scene: *mut Scene, clip: u32, buffer: *mut c_char, capacity: i32) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.animation(clip) {
+        Some(animation) => unsafe { copy_string(&animation.name, buffer, capacity) },
+        None => {
+            set_last_error("invalid animation handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+/// Duration in seconds (last key time of any channel), or a negative status.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_animation_get_duration(scene: *mut Scene, clip: u32, out_duration: *mut f32) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_duration.is_null() {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    }
+    match scene.animation(clip) {
+        Some(animation) => {
+            unsafe { *out_duration = animation.duration() };
+            status::OK
+        }
+        None => {
+            set_last_error("invalid animation handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+/// Creates an empty clip that channels can be added to.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_animation_create(scene: *mut Scene, name: *const c_char) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let name = unsafe { str_from_ptr(name) }.unwrap_or("animation").to_string();
+    scene.add_animation(AnimationClip { name, channels: Vec::new() })
+}
+
+/// Adds a keyframe channel. `path`: 0 translation, 1 rotation (quaternion
+/// xyzw), 2 scale. `interpolation`: 0 step, 1 linear, 2 cubic spline (values
+/// then hold in tangent, value, out tangent per key).
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn tn_animation_add_channel(
+    scene: *mut Scene,
+    clip: u32,
+    node: u32,
+    path: u32,
+    interpolation: u32,
+    times: *const f32,
+    key_count: u32,
+    values: *const f32,
+    value_count: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if times.is_null() || values.is_null() || key_count == 0 {
+        set_last_error("keyframe arrays are null or empty");
+        return status::NULL_POINTER;
+    }
+    if scene.node(node).is_none() {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    }
+    let path = TargetPath::from_u32(path);
+    let interpolation = Interpolation::from_u32(interpolation);
+    let per_key = path.components() * if interpolation == Interpolation::CubicSpline { 3 } else { 1 };
+    if value_count as usize != key_count as usize * per_key {
+        set_last_error(&format!("expected {} values for {key_count} keys, got {value_count}", key_count as usize * per_key));
+        return status::INVALID_ARGUMENT;
+    }
+    let times = unsafe { std::slice::from_raw_parts(times, key_count as usize) }.to_vec();
+    if times.windows(2).any(|w| w[1] < w[0]) {
+        set_last_error("key times must be ascending");
+        return status::INVALID_ARGUMENT;
+    }
+    let values = unsafe { std::slice::from_raw_parts(values, value_count as usize) }.to_vec();
+    match scene.animation_mut(clip) {
+        Some(animation) => {
+            animation.channels.push(Channel { target: node, path, interpolation, times, values });
+            status::OK
+        }
+        None => {
+            set_last_error("invalid animation handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_animation_destroy(scene: *mut Scene, clip: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.remove_animation(clip) {
+        status::OK
+    } else {
+        set_last_error("invalid animation handle");
+        status::INVALID_HANDLE
+    }
+}
+
+/// Starts playing a clip; returns the player id (0 on failure).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_animation_play(scene: *mut Scene, clip: u32, desc: *const TnPlayerDesc) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let mut player = AnimationPlayer::new(clip);
+    if let Some(desc) = unsafe { desc.as_ref() } {
+        desc.apply(&mut player);
+    }
+    match scene.play_animation(player) {
+        Some(id) => id,
+        None => {
+            set_last_error("invalid animation handle");
+            0
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_player_get(scene: *mut Scene, player: u32, out_desc: *mut TnPlayerDesc) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_desc.is_null() {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    }
+    match scene.player(player) {
+        Some(existing) => {
+            unsafe { *out_desc = (*existing).into() };
+            status::OK
+        }
+        None => {
+            set_last_error("invalid player handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_player_set(scene: *mut Scene, player: u32, desc: *const TnPlayerDesc) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(desc) = (unsafe { desc.as_ref() }) else {
+        set_last_error("player descriptor is null");
+        return status::NULL_POINTER;
+    };
+    match scene.player_mut(player) {
+        Some(existing) => {
+            desc.apply(existing);
+            status::OK
+        }
+        None => {
+            set_last_error("invalid player handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_player_stop(scene: *mut Scene, player: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.stop_animation(player) {
+        status::OK
+    } else {
+        set_last_error("invalid player handle");
+        status::INVALID_HANDLE
+    }
+}
+
+/// Advances every animation player by `delta` seconds and deforms skinned meshes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_update_animations(scene: *mut Scene, delta: f32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.update_animations(delta);
+    status::OK
+}
+
+// ---------------------------------------------------------------------- FBX
+
+/// Imports a binary or ASCII FBX file (meshes, materials, textures, skeletons
+/// and animation stacks).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_fbx(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::fbx::load_fbx(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports FBX from memory; only embedded textures can be resolved.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_fbx_memory(
+    scene: *mut Scene,
+    bytes: *const u8,
+    length: u32,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if bytes.is_null() || length == 0 {
+        set_last_error("FBX buffer is null or empty");
+        return status::INVALID_ARGUMENT;
+    }
+    let data = unsafe { std::slice::from_raw_parts(bytes, length as usize) };
+    match crate::fbx::load_fbx_from_slice(scene, data, (parent != 0).then_some(parent), "fbx", None) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
         Err(error) => fail(error),
     }
 }

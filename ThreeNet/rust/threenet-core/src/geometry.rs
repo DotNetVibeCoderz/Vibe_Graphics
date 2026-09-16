@@ -76,6 +76,8 @@ pub struct Geometry {
     pub indices: Vec<u32>,
     pub topology: Topology,
     pub bounds: Aabb,
+    /// Joint indices, weights and bind pose for skinned meshes.
+    pub skin: Option<crate::animation::SkinWeights>,
     pub(crate) version: u32,
 }
 
@@ -87,6 +89,7 @@ impl Default for Geometry {
             indices: Vec::new(),
             topology: Topology::TriangleList,
             bounds: Aabb::EMPTY,
+            skin: None,
             version: 1,
         }
     }

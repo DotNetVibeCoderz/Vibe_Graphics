@@ -221,6 +221,36 @@ public sealed class Scene : IDisposable
             Roughness = roughness,
         });
 
+    // ------------------------------------------------------------ animation
+
+    /// <summary>Every animation clip in the scene (imported or created), oldest first.</summary>
+    public unsafe IReadOnlyList<AnimationClip> Animations
+    {
+        get
+        {
+            int count = NativeMethods.tn_scene_get_animations(Handle, null, 0);
+            NativeError.Check(count);
+            uint[] ids = new uint[count];
+            fixed (uint* pointer = ids)
+            {
+                NativeMethods.tn_scene_get_animations(Handle, pointer, (uint)ids.Length);
+            }
+
+            return ids.Select(id => new AnimationClip(this, id)).ToArray();
+        }
+    }
+
+    /// <summary>Creates an empty clip; add keys with <see cref="AnimationClip.AddTranslation"/> and friends.</summary>
+    public AnimationClip CreateAnimation(string? name = null) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_animation_create(Handle, name)));
+
+    /// <summary>
+    /// Advances every playing animation by <paramref name="deltaSeconds"/>, applies the
+    /// pose and deforms skinned meshes. Call once per frame before rendering.
+    /// </summary>
+    public void UpdateAnimations(float deltaSeconds) =>
+        NativeError.Check(NativeMethods.tn_scene_update_animations(Handle, deltaSeconds));
+
     // -------------------------------------------------------------- shaders
 
     /// <summary>
@@ -283,6 +313,37 @@ public sealed class Scene : IDisposable
     }
 
     /// <summary>Imports a Wavefront OBJ file.</summary>
+    /// <summary>
+    /// Imports a binary or ASCII FBX file: meshes, Lambert/Phong materials with
+    /// textures, the node hierarchy, skeletons and animation stacks. Units and
+    /// up axis are converted to Y-up metres.
+    /// </summary>
+    public ImportResult LoadFbx(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_fbx(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports FBX from memory (embedded textures only).</summary>
+    public unsafe ImportResult LoadFbx(ReadOnlySpan<byte> bytes, Node? parent = null)
+    {
+        fixed (byte* pointer = bytes)
+        {
+            NativeError.Check(NativeMethods.tn_load_fbx_memory(Handle, pointer, (uint)bytes.Length, parent?.Id ?? 0, out NativeImportResult result));
+            return ImportResult.From(this, result);
+        }
+    }
+
+    /// <summary>Imports a model, picking the loader from the file extension (.gltf, .glb, .fbx, .obj).</summary>
+    public ImportResult LoadModel(string path, Node? parent = null) =>
+        Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".gltf" or ".glb" => LoadGltf(path, parent),
+            ".fbx" => LoadFbx(path, parent),
+            ".obj" => LoadObj(path, parent),
+            var extension => throw new NotSupportedException($"no importer for '{extension}' files"),
+        };
+
     public ImportResult LoadObj(string path, Node? parent = null)
     {
         NativeError.Check(NativeMethods.tn_load_obj(Handle, path, parent?.Id ?? 0, out NativeImportResult result));

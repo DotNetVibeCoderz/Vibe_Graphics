@@ -231,6 +231,45 @@ internal static unsafe partial class NativeMethods
     internal static partial int tn_shader_destroy(nint scene, uint shader);
 
     [LibraryImport(Library)]
+    internal static partial int tn_scene_get_animations(nint scene, uint* ids, uint capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_animation_get_name(nint scene, uint clip, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_animation_get_duration(nint scene, uint clip, out float duration);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint tn_animation_create(nint scene, string? name);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_animation_add_channel(nint scene, uint clip, uint node, uint path, uint interpolation, float* times, uint keyCount, float* values, uint valueCount);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_animation_destroy(nint scene, uint clip);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_animation_play(nint scene, uint clip, in NativePlayerDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_player_get(nint scene, uint player, out NativePlayerDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_player_set(nint scene, uint player, in NativePlayerDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_player_stop(nint scene, uint player);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_update_animations(nint scene, float delta);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_fbx(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_load_fbx_memory(nint scene, byte* bytes, uint length, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library)]
     internal static partial uint tn_texture_load_memory(nint scene, byte* bytes, uint length, int srgb);
 
     [LibraryImport(Library)]

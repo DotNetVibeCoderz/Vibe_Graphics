@@ -322,12 +322,21 @@ public struct MaterialOptions
 }
 
 /// <summary>Result of importing an asset file.</summary>
-public readonly record struct ImportResult(Node Root, int NodeCount, int GeometryCount, int MaterialCount, int TextureCount)
+public readonly record struct ImportResult(
+    Node Root,
+    int NodeCount,
+    int GeometryCount,
+    int MaterialCount,
+    int TextureCount,
+    int AnimationCount = 0,
+    int SkinCount = 0)
 {
     internal static ImportResult From(Scene scene, in NativeImportResult native) => new(
         new Node(scene, native.Root),
         (int)native.NodeCount,
         (int)native.GeometryCount,
         (int)native.MaterialCount,
-        (int)native.TextureCount);
+        (int)native.TextureCount,
+        (int)native.AnimationCount,
+        (int)native.SkinCount);
 }

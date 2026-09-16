@@ -21,6 +21,8 @@ pub struct ImportResult {
     pub geometries: Vec<u32>,
     pub materials: Vec<u32>,
     pub textures: Vec<u32>,
+    pub animations: Vec<u32>,
+    pub skins: Vec<u32>,
 }
 
 /// Imports a `.gltf` or `.glb` file into `scene` under `parent`.
@@ -167,6 +169,8 @@ fn build_gltf(
                 .read_indices()
                 .map(|i| i.into_u32().collect())
                 .unwrap_or_default();
+            let joints: Option<Vec<[u16; 4]>> = reader.read_joints(0).map(|j| j.into_u16().collect());
+            let weights: Option<Vec<[f32; 4]>> = reader.read_weights(0).map(|w| w.into_f32().collect());
 
             let mut geometry = Geometry::new(vertices, indices);
             geometry.name = mesh.name().unwrap_or_default().to_string();
@@ -175,6 +179,16 @@ fn build_gltf(
             }
             if tangents.is_none() {
                 geometry.compute_tangents();
+            }
+            if let (Some(joints), Some(weights)) = (joints, weights)
+                && joints.len() == geometry.vertices.len()
+                && weights.len() == geometry.vertices.len()
+            {
+                geometry.skin = Some(crate::animation::SkinWeights {
+                    joints,
+                    weights,
+                    bind_pose: geometry.vertices.clone(),
+                });
             }
             let geometry_id = scene.add_geometry(geometry);
             result.geometries.push(geometry_id);
@@ -194,8 +208,93 @@ fn build_gltf(
         .default_scene()
         .or_else(|| document.scenes().next())
         .ok_or_else(|| Error::Asset("the glTF file has no scene".into()))?;
+    let mut node_map: HashMap<usize, NodeId> = HashMap::new();
     for node in gltf_scene.nodes() {
-        import_gltf_node(scene, &node, root, &meshes, &mut result)?;
+        import_gltf_node(scene, &node, root, &meshes, &mut result, &mut node_map)?;
+    }
+
+    // ---------------------------------------------------------------- skins
+    let mut skins: HashMap<usize, u32> = HashMap::new();
+    for skin in document.skins() {
+        let reader = skin.reader(|buffer| buffers.get(buffer.index()).map(|b| &b.0[..]));
+        let joints: Vec<NodeId> = skin
+            .joints()
+            .filter_map(|joint| node_map.get(&joint.index()).copied())
+            .collect();
+        let inverse_bind_matrices: Vec<crate::math::Mat4> = reader
+            .read_inverse_bind_matrices()
+            .map(|matrices| matrices.map(|m| crate::math::Mat4::from_cols_array_2d(&m)).collect())
+            .unwrap_or_else(|| vec![crate::math::Mat4::IDENTITY; joints.len()]);
+        let id = scene.add_skin(crate::animation::Skin {
+            name: skin.name().unwrap_or_default().to_string(),
+            joints,
+            inverse_bind_matrices,
+        });
+        skins.insert(skin.index(), id);
+        result.skins.push(id);
+    }
+    for node in document.nodes() {
+        let (Some(skin), Some(id)) = (node.skin(), node_map.get(&node.index()).copied()) else {
+            continue;
+        };
+        let Some(skin_id) = skins.get(&skin.index()).copied() else {
+            continue;
+        };
+        // The mesh sits on the node itself or, for multi primitive meshes, on its children.
+        let mut targets = vec![id];
+        if let Some(target) = scene.node(id) {
+            targets.extend(target.children().iter().copied());
+        }
+        for target in targets {
+            if let Some(binding) = scene.node_mut(target).and_then(|n| n.mesh.as_mut()) {
+                binding.skin = Some(skin_id);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------- animations
+    for animation in document.animations() {
+        let mut clip = crate::animation::AnimationClip {
+            name: animation.name().unwrap_or_default().to_string(),
+            channels: Vec::new(),
+        };
+        for channel in animation.channels() {
+            let Some(target) = node_map.get(&channel.target().node().index()).copied() else {
+                continue;
+            };
+            let reader = channel.reader(|buffer| buffers.get(buffer.index()).map(|b| &b.0[..]));
+            let Some(times) = reader.read_inputs() else {
+                continue;
+            };
+            let times: Vec<f32> = times.collect();
+            let (path, values): (crate::animation::TargetPath, Vec<f32>) = match reader.read_outputs() {
+                Some(gltf::animation::util::ReadOutputs::Translations(values)) => {
+                    (crate::animation::TargetPath::Translation, values.flatten().collect())
+                }
+                Some(gltf::animation::util::ReadOutputs::Rotations(values)) => {
+                    (crate::animation::TargetPath::Rotation, values.into_f32().flatten().collect())
+                }
+                Some(gltf::animation::util::ReadOutputs::Scales(values)) => {
+                    (crate::animation::TargetPath::Scale, values.flatten().collect())
+                }
+                // Morph target weights are not supported yet.
+                _ => continue,
+            };
+            clip.channels.push(crate::animation::Channel {
+                target,
+                path,
+                interpolation: match channel.sampler().interpolation() {
+                    gltf::animation::Interpolation::Step => crate::animation::Interpolation::Step,
+                    gltf::animation::Interpolation::Linear => crate::animation::Interpolation::Linear,
+                    gltf::animation::Interpolation::CubicSpline => crate::animation::Interpolation::CubicSpline,
+                },
+                times,
+                values,
+            });
+        }
+        if !clip.channels.is_empty() {
+            result.animations.push(scene.add_animation(clip));
+        }
     }
 
     Ok(result)
@@ -207,9 +306,11 @@ fn import_gltf_node(
     parent: NodeId,
     meshes: &[Vec<(u32, u32)>],
     result: &mut ImportResult,
+    node_map: &mut HashMap<usize, NodeId>,
 ) -> Result<()> {
     let id = scene.create_node(Some(parent))?;
     result.nodes.push(id);
+    node_map.insert(node.index(), id);
 
     let (translation, rotation, scale) = node.transform().decomposed();
     if let Some(target) = scene.node_mut(id) {
@@ -235,6 +336,7 @@ fn import_gltf_node(
                         material,
                         cast_shadow: true,
                         receive_shadow: true,
+                        skin: None,
                     });
                 }
             }
@@ -293,7 +395,7 @@ fn import_gltf_node(
     }
 
     for child in node.children() {
-        import_gltf_node(scene, &child, id, meshes, result)?;
+        import_gltf_node(scene, &child, id, meshes, result, node_map)?;
     }
     Ok(())
 }
@@ -399,6 +501,8 @@ pub fn load_obj(scene: &mut Scene, path: &str, parent: Option<NodeId>) -> Result
         geometries: vec![geometry_id],
         materials: vec![material],
         textures: Vec::new(),
+        animations: Vec::new(),
+        skins: Vec::new(),
     })
 }
 

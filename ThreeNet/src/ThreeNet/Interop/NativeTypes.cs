@@ -185,6 +185,18 @@ internal struct NativeImportResult
     public uint GeometryCount;
     public uint MaterialCount;
     public uint TextureCount;
+    public uint AnimationCount;
+    public uint SkinCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal record struct NativePlayerDesc
+{
+    public float Time;
+    public float Speed;
+    public float Weight;
+    public int Looping;
+    public int Playing;
 }
 
 [StructLayout(LayoutKind.Sequential)]
