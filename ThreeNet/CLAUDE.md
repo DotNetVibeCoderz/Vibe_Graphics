@@ -66,6 +66,8 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 ## Gotchas
 
 - Windows defaults to the DX12 backend: enumerating Vulkan crashes on some machines. `WGPU_BACKEND` overrides.
+- `THREENET_FALLBACK_ADAPTER=1` forces the software adapter (WARP). The GitHub Windows runner's WARP crashes in
+  shadow/SSAO tests, so CI runs those as a non-blocking step there.
 - `AppWindow.Run` hops to an STA thread and winit runs with `any_thread`; keep that when touching `window.rs`.
 - The renderer passed to host callbacks must stay boxed (stable address) — .NET keeps the pointer.
 - Struct defaults: never write `Default => new()` together with a parameterless ctor that reads `Default`

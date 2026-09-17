@@ -345,7 +345,9 @@ impl Renderer {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: config.power_preference.to_wgpu(),
             compatible_surface: surface.as_ref(),
-            force_fallback_adapter: false,
+            // THREENET_FALLBACK_ADAPTER=1 picks the software adapter (WARP on
+            // DX12), which is what GPU-less CI machines end up with.
+            force_fallback_adapter: std::env::var_os("THREENET_FALLBACK_ADAPTER").is_some_and(|v| v != "0"),
             ..Default::default()
         }))
         .map_err(|_| Error::NoAdapter)?;
