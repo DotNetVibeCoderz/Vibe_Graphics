@@ -435,7 +435,10 @@ impl Mixer {
 /// Mixer plus (optionally) a live output stream.
 pub struct AudioEngine {
     pub mixer: Arc<Mutex<Mixer>>,
+    #[cfg(feature = "audio-output")]
     stream: Option<cpal::Stream>,
+    #[cfg(not(feature = "audio-output"))]
+    stream: Option<()>,
     pub device_name: String,
     pub channels: u16,
     listener_node_last: Option<(NodeId, Vec3)>,
@@ -449,6 +452,13 @@ impl std::fmt::Debug for AudioEngine {
 
 impl AudioEngine {
     /// Opens the default output device.
+    #[cfg(not(feature = "audio-output"))]
+    pub fn new() -> Result<Self> {
+        Err(Error::Asset("audio output is not included in this build".into()))
+    }
+
+    /// Opens the default output device.
+    #[cfg(feature = "audio-output")]
     pub fn new() -> Result<Self> {
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
         let host = cpal::default_host();

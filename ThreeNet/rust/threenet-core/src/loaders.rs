@@ -6,6 +6,7 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::geometry::{Geometry, Vertex};
+#[cfg(feature = "gltf-lights")]
 use crate::light::{Light, LightKind};
 use crate::material::{AlphaMode, CullMode, Material, ShadingModel};
 use crate::math::{Quat, Transform, Vec2, Vec3, Vec4};

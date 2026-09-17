@@ -8,6 +8,7 @@
 | [advanced-rendering.md](advanced-rendering.md) | Custom shaders, deferred, DoF / motion blur, animation, FBX, KTX2 / Basis, streaming and cache |
 | [interactivity.md](interactivity.md) | Node pointer events, native HUD overlay, gamepads |
 | [extensions.md](extensions.md) | Physics (Rapier), spatial audio, networking, OpenXR probe and stereo cameras |
+| [platforms.md](platforms.md) | Runtimes (Windows, Linux, macOS, Android, iOS, browser), build features, mobile and web builds |
 | [native-core.md](native-core.md) | Building, testing and extending the Rust core |
 | [threegallery.md](threegallery.md) | The sample gallery and how to add a sample |
 | [threeappgen.md](threeappgen.md) | ThreeAppGen, Jack - The Code Bender, settings, kernel functions, templates |

@@ -1798,7 +1798,7 @@ pub unsafe extern "C" fn tn_renderer_create_xlib(
     screen: i32,
     desc: *const TnRendererDesc,
 ) -> *mut Renderer {
-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), not(target_os = "emscripten")))]
     {
         use raw_window_handle::{
             RawDisplayHandle, RawWindowHandle, XlibDisplayHandle, XlibWindowHandle,
@@ -1823,7 +1823,7 @@ pub unsafe extern "C" fn tn_renderer_create_xlib(
             }
         }
     }
-    #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "android"))))]
+    #[cfg(not(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), not(target_os = "emscripten"))))]
     {
         let _ = (window, display, screen, desc);
         set_last_error("tn_renderer_create_xlib is only available on X11 systems");

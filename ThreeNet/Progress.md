@@ -3,6 +3,20 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-17 - Phase 5: multiplatform runtime / Fase 5: runtime multiplatform (0.4.0)
+
+- Platform services became Cargo features (`basis`, `audio-output`, `gamepad`, `xr`) with stubs, so the C ABI
+  is identical on every target; winit is left out on Android and Emscripten (hosts own the surface).
+- **Android**: arm64 and x64 cores built with the NDK (API 26, AAudio) and packaged as
+  `runtimes/android-*/native`; `samples/ThreeNet.Samples.Android` renders PBR + physics + HUD offscreen.
+  Local emulator runs were blocked (the machine has no WHPX), so CI runs the sample on an emulator.
+- **iOS**: `aarch64-apple-ios` / `-ios-sim` static libraries built on macOS CI, linked through
+  `buildTransitive/ThreeNet.Native.targets` (`NativeReference`), P/Invokes bound to the main program.
+- **Browser**: `wasm32-unknown-emscripten` static library (WebGL2 through wgpu's GLES backend), linked with
+  `NativeFileReference` for `browser-wasm`.
+- **macOS x64** cross build. `NativeRuntimeInfo` reports every RID. New doc: `docs/platforms.md`.
+- Tests: Rust 33 unit + 29 integration, .NET 47, converter 11 - all passing locally.
+
 ## 2026-09-17 - Phase 6: extensions / Fase 6: ekstensi
 
 - **Physics** (`Scene.Physics`, Rapier 0.35): dynamic / fixed / kinematic bodies on nodes, box / sphere / capsule /
@@ -143,6 +157,8 @@ Catatan pengembangan Three.Net. Terbaru di atas.
 
 ## Known limitations / Keterbatasan
 
-- Only Windows (DX12) is verified on real hardware so far.
-- Web and mobile heads compile, but the native core for WebAssembly and Android is not built yet (phase 5).
+- GPU rendering is verified on Windows hardware; Linux and macOS run the test suites in CI.
+- Android, iOS and browser cores are built and packaged but not yet run on real devices / browsers
+  (the Android emulator run happens in CI).
+- OpenXR headset sessions are not implemented (runtime probe and stereo cameras are).
 - Point lights do not cast shadows yet; skinning runs on the CPU (see PLAN.md).

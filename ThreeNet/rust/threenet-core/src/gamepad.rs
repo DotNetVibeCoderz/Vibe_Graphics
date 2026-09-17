@@ -5,7 +5,9 @@
 //! buttons so callers can detect presses and releases. Virtual pads (tests,
 //! on-screen controls, network replay) can be injected into free slots.
 
+#[cfg(feature = "gamepad")]
 use gilrs::ff::{BaseEffect, BaseEffectType, EffectBuilder, Replay, Ticks};
+#[cfg(feature = "gamepad")]
 use gilrs::{Axis, Button, EventType, Gilrs};
 
 /// Button bits of [`GamepadState::buttons`], matching `GamepadButton` in .NET.
@@ -29,6 +31,7 @@ pub mod buttons {
     pub const RIGHT_TRIGGER: u32 = 1 << 16;
 }
 
+#[cfg(feature = "gamepad")]
 const BUTTON_MAP: [(Button, u32); 15] = [
     (Button::South, buttons::SOUTH),
     (Button::East, buttons::EAST),
@@ -62,9 +65,11 @@ pub struct GamepadState {
 }
 
 pub struct Gamepads {
+    #[cfg(feature = "gamepad")]
     gilrs: Option<Gilrs>,
     slots: Vec<GamepadState>,
     /// Slot owned by each physical controller.
+    #[cfg(feature = "gamepad")]
     physical: Vec<(gilrs::GamepadId, usize)>,
     pub dead_zone: f32,
     /// Trigger value above which the digital trigger bit is set.
@@ -87,6 +92,40 @@ impl Default for Gamepads {
 impl Gamepads {
     /// Opens the platform backend. Failing to open it (no udev, sandbox) is
     /// not an error: the object works with virtual pads only.
+    #[cfg(not(feature = "gamepad"))]
+    pub fn new() -> Self {
+        Self {
+            slots: Vec::new(),
+            dead_zone: 0.12,
+            trigger_threshold: 0.35,
+            init_error: Some("physical gamepads are not included in this build".into()),
+        }
+    }
+
+    #[cfg(not(feature = "gamepad"))]
+    pub fn update(&mut self) -> usize {
+        for slot in &mut self.slots {
+            slot.previous_buttons = slot.buttons;
+        }
+        self.slots.iter().filter(|s| s.connected).count()
+    }
+
+    #[cfg(not(feature = "gamepad"))]
+    fn owns_physical(&self, _slot: usize) -> bool {
+        false
+    }
+
+    #[cfg(not(feature = "gamepad"))]
+    pub fn rumble(&mut self, _slot: usize, _strong: f32, _weak: f32, _duration_ms: u32) -> bool {
+        false
+    }
+
+    #[cfg(feature = "gamepad")]
+    fn owns_physical(&self, slot: usize) -> bool {
+        self.physical.iter().any(|(_, owned)| *owned == slot)
+    }
+
+    #[cfg(feature = "gamepad")]
     pub fn new() -> Self {
         let (gilrs, init_error) = match Gilrs::new() {
             Ok(gilrs) => (Some(gilrs), None),
@@ -113,6 +152,7 @@ impl Gamepads {
         pads
     }
 
+    #[cfg(feature = "gamepad")]
     fn attach(&mut self, id: gilrs::GamepadId) -> usize {
         if let Some(&(_, slot)) = self.physical.iter().find(|(known, _)| *known == id) {
             self.slots[slot].connected = true;
@@ -138,6 +178,7 @@ impl Gamepads {
 
     /// Drains platform events and refreshes every physical slot. Returns the
     /// number of connected controllers (virtual ones included).
+    #[cfg(feature = "gamepad")]
     pub fn update(&mut self) -> usize {
         for slot in &mut self.slots {
             slot.previous_buttons = slot.buttons;
@@ -209,7 +250,7 @@ impl Gamepads {
     /// Creates or overwrites a virtual pad. `slot` may be one past the last
     /// slot to append; slots owned by physical controllers are rejected.
     pub fn set_virtual(&mut self, slot: usize, buttons: u32, axes: [f32; 6], connected: bool, name: &str) -> bool {
-        if slot > self.slots.len() || self.physical.iter().any(|(_, owned)| *owned == slot) {
+        if slot > self.slots.len() || self.owns_physical(slot) {
             return false;
         }
         if slot == self.slots.len() {
@@ -226,6 +267,7 @@ impl Gamepads {
 
     /// Plays a rumble effect: `strong` drives the low frequency motor, `weak`
     /// the high frequency one (0..1). Returns false when unsupported.
+    #[cfg(feature = "gamepad")]
     pub fn rumble(&mut self, slot: usize, strong: f32, weak: f32, duration_ms: u32) -> bool {
         let Some(gilrs) = &mut self.gilrs else { return false };
         let Some(&(id, _)) = self.physical.iter().find(|(_, owned)| *owned == slot) else {

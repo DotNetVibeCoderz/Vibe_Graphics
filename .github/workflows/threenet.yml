@@ -1,7 +1,7 @@
 name: ThreeNet
 
-# Builds the Rust core on every desktop OS, tests the .NET layers and publishes
-# ThreeNet, ThreeNet.Native (all RIDs) and ThreeNet.Avalonia to NuGet.
+# Builds the Rust core for desktop, Android, iOS and WebAssembly, tests the .NET
+# layers and publishes ThreeNet, ThreeNet.Native (all RIDs) and ThreeNet.Avalonia to NuGet.
 on:
   push:
     branches: [main]
@@ -81,9 +81,167 @@ jobs:
           path: ThreeNet/rust/target/release/${{ matrix.lib }}
           if-no-files-found: error
 
+  cross:
+    name: Native core (${{ matrix.rid }}, cross)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Intel Macs.
+          - os: macos-latest
+            rid: osx-x64
+            target: x86_64-apple-darwin
+            kind: cdylib
+            lib: libthreenet_core.dylib
+            features: ""
+          # iOS links the core statically (NativeReference, resolved from the main program).
+          - os: macos-latest
+            rid: ios-arm64
+            target: aarch64-apple-ios
+            kind: staticlib
+            lib: libthreenet_core.a
+            features: ""
+          - os: macos-latest
+            rid: iossimulator-arm64
+            target: aarch64-apple-ios-sim
+            kind: staticlib
+            lib: libthreenet_core.a
+            features: ""
+          # Browser (.NET WebAssembly links native code with Emscripten). Basis, audio
+          # output, gamepads and OpenXR are left out; the ABI stays the same.
+          - os: ubuntu-latest
+            rid: browser-wasm
+            target: wasm32-unknown-emscripten
+            kind: staticlib
+            lib: libthreenet_core.a
+            features: --no-default-features --features gltf-lights
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ThreeNet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ThreeNet/rust -> target
+          key: ${{ matrix.target }}
+
+      - name: Build
+        shell: bash
+        run: |
+          if [ "${{ matrix.kind }}" = "staticlib" ]; then
+            cargo rustc --lib --release --manifest-path rust/threenet-core/Cargo.toml --target ${{ matrix.target }} ${{ matrix.features }} --crate-type staticlib
+          else
+            cargo build --release --manifest-path rust/threenet-core/Cargo.toml --target ${{ matrix.target }} ${{ matrix.features }}
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: ThreeNet/rust/target/${{ matrix.target }}/release/${{ matrix.lib }}
+          if-no-files-found: error
+
+  android:
+    name: Native core (Android)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ThreeNet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ThreeNet/rust -> target
+          key: android
+
+      - name: Build with the NDK
+        # API 26 is the first with AAudio (cpal). winit is not used on Android.
+        run: |
+          cargo install cargo-ndk --locked
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          cargo ndk -t arm64-v8a -t x86_64 --platform 26 build --release --manifest-path rust/threenet-core/Cargo.toml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-android-arm64
+          path: ThreeNet/rust/target/aarch64-linux-android/release/libthreenet_core.so
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-android-x64
+          path: ThreeNet/rust/target/x86_64-linux-android/release/libthreenet_core.so
+          if-no-files-found: error
+
+  android-smoke:
+    name: Android emulator smoke test (informational)
+    needs: android
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: ThreeNet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-android-x64
+          path: ThreeNet/rust/target/x86_64-linux-android/release
+
+      - name: Build the sample APK
+        run: |
+          dotnet workload install android
+          dotnet publish samples/ThreeNet.Samples.Android -c Release -f net10.0-android -r android-x64 -p:SkipRustBuild=true -p:AndroidPackageFormat=apk -o apk
+          ls -la apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          working-directory: ThreeNet
+          script: |
+            adb install -r "$(ls apk/*-Signed.apk | head -1)"
+            adb logcat -c
+            adb shell am start -n com.gravicode.threenet.samples/com.gravicode.threenet.samples.MainActivity
+            for i in $(seq 1 90); do if adb logcat -d -s ThreeNet | grep -qE "THREENET_(OK|FAILED)"; then break; fi; sleep 2; done
+            adb logcat -d -s ThreeNet
+            adb logcat -d -s ThreeNet | grep -q THREENET_OK
+
   dotnet:
     name: Test, pack and publish
-    needs: native
+    needs: [native, cross, android]
+    # Desktop and Android binaries are required; a failing iOS / WebAssembly / Intel Mac
+    # build leaves that runtime out of the package instead of blocking the release.
+    if: ${{ !cancelled() && needs.native.result == 'success' && needs.android.result == 'success' }}
     runs-on: windows-latest
     defaults:
       run:
@@ -103,8 +261,9 @@ jobs:
       - name: Stage native binaries
         shell: pwsh
         run: |
-          foreach ($rid in 'win-x64', 'linux-x64', 'osx-arm64') {
+          foreach ($rid in 'win-x64', 'linux-x64', 'osx-arm64', 'osx-x64', 'android-arm64', 'android-x64', 'ios-arm64', 'iossimulator-arm64', 'browser-wasm') {
             $target = "src/ThreeNet.Native/runtimes/$rid/native"
+            if (-not (Test-Path "../artifacts/native-$rid")) { Write-Warning "no binaries for $rid"; continue }
             New-Item -ItemType Directory -Force $target | Out-Null
             Copy-Item "../artifacts/native-$rid/*" $target
           }

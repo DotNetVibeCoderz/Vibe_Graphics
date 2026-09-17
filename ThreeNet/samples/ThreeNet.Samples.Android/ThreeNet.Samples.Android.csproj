@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Smoke test for the Android build of the native core: renders a scene
+    offscreen with Three.Net and shows the frame. Build the core first:
+      cargo ndk (targets arm64-v8a and x86_64, platform 26) build, release profile
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <ApplicationId>com.gravicode.threenet.samples</ApplicationId>
+    <ApplicationTitle>Three.Net Android</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ThreeNet\ThreeNet.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AndroidNativeLibrary Include="..\..\rust\target\aarch64-linux-android\release\libthreenet_core.so" Abi="arm64-v8a" Condition="Exists('..\..\rust\target\aarch64-linux-android\release\libthreenet_core.so')" />
+    <AndroidNativeLibrary Include="..\..\rust\target\x86_64-linux-android\release\libthreenet_core.so" Abi="x86_64" Condition="Exists('..\..\rust\target\x86_64-linux-android\release\libthreenet_core.so')" />
+  </ItemGroup>
+
+</Project>

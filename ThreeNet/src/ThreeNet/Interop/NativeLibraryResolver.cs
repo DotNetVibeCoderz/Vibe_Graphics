@@ -32,6 +32,12 @@ internal static class NativeLibraryResolver
             return nint.Zero;
         }
 
+        // iOS and WebAssembly link the core into the application itself.
+        if (NativeRuntimeInfo.IsStaticallyLinked)
+        {
+            return NativeLibrary.GetMainProgramHandle();
+        }
+
         foreach (string candidate in CandidatePaths())
         {
             if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out nint handle))

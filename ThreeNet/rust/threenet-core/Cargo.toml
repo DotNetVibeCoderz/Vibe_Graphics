@@ -12,9 +12,17 @@ name = "threenet_core"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["gltf-lights"]
+default = ["gltf-lights", "basis", "audio-output", "gamepad", "xr"]
 # Imports KHR_lights_punctual lights from glTF files.
 gltf-lights = ["gltf/KHR_lights_punctual"]
+# Basis Universal transcoding (C++; needs a C++ toolchain for the target).
+basis = ["dep:basis-universal"]
+# Audio device output through cpal (the mixer and decoders are always built).
+audio-output = ["dep:cpal"]
+# Physical gamepads through gilrs (virtual pads always work).
+gamepad = ["dep:gilrs"]
+# OpenXR runtime discovery (dynamic loader).
+xr = ["dep:openxr"]
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
@@ -28,7 +36,7 @@ miniz_oxide = "0.8.9"
 # KTX2 zstd supercompression.
 ruzstd = "0.9.0"
 # Basis Universal transcoder (ETC1S / UASTC) and CPU fallback block decoding.
-basis-universal = "0.3.1"
+basis-universal = { version = "0.3.1", optional = true }
 texture2ddecoder = "0.1.2"
 # Same naga as wgpu: validates custom shaders and translates GLSL hooks to WGSL.
 naga = { version = "30.0.1", features = ["wgsl-in", "wgsl-out", "glsl-in"] }
@@ -36,13 +44,16 @@ pollster = "1.0.1"
 raw-window-handle = "0.6.2"
 thiserror = "2.0.20"
 wgpu = "30.0.1"
-winit = "0.30.13"
-gilrs = "0.11.2"
+gilrs = { version = "0.11.2", optional = true }
 ab_glyph = "0.2.32"
 rapier3d = "0.35.3"
-cpal = "0.18.2"
+cpal = { version = "0.18.2", optional = true }
 symphonia = { version = "0.6.1", default-features = false, features = ["wav", "pcm", "ogg", "vorbis", "mp3", "flac"] }
-openxr = "0.21.1"
+openxr = { version = "0.21.1", optional = true }
+
+# Native windows; Android hosts own their activity, so winit is left out there.
+[target.'cfg(not(any(target_os = "android", target_os = "emscripten")))'.dependencies]
+winit = "0.30.13"
 
 [dev-dependencies]
 # The compression tests encode real ETC1S / UASTC data.

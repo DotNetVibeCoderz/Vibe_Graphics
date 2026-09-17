@@ -26,6 +26,12 @@ pub struct XrProbe {
     pub message: String,
 }
 
+#[cfg(not(feature = "xr"))]
+pub fn probe() -> XrProbe {
+    XrProbe { message: "OpenXR support is not included in this build".into(), ..Default::default() }
+}
+
+#[cfg(feature = "xr")]
 pub fn probe() -> XrProbe {
     let mut result = XrProbe::default();
     // SAFETY: loading the system OpenXR loader; failure is reported, not fatal.

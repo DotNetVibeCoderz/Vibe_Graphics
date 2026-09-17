@@ -2,13 +2,20 @@
 //! standalone samples; embedded hosts (Avalonia, WPF, WinForms) create the
 //! renderer from their own window handle instead.
 
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use std::sync::Arc;
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use std::time::Instant;
 
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use winit::application::ApplicationHandler;
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use winit::keyboard::{KeyCode, PhysicalKey};
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use winit::window::{Window, WindowId};
 
 use crate::error::{Error, Result};
@@ -56,6 +63,7 @@ pub enum Key {
     NumPadAdd = 93, NumPadSubtract, NumPadMultiply, NumPadDivide, NumPadEnter,
 }
 
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 impl Key {
     pub fn from_physical(key: PhysicalKey) -> Self {
         let PhysicalKey::Code(code) = key else {
@@ -184,6 +192,7 @@ pub struct InputEvent {
 }
 
 impl InputEvent {
+    #[cfg(not(any(target_os = "android", target_os = "emscripten")))]
     fn new(kind: EventKind) -> Self {
         Self {
             kind: kind as u32,
@@ -234,6 +243,7 @@ impl Default for WindowConfig {
     }
 }
 
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 struct App<H: AppHandler> {
     config: WindowConfig,
     handler: H,
@@ -247,6 +257,7 @@ struct App<H: AppHandler> {
     error: Option<Error>,
 }
 
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 impl<H: AppHandler> ApplicationHandler for App<H> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
@@ -421,8 +432,16 @@ impl<H: AppHandler> ApplicationHandler for App<H> {
     }
 }
 
+/// Native windows are not available on Android: the host app owns the
+/// activity and renders through an offscreen renderer or its own surface.
+#[cfg(any(target_os = "android", target_os = "emscripten"))]
+pub fn run_app<H: AppHandler>(_config: WindowConfig, _handler: H) -> Result<()> {
+    Err(Error::Surface("native windows are not supported on this platform; render offscreen or into a host surface".into()))
+}
+
 /// Opens a window and runs the render loop until it is closed. Must be called
 /// from the main thread on macOS and Windows.
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 pub fn run_app<H: AppHandler>(config: WindowConfig, handler: H) -> Result<()> {
     let mut builder = EventLoop::builder();
     // A .NET host cannot make its main thread a single threaded apartment, so

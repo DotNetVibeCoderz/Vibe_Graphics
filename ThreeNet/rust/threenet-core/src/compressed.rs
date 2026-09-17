@@ -9,8 +9,11 @@
 //!   file, then transcoded at upload time to the best format the GPU supports
 //!   (BC7, ETC2, ASTC 4x4, or RGBA8 as a last resort).
 
-use std::sync::{Arc, Once};
+use std::sync::Arc;
+#[cfg(feature = "basis")]
+use std::sync::Once;
 
+#[cfg(feature = "basis")]
 use basis_universal::{TranscodeParameters, Transcoder, TranscoderTextureFormat};
 
 use crate::error::{Error, Result};
@@ -501,9 +504,17 @@ fn build_basis_file(uastc: bool, srgb: bool, slices: &[BasisSlice], global: &Etc
 
 // ----------------------------------------------------------- transcoding
 
+#[cfg(feature = "basis")]
 static TRANSCODER_INIT: Once = Once::new();
 
 /// Reads the size and level count of a `.basis` file.
+#[cfg(not(feature = "basis"))]
+pub fn basis_info(_file: &[u8]) -> Result<(u32, u32, u32)> {
+    Err(Error::Asset("Basis Universal support is not included in this build".into()))
+}
+
+/// Reads the size and level count of a `.basis` file.
+#[cfg(feature = "basis")]
 pub fn basis_info(file: &[u8]) -> Result<(u32, u32, u32)> {
     TRANSCODER_INIT.call_once(basis_universal::transcoder_init);
     let transcoder = Transcoder::new();
@@ -532,6 +543,9 @@ pub fn resolve(data: &CompressedData, width: u32, height: u32, features: wgpu::F
                 Ok(Resolved::Rgba8(format.decode(base, width, height)?))
             }
         }
+        #[cfg(not(feature = "basis"))]
+        CompressedData::Basis { .. } => Err(Error::Asset("Basis Universal support is not included in this build".into())),
+        #[cfg(feature = "basis")]
         CompressedData::Basis { file, levels } => {
             TRANSCODER_INIT.call_once(basis_universal::transcoder_init);
             let mut transcoder = Transcoder::new();

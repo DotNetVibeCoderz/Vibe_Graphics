@@ -19,6 +19,8 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | ![Converted Crystal Garden](docs/images/converted-crystal-garden.png) | ![Hello Cube](docs/images/hello-cube.png) |
 | **Shadow maps + SSAO** | **Motocross sample (Rodin rider & bike)** |
 | ![Shadows and SSAO](docs/images/gallery-shadows.png) | ![Motocross](docs/images/moto-rodin.png) |
+| **Interaction & HUD** | **Physics & spatial audio** |
+| ![Interaction and HUD](docs/images/gallery-interaction-hud.png) | ![Physics](docs/images/gallery-physics.png) |
 | **Custom WGSL / GLSL shaders** | **Deferred renderer - 100 lights** |
 | ![Custom shaders](docs/images/gallery-custom-shaders.png) | ![Deferred lights](docs/images/gallery-deferred-lights.png) |
 | **Home Complex CAD - estate** | **Home Complex CAD - show unit interior** |
@@ -32,11 +34,11 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 
 | Part | Path | Status |
 |---|---|---|
-| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, depth of field + motion blur, bloom + tone mapping, keyframe/skeletal animation, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, C ABI | `rust/threenet-core` | working, tested |
-| .NET 10 binding (`ThreeNet`) | `src/ThreeNet` | working, tested |
+| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, depth of field + motion blur, bloom + tone mapping, keyframe/skeletal animation, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
+| .NET 10 binding (`ThreeNet`): scene, node events, HUD, gamepads, physics, audio, UDP networking, stereo | `src/ThreeNet` | working, tested |
 | Native packaging (`ThreeNet.Native`) | `src/ThreeNet.Native` | builds the Rust core automatically |
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
-| **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 18 samples |
+| **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 20 samples |
 | **ThreeAppGen** - AI code editor (Jack - The Code Bender) + Three.js converter | `apps/ThreeAppGen` | working |
 | **Home Complex CAD Viewer** - housing estate explorer (interiors, day/night, land & building info) | `apps/HomeComplexCad` | working |
 | Samples | `samples/` | Hello Cube, **Motocross** game, Three.js demo project |
@@ -96,7 +98,8 @@ scene deterministically, the LLM translates behaviour, and the result is compile
 ### Documentation
 
 Everything is in [`docs/`](docs/README.md): getting started, architecture, API reference, advanced rendering
-(custom shaders, deferred, animation, FBX, KTX2, streaming), the native core,
+(custom shaders, deferred, animation, FBX, KTX2, streaming), interactivity (node events, HUD, gamepads),
+extensions (physics, audio, networking, XR), platforms (Android, iOS, browser), the native core,
 ThreeGallery, ThreeAppGen and the Three.js converter. The roadmap is in [PLAN.md](PLAN.md) and the
 development log in [Progress.md](Progress.md).
 
@@ -108,11 +111,11 @@ development log in [Progress.md](Progress.md).
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, depth of field + motion blur, bloom + tone mapping, animasi keyframe/skeletal, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, C ABI | `rust/threenet-core` | berjalan, teruji |
-| Binding .NET 10 (`ThreeNet`) | `src/ThreeNet` | berjalan, teruji |
+| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, depth of field + motion blur, bloom + tone mapping, animasi keyframe/skeletal, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
+| Binding .NET 10 (`ThreeNet`): scene, event node, HUD, gamepad, fisika, audio, jaringan UDP, stereo | `src/ThreeNet` | berjalan, teruji |
 | Paket native (`ThreeNet.Native`) | `src/ThreeNet.Native` | otomatis mem-build inti Rust |
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |
-| **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 18 contoh |
+| **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 20 contoh |
 | **ThreeAppGen** - editor kode AI (Jack - The Code Bender) + konverter Three.js | `apps/ThreeAppGen` | berjalan |
 | **Home Complex CAD Viewer** - penjelajah kompleks perumahan (interior, siang/malam, info tanah & bangunan) | `apps/HomeComplexCad` | berjalan |
 | Contoh | `samples/` | Hello Cube, game **Motocross**, project demo Three.js |

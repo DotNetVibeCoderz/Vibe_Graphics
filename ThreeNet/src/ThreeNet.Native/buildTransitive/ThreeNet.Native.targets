@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    Android picks up runtimes/android-*/native/*.so automatically. iOS and the
+    browser link native code statically, so the core's static library has to be
+    handed to the platform linker explicitly.
+  -->
+
+  <PropertyGroup>
+    <_ThreeNetRuntimes>$(MSBuildThisFileDirectory)..\runtimes\</_ThreeNetRuntimes>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios' and '$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('iossimulator'))">
+    <NativeReference Include="$(_ThreeNetRuntimes)iossimulator-arm64\native\libthreenet_core.a" Kind="Static" ForceLoad="true" LinkerFlags="-lc++" Condition="Exists('$(_ThreeNetRuntimes)iossimulator-arm64\native\libthreenet_core.a')" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios' and ('$(RuntimeIdentifier)' == '' or !$(RuntimeIdentifier.StartsWith('iossimulator')))">
+    <NativeReference Include="$(_ThreeNetRuntimes)ios-arm64\native\libthreenet_core.a" Kind="Static" ForceLoad="true" LinkerFlags="-lc++" Condition="Exists('$(_ThreeNetRuntimes)ios-arm64\native\libthreenet_core.a')" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <NativeFileReference Include="$(_ThreeNetRuntimes)browser-wasm\native\libthreenet_core.a" Condition="Exists('$(_ThreeNetRuntimes)browser-wasm\native\libthreenet_core.a')" />
+  </ItemGroup>
+
+</Project>

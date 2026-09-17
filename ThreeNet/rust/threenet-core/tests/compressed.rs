@@ -1,3 +1,4 @@
+#![cfg(feature = "basis")]
 //! KTX2 and Basis Universal: the test encodes a synthetic image with the Basis
 //! encoder (ETC1S and UASTC), wraps the result in `.basis` and KTX2 containers
 //! and checks that every path decodes back close to the source.

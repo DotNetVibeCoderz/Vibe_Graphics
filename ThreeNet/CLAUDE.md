@@ -33,6 +33,9 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 
 ## Architecture (big picture)
 
+- Phase 4-6 modules: `overlay.rs` + `renderer/overlay.rs` (HUD), `gamepad.rs`, `physics.rs` (Rapier), `audio.rs`
+  (mixer + cpal), `xr.rs`; .NET: `Interaction.cs`, `Overlay.cs`, `Gamepads.cs`, `Physics.cs`, `Audio.cs`, `Xr.cs`,
+  `Networking/` (pure C# UDP sessions).
 - `rust/threenet-core`: scene graph as generational arenas (`scene.rs`), forward and deferred renderer
   (`RenderPath`, `renderer/deferred.rs`) with HDR target, shadow maps (`renderer/shadows.rs`, cascades + spot),
   SSAO (`renderer/ssao.rs`), DoF + motion blur (`renderer/effects.rs`), bloom + tone mapping, modular WGSL
@@ -77,6 +80,10 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 - Avalonia 12: no `GetVisualRoot()` (use `TopLevel.GetTopLevel`), `PlaceholderText` not `Watermark`, don't define
   your own `InitializeComponent`, Android uses `AvaloniaAndroidApplication<TApp>` + non-generic `AvaloniaMainActivity`.
 - PowerShell `Set-Content -Encoding utf8` writes a BOM, which breaks WGSL; write files with the editor tools.
+- Cargo features `basis`, `audio-output`, `gamepad`, `xr` (default on) wrap platform dependencies; builds without
+  them must keep the same FFI (stub implementations). winit is excluded on Android / Emscripten. Check portable
+  code with `cargo check --target wasm32-unknown-emscripten --no-default-features --features gltf-lights`.
+  Android: `cargo ndk -t arm64-v8a -t x86_64 --platform 26 build --release` (NDK in `~/android-sdk/ndk`).
 - `basis-universal` compiles C++ in `build.rs`: the native build needs a C++ toolchain. Regenerate the
   compressed test files with `cargo test --test compressed -- --ignored`.
 - Arena ids are reused after removal: anything keyed by a texture id (streaming, cache) must be forgotten in

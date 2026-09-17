@@ -14,7 +14,7 @@
     <RootNamespace>ThreeNet.Native</RootNamespace>
     <AssemblyName>ThreeNet.Native</AssemblyName>
     <PackageId>ThreeNet.Native</PackageId>
-    <Description>Native runtime binaries for Three.Net: the Rust + wgpu rendering core for Windows (x64), Linux (x64) and macOS (arm64).</Description>
+    <Description>Native runtime binaries for Three.Net: the Rust + wgpu rendering core for Windows (x64), Linux (x64), macOS (arm64, x64), Android (arm64, x64), iOS (static library) and browser WebAssembly (static library).</Description>
     <PackageTags>3d;graphics;wgpu;rust;native;runtime</PackageTags>
     <IncludeBuildOutput>true</IncludeBuildOutput>
     <SkipRustBuild Condition="'$(SkipRustBuild)' == ''">false</SkipRustBuild>
@@ -42,6 +42,11 @@
     <NativeRuntimeIdentifier>osx-arm64</NativeRuntimeIdentifier>
     <NativeLibraryFileName>libthreenet_core.dylib</NativeLibraryFileName>
   </PropertyGroup>
+
+  <!-- Tells iOS and browser apps to link the static libraries (see buildTransitive). -->
+  <ItemGroup>
+    <None Include="buildTransitive\ThreeNet.Native.targets" Pack="true" PackagePath="buildTransitive\ThreeNet.Native.targets" />
+  </ItemGroup>
 
   <Target Name="BuildRustCore" BeforeTargets="BeforeBuild" Condition="'$(SkipRustBuild)' != 'true'">
     <Message Importance="high" Text="Building the Three.Net native core ($(RustProfile))..." />
