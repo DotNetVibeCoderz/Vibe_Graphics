@@ -50,6 +50,11 @@ jobs:
         with:
           workspaces: ThreeNet/rust -> target
 
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        # gilrs (gamepads) links libudev.
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+
       - name: Build
         run: cargo build --release --manifest-path rust/threenet-core/Cargo.toml
 

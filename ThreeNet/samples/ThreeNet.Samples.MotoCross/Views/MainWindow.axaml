@@ -109,7 +109,7 @@
     <Border Classes="panel" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18" Padding="12,6">
       <StackPanel Orientation="Horizontal" Spacing="14">
         <TextBlock x:Name="StatusText" Classes="hud" FontSize="12" Foreground="#9BA7B4"
-                   Text="W/↑ throttle · S/↓ brake · A/D steer · Space hop · ←/→ air control · C camera · R restart" />
+                   Text="W/↑ throttle · S/↓ brake · A/D steer · Space hop · ←/→ air control · C camera · R restart · Gamepad: RT/LT, sticks, A hop, Y camera, B restart" />
         <TextBlock x:Name="StatsText" Classes="hud" FontSize="12" Foreground="#5F6C79" Text="" />
       </StackPanel>
     </Border>

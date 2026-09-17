@@ -46,9 +46,9 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Keyboard, mouse, touch input (native window) | ✅ | `AppWindow.Input` |
 | Raycasting / picking | ✅ | BVH-less: AABB broad phase + Möller-Trumbore |
 | Orbit camera controls | ✅ | `OrbitController` (Avalonia), `OrbitRig` (converted apps) |
-| Gamepad | ⬜ | |
-| Event system (onClick / onHover / drag on nodes) | 🟡 | Picking exists; node level events planned |
-| UI overlay | 🟡 | Via Avalonia hosting (`ThreeNetView`) |
+| Gamepad | ✅ | `Gamepads` (gilrs: XInput/WGI, evdev, IOKit), sticks with radial dead zone, triggers, rumble, virtual pads |
+| Event system (onClick / onHover / drag on nodes) | ✅ | `InteractionManager`: enter/leave/down/up/move/click/double click/drag with bubbling; wired into `ThreeNetView` |
+| UI overlay | ✅ | Native HUD (`Scene.Overlay`): rounded panels, images, text (Inter, custom fonts), anchors, parents, hit testing, buttons |
 
 ## Phase 5 - Multiplatform runtime
 

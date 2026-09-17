@@ -37,7 +37,7 @@ dotnet run --project apps/ThreeGallery
 | Environment | Fog & depth |
 | Scene graph | Scene graph (solar system) |
 | Animation | Animated geometry (96×96 height field), Keyframe & skeletal animation |
-| Interaction | Raycast picking |
+| Interaction | Raycast picking, Interaction & HUD (node events, HUD buttons, gamepad) |
 | Performance | 1000 objects |
 
 ## Adding a sample / Menambah contoh

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -114,6 +115,17 @@ public class ThreeNetView : Control
         set => SetValue(RendererOptionsProperty, value);
     }
 
+    /// <summary>
+    /// Node level pointer events for the current <see cref="Scene"/> (created with
+    /// the scene). Register handlers with <c>Interaction.OnClick(node, ...)</c> or
+    /// make nodes draggable; a drag captures the pointer so camera controllers
+    /// attached to this view do not react to it.
+    /// </summary>
+    public InteractionManager? Interaction { get; private set; }
+
+    /// <summary>Set to false to stop feeding pointer input to <see cref="Interaction"/>.</summary>
+    public bool EnableInteraction { get; set; } = true;
+
     /// <summary>The live renderer, available after <see cref="RendererCreated"/>.</summary>
     public Renderer? Renderer => _renderer;
 
@@ -145,9 +157,84 @@ public class ThreeNetView : Control
         DisposeGpuResources();
     }
 
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (EnableInteraction && Interaction is { } interaction && interaction.PointerMove(ToVector(e.GetPosition(this)), ViewportSize()))
+        {
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!EnableInteraction || Interaction is not { } interaction)
+        {
+            return;
+        }
+
+        PointerPointProperties properties = e.GetCurrentPoint(this).Properties;
+        MouseButton button = properties.IsRightButtonPressed ? MouseButton.Right
+            : properties.IsMiddleButtonPressed ? MouseButton.Middle
+            : MouseButton.Left;
+        if (interaction.PointerDown(ToVector(e.GetPosition(this)), ViewportSize(), button))
+        {
+            e.Pointer.Capture(this);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!EnableInteraction || Interaction is not { } interaction)
+        {
+            return;
+        }
+
+        bool captured = interaction.HasPointerCapture;
+        MouseButton button = e.InitialPressMouseButton switch
+        {
+            global::Avalonia.Input.MouseButton.Right => MouseButton.Right,
+            global::Avalonia.Input.MouseButton.Middle => MouseButton.Middle,
+            _ => MouseButton.Left,
+        };
+        interaction.PointerUp(ToVector(e.GetPosition(this)), ViewportSize(), button);
+        if (captured)
+        {
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        Interaction?.PointerExit();
+    }
+
+    private static System.Numerics.Vector2 ToVector(Point point) => new((float)point.X, (float)point.Y);
+
+    private System.Numerics.Vector2 ViewportSize()
+    {
+        // The HUD is laid out in render target pixels, which differ from DIPs.
+        if (Interaction is { } interaction && _renderer is { } renderer)
+        {
+            interaction.OverlayTargetSize = new System.Numerics.Vector2(renderer.Width, renderer.Height);
+        }
+
+        return new((float)Bounds.Width, (float)Bounds.Height);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+
+        if (change.Property == CameraProperty && Interaction is { } current)
+        {
+            current.Camera = Camera;
+        }
 
         if (change.Property == IsRenderingProperty)
         {
@@ -166,6 +253,7 @@ public class ThreeNetView : Control
         else if (change.Property == SceneProperty)
         {
             _failure = null;
+            Interaction = Scene is { } scene ? new InteractionManager(scene, Camera) : null;
             InvalidateVisual();
         }
     }

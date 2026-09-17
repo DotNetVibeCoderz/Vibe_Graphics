@@ -127,6 +127,10 @@ public partial class MainWindow : Window
         });
         Viewport.Scene = _scene;
         Viewport.Camera = _camera;
+        if (Viewport.Interaction is { } interaction)
+        {
+            sample.ConfigureInteraction(interaction);
+        }
 
         _orbit = new OrbitController(Viewport, _camera)
         {

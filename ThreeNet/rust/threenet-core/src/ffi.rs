@@ -2619,3 +2619,392 @@ pub unsafe extern "C" fn tn_scene_clear_asset_cache(scene: *mut Scene) -> i32 {
     scene.clear_asset_cache();
     status::OK
 }
+
+// ------------------------------------------------------------------ overlay
+
+/// Overlay element description; `kind` 0 = panel, 1 = image, 2 = text.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct TnOverlayElement {
+    pub kind: u32,
+    pub parent: u32,
+    pub anchor: u32,
+    pub layer: i32,
+    pub offset: [f32; 2],
+    pub size: [f32; 2],
+    pub color: [f32; 4],
+    pub border_color: [f32; 4],
+    pub border_width: f32,
+    pub corner_radius: f32,
+    pub visible: i32,
+    pub interactive: i32,
+    pub texture: u32,
+    pub uv: [f32; 4],
+    pub font: u32,
+    pub font_size: f32,
+    pub align: u32,
+    pub vertical_align: u32,
+    pub wrap: i32,
+}
+
+fn overlay_from_desc(desc: &TnOverlayElement, text: Option<&str>) -> crate::overlay::OverlayElement {
+    use crate::overlay::{Anchor, OverlayContent, OverlayElement, TextAlign};
+    let content = match desc.kind {
+        1 => OverlayContent::Image { texture: desc.texture, uv: desc.uv },
+        2 => OverlayContent::Text {
+            text: text.unwrap_or_default().to_string(),
+            font: desc.font,
+            size: if desc.font_size > 0.0 { desc.font_size } else { 16.0 },
+            align: TextAlign::from_u32(desc.align),
+            vertical_align: TextAlign::from_u32(desc.vertical_align),
+            wrap: desc.wrap != 0,
+        },
+        _ => OverlayContent::Panel,
+    };
+    OverlayElement {
+        content,
+        parent: (desc.parent != 0).then_some(desc.parent),
+        anchor: Anchor::from_u32(desc.anchor),
+        offset: desc.offset,
+        size: desc.size,
+        color: desc.color,
+        border_color: desc.border_color,
+        border_width: desc.border_width,
+        corner_radius: desc.corner_radius,
+        layer: desc.layer,
+        visible: desc.visible != 0,
+        interactive: desc.interactive != 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_add(scene: *mut Scene, desc: *const TnOverlayElement, text: *const c_char) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let Some(desc) = (unsafe { desc.as_ref() }) else {
+        set_last_error("overlay descriptor is null");
+        return 0;
+    };
+    let text = unsafe { str_from_ptr(text) };
+    match scene.overlay.add(overlay_from_desc(desc, text)) {
+        Ok(id) => id,
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_update(scene: *mut Scene, id: u32, desc: *const TnOverlayElement, text: *const c_char) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(desc) = (unsafe { desc.as_ref() }) else {
+        set_last_error("overlay descriptor is null");
+        return status::NULL_POINTER;
+    };
+    let text = unsafe { str_from_ptr(text) };
+    match scene.overlay.update(id, overlay_from_desc(desc, text)) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_get(scene: *mut Scene, id: u32, out: *mut TnOverlayElement) -> i32 {
+    use crate::overlay::OverlayContent;
+    let scene = scene_ref!(scene);
+    let Some(element) = scene.overlay.get(id) else {
+        set_last_error("invalid overlay element");
+        return status::INVALID_HANDLE;
+    };
+    let Some(out) = (unsafe { out.as_mut() }) else {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    };
+    let mut desc = TnOverlayElement {
+        kind: 0,
+        parent: element.parent.unwrap_or(0),
+        anchor: element.anchor as u32,
+        layer: element.layer,
+        offset: element.offset,
+        size: element.size,
+        color: element.color,
+        border_color: element.border_color,
+        border_width: element.border_width,
+        corner_radius: element.corner_radius,
+        visible: element.visible as i32,
+        interactive: element.interactive as i32,
+        texture: 0,
+        uv: [0.0, 0.0, 1.0, 1.0],
+        font: 0,
+        font_size: 16.0,
+        align: 0,
+        vertical_align: 0,
+        wrap: 0,
+    };
+    match &element.content {
+        OverlayContent::Panel => {}
+        OverlayContent::Image { texture, uv } => {
+            desc.kind = 1;
+            desc.texture = *texture;
+            desc.uv = *uv;
+        }
+        OverlayContent::Text { font, size, align, vertical_align, wrap, .. } => {
+            desc.kind = 2;
+            desc.font = *font;
+            desc.font_size = *size;
+            desc.align = *align as u32;
+            desc.vertical_align = *vertical_align as u32;
+            desc.wrap = *wrap as i32;
+        }
+    }
+    *out = desc;
+    status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_get_text(scene: *mut Scene, id: u32, buffer: *mut c_char, capacity: i32) -> i32 {
+    use crate::overlay::OverlayContent;
+    let scene = scene_ref!(scene);
+    match scene.overlay.get(id) {
+        Some(element) => {
+            let text = match &element.content {
+                OverlayContent::Text { text, .. } => text.as_str(),
+                _ => "",
+            };
+            unsafe { copy_string(text, buffer, capacity) }
+        }
+        None => {
+            set_last_error("invalid overlay element");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_remove(scene: *mut Scene, id: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.overlay.remove(id) {
+        status::OK
+    } else {
+        set_last_error("invalid overlay element");
+        status::INVALID_HANDLE
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_clear(scene: *mut Scene) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.overlay.clear();
+    status::OK
+}
+
+/// Topmost interactive element at a pixel of a target of the given size (0 = none).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_hit_test(scene: *mut Scene, x: f32, y: f32, width: f32, height: f32) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    scene.overlay.hit_test(x, y, width, height).unwrap_or(0)
+}
+
+/// Screen rectangle (x, y, width, height) of an element; zero size when hidden.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_get_rect(scene: *mut Scene, id: u32, width: f32, height: f32, out: *mut [f32; 4]) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.overlay.get(id).is_none() {
+        set_last_error("invalid overlay element");
+        return status::INVALID_HANDLE;
+    }
+    let Some(out) = (unsafe { out.as_mut() }) else {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    };
+    let rect = scene
+        .overlay
+        .layout(width, height)
+        .into_iter()
+        .find(|(element, _)| *element == id)
+        .map(|(_, r)| [r.x, r.y, r.width, r.height])
+        .unwrap_or([0.0; 4]);
+    *out = rect;
+    status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_measure_text(
+    scene: *mut Scene,
+    font: u32,
+    size: f32,
+    text: *const c_char,
+    max_width: f32,
+    out_width: *mut f32,
+    out_height: *mut f32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let text = unsafe { str_from_ptr(text) }.unwrap_or_default();
+    if scene.overlay.font(font).is_none() {
+        set_last_error("invalid font");
+        return status::INVALID_HANDLE;
+    }
+    let (w, h) = scene.overlay.measure_text(font, size, text, (max_width > 0.0).then_some(max_width));
+    unsafe {
+        if let Some(out) = out_width.as_mut() {
+            *out = w;
+        }
+        if let Some(out) = out_height.as_mut() {
+            *out = h;
+        }
+    }
+    status::OK
+}
+
+/// Loads a TTF / OTF font from memory; returns its index (>= 1) or a negative status.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_load_font(scene: *mut Scene, bytes: *const u8, length: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if bytes.is_null() || length == 0 {
+        set_last_error("font buffer is null or empty");
+        return status::INVALID_ARGUMENT;
+    }
+    let data = unsafe { std::slice::from_raw_parts(bytes, length as usize) }.to_vec();
+    match scene.overlay.add_font(data) {
+        Ok(index) => index as i32,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_overlay_configure(scene: *mut Scene, scale: f32, enabled: i32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.overlay.scale = if scale > 0.0 { scale } else { 1.0 };
+    scene.overlay.enabled = enabled != 0;
+    status::OK
+}
+
+// ----------------------------------------------------------------- gamepads
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnGamepadState {
+    pub connected: i32,
+    pub is_virtual: i32,
+    pub buttons: u32,
+    pub previous_buttons: u32,
+    pub axes: [f32; 6],
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn tn_gamepads_create() -> *mut crate::gamepad::Gamepads {
+    Box::into_raw(Box::new(crate::gamepad::Gamepads::new()))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepads_destroy(pads: *mut crate::gamepad::Gamepads) {
+    if !pads.is_null() {
+        drop(unsafe { Box::from_raw(pads) });
+    }
+}
+
+macro_rules! pads_ref {
+    ($pads:expr) => {
+        match unsafe { $pads.as_mut() } {
+            Some(pads) => pads,
+            None => {
+                set_last_error("gamepads pointer is null");
+                return status::NULL_POINTER;
+            }
+        }
+    };
+}
+
+/// Polls the platform; returns the number of connected pads.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepads_update(pads: *mut crate::gamepad::Gamepads) -> i32 {
+    let pads = pads_ref!(pads);
+    pads.update() as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepads_slot_count(pads: *mut crate::gamepad::Gamepads) -> i32 {
+    let pads = pads_ref!(pads);
+    pads.slot_count() as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepads_configure(pads: *mut crate::gamepad::Gamepads, dead_zone: f32, trigger_threshold: f32) -> i32 {
+    let pads = pads_ref!(pads);
+    pads.dead_zone = dead_zone.clamp(0.0, 0.95);
+    pads.trigger_threshold = trigger_threshold.clamp(0.0, 1.0);
+    status::OK
+}
+
+/// Copies the platform initialisation error (empty when gamepads work).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepads_get_error(pads: *mut crate::gamepad::Gamepads, buffer: *mut c_char, capacity: i32) -> i32 {
+    let pads = pads_ref!(pads);
+    let message = pads.init_error.clone().unwrap_or_default();
+    unsafe { copy_string(&message, buffer, capacity) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepad_get_state(pads: *mut crate::gamepad::Gamepads, slot: u32, out: *mut TnGamepadState) -> i32 {
+    let pads = pads_ref!(pads);
+    let Some(state) = pads.state(slot as usize) else {
+        set_last_error("gamepad slot out of range");
+        return status::INVALID_HANDLE;
+    };
+    let Some(out) = (unsafe { out.as_mut() }) else {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    };
+    *out = TnGamepadState {
+        connected: state.connected as i32,
+        is_virtual: state.is_virtual as i32,
+        buttons: state.buttons,
+        previous_buttons: state.previous_buttons,
+        axes: state.axes,
+    };
+    status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepad_get_name(pads: *mut crate::gamepad::Gamepads, slot: u32, buffer: *mut c_char, capacity: i32) -> i32 {
+    let pads = pads_ref!(pads);
+    match pads.state(slot as usize) {
+        Some(state) => {
+            let name = state.name.clone();
+            unsafe { copy_string(&name, buffer, capacity) }
+        }
+        None => {
+            set_last_error("gamepad slot out of range");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+/// Creates or updates a virtual pad in `slot` (at most one past the last slot).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepad_set_virtual(
+    pads: *mut crate::gamepad::Gamepads,
+    slot: u32,
+    state: *const TnGamepadState,
+    name: *const c_char,
+) -> i32 {
+    let pads = pads_ref!(pads);
+    let Some(state) = (unsafe { state.as_ref() }) else {
+        set_last_error("state pointer is null");
+        return status::NULL_POINTER;
+    };
+    let name = unsafe { str_from_ptr(name) }.unwrap_or("Virtual gamepad");
+    if pads.set_virtual(slot as usize, state.buttons, state.axes, state.connected != 0, name) {
+        status::OK
+    } else {
+        set_last_error("slot is owned by a physical controller or out of range");
+        status::INVALID_ARGUMENT
+    }
+}
+
+/// Rumble for `duration_ms`; returns 1 when played, 0 when unsupported.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_gamepad_rumble(pads: *mut crate::gamepad::Gamepads, slot: u32, strong: f32, weak: f32, duration_ms: u32) -> i32 {
+    let pads = pads_ref!(pads);
+    pads.rumble(slot as usize, strong, weak, duration_ms) as i32
+}

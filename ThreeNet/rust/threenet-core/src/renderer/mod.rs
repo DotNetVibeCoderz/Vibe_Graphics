@@ -4,7 +4,8 @@
 pub mod deferred;
 pub mod effects;
 pub mod pipeline;
-pub mod post;
+pub mod overlay;
+mod post;
 pub mod resources;
 pub mod shadows;
 pub mod ssao;
@@ -254,6 +255,7 @@ pub struct Renderer {
     layouts: Layouts,
     pipelines: PipelineCache,
     post: PostProcess,
+    overlay: overlay::OverlayRenderer,
     mipmaps: MipmapGenerator,
     resources: ResourceCache,
     defaults: DefaultTextures,
@@ -474,6 +476,7 @@ impl Renderer {
             surface.is_none(),
         );
 
+        let overlay_renderer = overlay::OverlayRenderer::new(&device);
         Ok(Self {
             instance,
             adapter,
@@ -487,6 +490,7 @@ impl Renderer {
             layouts,
             pipelines,
             post,
+            overlay: overlay_renderer,
             mipmaps,
             resources: ResourceCache::default(),
             defaults,
@@ -961,6 +965,18 @@ impl Renderer {
                     self.output_format,
                     settings,
                 );
+                self.overlay.draw(
+                    &self.device,
+                    &self.queue,
+                    &mut encoder,
+                    &view,
+                    self.output_format,
+                    self.config.width,
+                    self.config.height,
+                    scene,
+                    &self.resources,
+                    &self.defaults,
+                );
                 self.queue.submit(Some(encoder.finish()));
                 self.queue.present(frame);
             }
@@ -978,6 +994,18 @@ impl Renderer {
                     output,
                     self.output_format,
                     settings,
+                );
+                self.overlay.draw(
+                    &self.device,
+                    &self.queue,
+                    &mut encoder,
+                    output,
+                    self.output_format,
+                    self.config.width,
+                    self.config.height,
+                    scene,
+                    &self.resources,
+                    &self.defaults,
                 );
                 self.queue.submit(Some(encoder.finish()));
             }
@@ -1131,6 +1159,7 @@ impl Renderer {
         if let Some(environment) = scene.environment.environment_map {
             used_textures.push(environment);
         }
+        used_textures.extend(scene.overlay.texture_ids());
         used_textures.sort_unstable();
         used_textures.dedup();
         for id in used_textures {

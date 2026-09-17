@@ -308,6 +308,69 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library)]
     internal static partial int tn_scene_clear_asset_cache(nint scene);
 
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint tn_overlay_add(nint scene, in NativeOverlayElement desc, string? text);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_overlay_update(nint scene, uint id, in NativeOverlayElement desc, string? text);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_get(nint scene, uint id, out NativeOverlayElement desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_get_text(nint scene, uint id, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_remove(nint scene, uint id);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_clear(nint scene);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_overlay_hit_test(nint scene, float x, float y, float width, float height);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_get_rect(nint scene, uint id, float width, float height, out Vector4 rect);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_overlay_measure_text(nint scene, uint font, float size, string text, float maxWidth, out float width, out float height);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_load_font(nint scene, byte* bytes, uint length);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_overlay_configure(nint scene, float scale, int enabled);
+
+    [LibraryImport(Library)]
+    internal static partial nint tn_gamepads_create();
+
+    [LibraryImport(Library)]
+    internal static partial void tn_gamepads_destroy(nint pads);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepads_update(nint pads);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepads_slot_count(nint pads);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepads_configure(nint pads, float deadZone, float triggerThreshold);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepads_get_error(nint pads, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepad_get_state(nint pads, uint slot, out NativeGamepadState state);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepad_get_name(nint pads, uint slot, byte* buffer, int capacity);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_gamepad_set_virtual(nint pads, uint slot, in NativeGamepadState state, string? name);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_gamepad_rumble(nint pads, uint slot, float strong, float weak, uint durationMs);
+
     // ------------------------------------------------------------ renderer
 
     [LibraryImport(Library)]

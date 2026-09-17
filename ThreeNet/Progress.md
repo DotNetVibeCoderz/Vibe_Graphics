@@ -3,6 +3,20 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-17 - Phase 4: interactivity / Fase 4: interaktivitas
+
+- **Node events** (`InteractionManager`): pointer enter/leave/down/up/move, click, double click and drag
+  (camera plane, ground plane, events only) with bubbling to ancestors and `Handled`; built on raycasting,
+  wired into `ThreeNetView` (drags suppress `OrbitController`) and usable with `AppWindow.Input`.
+- **Native HUD** (`Scene.Overlay`): rounded panels with borders, images, text with the embedded Inter font
+  (SIL OFL) or loaded TTF/OTF, anchors, parents, layers, scale; hit testing and buttons that block picking.
+  Rendered by the Rust core after tone mapping (glyph atlas, one vertex buffer per frame).
+- **Gamepads** (`Gamepads`): gilrs backend, stable slots, pressed/released edges, radial dead zone,
+  triggers, rumble, connect/disconnect events, virtual pads.
+- Motocross: gamepad controls; Rodin generated pine and oak trees, boulders and tyre stacks
+  (`Node.SetShadowsRecursive` keeps distant trees out of the shadow maps).
+- ThreeGallery: "Interaction & HUD" sample. New doc: `docs/interactivity.md`. **ABI 6.**
+
 ## 2026-09-17 - Phase 2 & 3 complete / Fase 2 & 3 selesai (0.3.0)
 
 - **Custom shaders**: the uber shader is now modular (`common`, `material`, `forward`, `deferred_gbuffer`);

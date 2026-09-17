@@ -178,6 +178,45 @@ internal struct NativeRayHit
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct NativeOverlayElement
+{
+    public uint Kind;
+    public uint Parent;
+    public uint Anchor;
+    public int Layer;
+    public Vector2 Offset;
+    public Vector2 Size;
+    public Vector4 Color;
+    public Vector4 BorderColor;
+    public float BorderWidth;
+    public float CornerRadius;
+    public int Visible;
+    public int Interactive;
+    public uint Texture;
+    public Vector4 Uv;
+    public uint Font;
+    public float FontSize;
+    public uint Align;
+    public uint VerticalAlign;
+    public int Wrap;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeGamepadState
+{
+    public int Connected;
+    public int IsVirtual;
+    public uint Buttons;
+    public uint PreviousButtons;
+    public float LeftX;
+    public float LeftY;
+    public float RightX;
+    public float RightY;
+    public float LeftTrigger;
+    public float RightTrigger;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct NativeAssetStats
 {
     public uint PendingTextures;

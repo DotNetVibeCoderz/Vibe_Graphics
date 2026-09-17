@@ -40,6 +40,14 @@ public abstract class GallerySample
     /// <summary>Lets a sample turn renderer features (bloom, MSAA, ...) on or off.</summary>
     public virtual RendererOptions ConfigureRenderer(RendererOptions options) => options;
 
+    /// <summary>
+    /// Registers node / overlay event handlers. Called after <see cref="Build"/>
+    /// with the view's interaction manager.
+    /// </summary>
+    public virtual void ConfigureInteraction(InteractionManager interaction)
+    {
+    }
+
     /// <summary>Called when the user clicks in the viewport, with the picking ray.</summary>
     public virtual void OnPick(Scene scene, Ray ray)
     {
@@ -114,6 +122,7 @@ public static class SampleCatalog
         new AnimatedGeometrySample(),
         new AnimationSample(),
         new PickingSample(),
+        new InteractionHudSample(),
         new StressTestSample(),
     ];
 }

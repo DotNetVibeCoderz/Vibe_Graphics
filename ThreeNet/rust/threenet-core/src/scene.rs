@@ -206,6 +206,8 @@ impl Default for Environment {
 #[derive(Debug)]
 pub struct Scene {
     pub environment: Environment,
+    /// Screen space HUD drawn on top of the frame.
+    pub overlay: crate::overlay::Overlay,
     pub(crate) nodes: Arena<Node>,
     pub(crate) geometries: Arena<Geometry>,
     materials: Arena<Material>,
@@ -235,6 +237,7 @@ impl Scene {
         });
         Self {
             environment: Environment::default(),
+            overlay: crate::overlay::Overlay::new(),
             nodes,
             geometries: Arena::default(),
             materials: Arena::default(),

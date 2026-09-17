@@ -140,6 +140,24 @@ floor.CastShadow = false;      // receives only
 - `OrbitController`: `Target`, `Distance`, `Yaw`, `Pitch`, speeds, `EnableRotate/Pan/Zoom`, `AutoRotate`,
   `AutoRotateSpeed`, `FrameBounds(bounds)`, `Apply()`.
 
+## Interactivity
+
+- `InteractionManager(scene, camera?)`: `On(node, NodeEventKind, handler)`, `OnClick`, `OnDoubleClick`,
+  `OnPointerEnter/Leave/Down/Up`, `MakeDraggable(node, DragMode, onDrag?)`, `Remove(node)`, `Clear()`,
+  `PointerMove/Down/Up(position, viewport)`, `PointerExit()`, `HandleInput(InputEvent, viewport)`,
+  `HoveredNode`, `IsDragging`, `HasPointerCapture`, `ClickTolerance`, `DoubleClickTime`, `RaycastOptions`,
+  `Event`; overlay: `OnClick/OnPointerEnter/OnPointerLeave(OverlayElement, ...)`, `OverlayClicked`,
+  `HoveredOverlayElement`, `OverlayTargetSize`. `ThreeNetView.Interaction`, `EnableInteraction`.
+- `Scene.Overlay`: `Add(OverlayElementOptions)`, `AddPanel`, `AddText`, `AddImage`, `AddButton`, `HitTest`,
+  `MeasureText`, `LoadFont`, `Clear`, `Scale`, `Enabled`. `OverlayElement`: `Options`, `Update`, `Text`,
+  `Visible`, `Color`, `Offset`, `Size`, `GetBounds`, `Remove`.
+- `Gamepads`: `Update()`, `Connected`, `this[slot]`, `SlotCount`, `DeadZone`, `TriggerThreshold`,
+  `SetVirtual`, `Rumble`, `PlatformError`, `ControllerConnected/Disconnected`. `GamepadState`: `IsDown`,
+  `WasPressed`, `WasReleased`, `LeftStick`, `RightStick`, `LeftTrigger`, `RightTrigger`.
+- `Node.SetShadowsRecursive(cast, receive)`.
+
+See [interactivity.md](interactivity.md).
+
 ## Helpers
 
 `MathHelpers.ToRadians/ToDegrees/Rgba/FromHex/SrgbToLinear/LinearToSrgb`, `Colors.*` (linear palette).

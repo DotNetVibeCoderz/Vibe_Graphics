@@ -15,6 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly GameWorld _game = new();
     private readonly HashSet<Key> _keys = [];
+    private readonly Gamepads _pads = new();
     private readonly Polyline _mapTrack = new() { Stroke = new SolidColorBrush(Color.FromRgb(0x6B, 0x51, 0x36)), StrokeThickness = 5 };
     private readonly Ellipse _mapBike = new() { Width = 9, Height = 9, Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x7A, 0x18)) };
     private readonly Ellipse _mapCheckpoint = new() { Width = 7, Height = 7, Fill = new SolidColorBrush(Color.FromRgb(0x4F, 0xD1, 0xE5)) };
@@ -84,7 +85,11 @@ public partial class MainWindow : Window
         Opened += (_, _) => Viewport.Focus();
         // Releasing every key avoids a stuck throttle when the window loses focus.
         Deactivated += (_, _) => _keys.Clear();
-        Closed += (_, _) => _game.Dispose();
+        Closed += (_, _) =>
+        {
+            _game.Dispose();
+            _pads.Dispose();
+        };
     }
 
     private void ApplyQuality(bool high)
@@ -129,6 +134,8 @@ public partial class MainWindow : Window
             _countdown -= dt;
         }
 
+        _pads.Update();
+        HandlePadButtons();
         RiderInput input = ReadInput(racing);
         _game.Update(dt, input, e.TotalSeconds);
         UpdateHud(dt);
@@ -159,7 +166,51 @@ public partial class MainWindow : Window
         float steer = (_keys.Contains(Key.A) ? 1f : 0f) - (_keys.Contains(Key.D) ? 1f : 0f);
         float lean = (_keys.Contains(Key.Left) ? 1f : 0f) - (_keys.Contains(Key.Right) ? 1f : 0f);
         bool hop = _keys.Contains(Key.Space);
+
+        // Gamepad: triggers for throttle and brake, left stick steers, right stick leans, A hops.
+        if (_pads.Connected is [var pad, ..])
+        {
+            throttle = MathF.Max(throttle, pad.RightTrigger);
+            brake = MathF.Max(brake, pad.LeftTrigger);
+            steer = Math.Clamp(steer - pad.LeftStick.X, -1f, 1f);
+            lean = Math.Clamp(lean - pad.RightStick.X, -1f, 1f);
+            hop |= pad.IsDown(GamepadButton.A);
+        }
+
         return new RiderInput(throttle, brake, steer, lean, hop);
+    }
+
+    private void HandlePadButtons()
+    {
+        if (_pads.Connected is not [var pad, ..])
+        {
+            return;
+        }
+
+        if (pad.WasPressed(GamepadButton.Y))
+        {
+            CameraBox.SelectedIndex = (CameraBox.SelectedIndex + 1) % 3;
+        }
+
+        if (pad.WasPressed(GamepadButton.X))
+        {
+            TimeBox.SelectedIndex = (TimeBox.SelectedIndex + 1) % 4;
+        }
+
+        if (pad.WasPressed(GamepadButton.Select))
+        {
+            _game.Respawn();
+        }
+
+        if (pad.WasPressed(GamepadButton.Start))
+        {
+            _game.Paused = !_game.Paused;
+        }
+
+        if (pad.WasPressed(GamepadButton.B))
+        {
+            RestartRace();
+        }
     }
 
     private void UpdateHud(float dt)

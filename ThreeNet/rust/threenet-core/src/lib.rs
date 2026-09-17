@@ -12,11 +12,13 @@ pub mod camera;
 pub mod compressed;
 pub mod error;
 pub mod fbx;
+pub mod gamepad;
 pub mod ffi;
 pub mod geometry;
 pub mod light;
 pub mod loaders;
 pub mod material;
+pub mod overlay;
 pub mod math;
 pub mod raycast;
 pub mod renderer;
@@ -40,4 +42,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 5;
+pub const ABI_VERSION: u32 = 6;

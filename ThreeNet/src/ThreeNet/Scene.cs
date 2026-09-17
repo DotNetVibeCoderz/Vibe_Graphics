@@ -30,7 +30,11 @@ public sealed class Scene : IDisposable
 
         Root = new Node(this, NativeMethods.tn_scene_root(_handle));
         Environment = _environment;
+        Overlay = new Overlay(this);
     }
+
+    /// <summary>Screen space HUD (panels, images, text) drawn on top of every frame of this scene.</summary>
+    public Overlay Overlay { get; }
 
     internal nint Handle
     {
