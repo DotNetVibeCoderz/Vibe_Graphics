@@ -3,6 +3,12 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-17 - 0.4.1: self-contained Android core
+
+- The 0.4.0 Android binaries needed `libc++_shared.so`, so the CI emulator run failed with
+  `DllNotFoundException`. `rust/.cargo/config.toml` now links libc++ and libc++abi statically for Android
+  targets; the core only depends on system libraries (libc, libm, libdl, libandroid, libaaudio).
+
 ## 2026-09-17 - Phase 5: multiplatform runtime / Fase 5: runtime multiplatform (0.4.0)
 
 - Platform services became Cargo features (`basis`, `audio-output`, `gamepad`, `xr`) with stubs, so the C ABI

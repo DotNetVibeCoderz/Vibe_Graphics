@@ -35,7 +35,8 @@ export ANDROID_NDK_HOME=<ndk>                     # NDK r26+; API 26 is required
 cargo ndk -t arm64-v8a -t x86_64 --platform 26 build --release --manifest-path rust/threenet-core/Cargo.toml
 ```
 
-With the NuGet package, `runtimes/android-*/native/libthreenet_core.so` is picked up automatically. From source,
+`rust/.cargo/config.toml` links the C++ runtime statically, so the library has no `libc++_shared.so`
+dependency. With the NuGet package, `runtimes/android-*/native/libthreenet_core.so` is picked up automatically. From source,
 add the libraries as `AndroidNativeLibrary` items like `samples/ThreeNet.Samples.Android`, which renders a scene
 offscreen (PBR, physics, HUD) and shows it in an `ImageView`; it logs `THREENET_OK` with the adapter name.
 

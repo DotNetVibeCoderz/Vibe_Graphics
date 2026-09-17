@@ -1,0 +1,11 @@
+# Android: link the C++ runtime (used by the Basis Universal transcoder)
+# statically so libthreenet_core.so needs no libc++_shared.so in the APK.
+[env]
+CXXSTDLIB_aarch64_linux_android = "c++_static"
+CXXSTDLIB_x86_64_linux_android = "c++_static"
+
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-lc++abi"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-lc++abi"]
