@@ -3,6 +3,21 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-17 - Phase 6: extensions / Fase 6: ekstensi
+
+- **Physics** (`Scene.Physics`, Rapier 0.35): dynamic / fixed / kinematic bodies on nodes, box / sphere / capsule /
+  cylinder / triangle mesh / convex hull colliders with friction, restitution, density, sensors and collision
+  groups; impulses, forces, velocities, teleport; raycasts; contact events; fixed / ball / hinge / slider
+  joints; kinematic character controller (slide, slopes, auto-step, ground snap); fixed timestep sync.
+- **Spatial audio** (`AudioEngine`): cpal output, software mixer with equal power panning, inverse distance
+  attenuation, Doppler, air absorption and smoothed gains; WAV / OGG / MP3 / FLAC decoding (symphonia);
+  node attached sounds and camera listener; offline rendering.
+- **Networking** (`ThreeNet.Networking.NetworkSession`): UDP host / clients with relay, reliable ordered and
+  unreliable messages, heartbeats and timeouts, node transform replication with snapshot interpolation.
+- **XR**: OpenXR runtime / headset probe (dynamic loader), off-axis camera projection, `StereoRig` with
+  side-by-side rendering. Headset sessions are not implemented yet.
+- ThreeGallery: "Physics & spatial audio" sample. New doc: `docs/extensions.md`. **ABI 7.**
+
 ## 2026-09-17 - Phase 4: interactivity / Fase 4: interaktivitas
 
 - **Node events** (`InteractionManager`): pointer enter/leave/down/up/move, click, double click and drag

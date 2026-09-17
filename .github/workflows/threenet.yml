@@ -52,8 +52,8 @@ jobs:
 
       - name: Linux system libraries
         if: runner.os == 'Linux'
-        # gilrs (gamepads) links libudev.
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+        # gilrs (gamepads) links libudev, cpal (audio) links ALSA.
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libasound2-dev pkg-config
 
       - name: Build
         run: cargo build --release --manifest-path rust/threenet-core/Cargo.toml

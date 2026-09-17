@@ -31,7 +31,11 @@ public sealed class Scene : IDisposable
         Root = new Node(this, NativeMethods.tn_scene_root(_handle));
         Environment = _environment;
         Overlay = new Overlay(this);
+        Physics = new PhysicsWorld(this);
     }
+
+    /// <summary>Rigid body physics attached to this scene's nodes.</summary>
+    public PhysicsWorld Physics { get; }
 
     /// <summary>Screen space HUD (panels, images, text) drawn on top of every frame of this scene.</summary>
     public Overlay Overlay { get; }

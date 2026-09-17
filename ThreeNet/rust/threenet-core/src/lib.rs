@@ -7,6 +7,7 @@
 //! Made by Gravicode Studios - led by Kang Fadhil.
 
 pub mod animation;
+pub mod audio;
 pub mod assets;
 pub mod camera;
 pub mod compressed;
@@ -19,6 +20,7 @@ pub mod light;
 pub mod loaders;
 pub mod material;
 pub mod overlay;
+pub mod physics;
 pub mod math;
 pub mod raycast;
 pub mod renderer;
@@ -26,6 +28,7 @@ pub mod scene;
 pub mod shader;
 pub mod texture;
 pub mod window;
+pub mod xr;
 
 pub use camera::{Camera, Projection};
 pub use error::{Error, Result};
@@ -42,4 +45,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 6;
+pub const ABI_VERSION: u32 = 7;

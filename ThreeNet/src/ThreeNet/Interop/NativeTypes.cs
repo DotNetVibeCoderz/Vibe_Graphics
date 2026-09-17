@@ -101,6 +101,92 @@ internal struct NativeCameraDesc
     public float Aspect;
     public float Near;
     public float Far;
+    public float AngleLeft;
+    public float AngleRight;
+    public float AngleUp;
+    public float AngleDown;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeBodyDesc
+{
+    public uint Kind;
+    public float AdditionalMass;
+    public float LinearDamping;
+    public float AngularDamping;
+    public float GravityScale;
+    public int Ccd;
+    public int LockRotations;
+    public int CanSleep;
+    public Vector3 LinearVelocity;
+    public Vector3 AngularVelocity;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeColliderDesc
+{
+    public uint Shape;
+    public Vector3 HalfExtents;
+    public float Radius;
+    public float HalfHeight;
+    public uint Geometry;
+    public Vector3 Offset;
+    public Vector4 Rotation;
+    public float Friction;
+    public float Restitution;
+    public float Density;
+    public int Sensor;
+    public uint Membership;
+    public uint Filter;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativePhysicsHit
+{
+    public uint Node;
+    public float Distance;
+    public Vector3 Point;
+    public Vector3 Normal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeContactEvent
+{
+    public uint NodeA;
+    public uint NodeB;
+    public int Started;
+    public int Sensor;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeSoundDesc
+{
+    public uint Clip;
+    public float Gain;
+    public float Pitch;
+    public int Looping;
+    public int Spatial;
+    public Vector3 Position;
+    public Vector3 Velocity;
+    public float MinDistance;
+    public float MaxDistance;
+    public float Rolloff;
+    public uint Node;
+    public int Paused;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeXrInfo
+{
+    public int LoaderFound;
+    public int RuntimeFound;
+    public int HeadsetFound;
+    public uint VendorId;
+    public uint RecommendedWidth;
+    public uint RecommendedHeight;
+    public uint ViewCount;
+    public int OrientationTracking;
+    public int PositionTracking;
 }
 
 [StructLayout(LayoutKind.Sequential)]

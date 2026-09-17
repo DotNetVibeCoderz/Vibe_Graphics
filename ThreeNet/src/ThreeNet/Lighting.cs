@@ -126,6 +126,30 @@ public struct Camera
     public float AspectRatio;
     public float Near;
     public float Far;
+    /// <summary>True for an off-axis (asymmetric) perspective; see <see cref="OffAxis"/>.</summary>
+    public bool IsOffAxis;
+    /// <summary>Frustum half angles in radians for off-axis cameras (left and down are negative).</summary>
+    public float AngleLeft;
+    public float AngleRight;
+    public float AngleUp;
+    public float AngleDown;
+
+    /// <summary>
+    /// Asymmetric perspective from the four frustum half angles (OpenXR convention),
+    /// used for stereo eyes and head mounted displays.
+    /// </summary>
+    public static Camera OffAxis(float angleLeft, float angleRight, float angleUp, float angleDown, float near = 0.05f, float far = 1000f) => new()
+    {
+        IsPerspective = true,
+        IsOffAxis = true,
+        FieldOfView = angleUp - angleDown,
+        AngleLeft = angleLeft,
+        AngleRight = angleRight,
+        AngleUp = angleUp,
+        AngleDown = angleDown,
+        Near = near,
+        Far = far,
+    };
 
     /// <summary>Perspective camera; <paramref name="fieldOfView"/> is in radians.</summary>
     public static Camera Perspective(float fieldOfView = MathF.PI / 4f, float near = 0.1f, float far = 1000f) => new()
@@ -147,22 +171,31 @@ public struct Camera
 
     internal NativeCameraDesc ToNative() => new()
     {
-        Projection = IsPerspective ? 0u : 1u,
+        Projection = IsOffAxis ? 2u : IsPerspective ? 0u : 1u,
         FovY = FieldOfView,
         OrthoHeight = OrthographicHeight,
         Aspect = AspectRatio,
         Near = Near,
         Far = Far,
+        AngleLeft = AngleLeft,
+        AngleRight = AngleRight,
+        AngleUp = AngleUp,
+        AngleDown = AngleDown,
     };
 
     internal static Camera FromNative(in NativeCameraDesc desc) => new()
     {
-        IsPerspective = desc.Projection == 0,
+        IsPerspective = desc.Projection != 1,
+        IsOffAxis = desc.Projection == 2,
         FieldOfView = desc.FovY,
         OrthographicHeight = desc.OrthoHeight,
         AspectRatio = desc.Aspect,
         Near = desc.Near,
         Far = desc.Far,
+        AngleLeft = desc.AngleLeft,
+        AngleRight = desc.AngleRight,
+        AngleUp = desc.AngleUp,
+        AngleDown = desc.AngleDown,
     };
 }
 

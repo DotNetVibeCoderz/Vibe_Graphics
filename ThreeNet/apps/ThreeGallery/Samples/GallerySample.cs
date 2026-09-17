@@ -123,6 +123,7 @@ public static class SampleCatalog
         new AnimationSample(),
         new PickingSample(),
         new InteractionHudSample(),
+        new PhysicsSample(),
         new StressTestSample(),
     ];
 }

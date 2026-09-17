@@ -371,6 +371,117 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library)]
     internal static partial int tn_gamepad_rumble(nint pads, uint slot, float strong, float weak, uint durationMs);
 
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_configure(nint scene, Vector3 gravity, float fixedTimestep, uint maxSubsteps);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_add_body(nint scene, uint node, in NativeBodyDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_add_collider(nint scene, uint node, in NativeColliderDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_remove(nint scene, uint node);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_has_body(nint scene, uint node);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_step(nint scene, float delta);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_apply_impulse(nint scene, uint node, Vector3 impulse, Vector3 torqueImpulse);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_add_force(nint scene, uint node, Vector3 force, Vector3 torque);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_set_velocity(nint scene, uint node, Vector3 linear, Vector3 angular);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_get_velocity(nint scene, uint node, out Vector3 linear, out Vector3 angular);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_teleport(nint scene, uint node, Vector3 position, Vector4 rotation);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_is_sleeping(nint scene, uint node);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_raycast(nint scene, Vector3 origin, Vector3 direction, float maxDistance, uint exclude, out NativePhysicsHit hit);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_take_events(nint scene, NativeContactEvent* events, uint capacity);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_physics_add_joint(nint scene, uint kind, uint nodeA, uint nodeB, Vector3 anchorA, Vector3 anchorB, Vector3 axis);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_remove_joint(nint scene, uint joint);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_move_character(nint scene, uint node, Vector3 desired, float delta, out Vector3 applied);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_physics_configure_character(nint scene, float maxSlopeDegrees, float stepHeight, float snapToGround);
+
+    [LibraryImport(Library)]
+    internal static partial nint tn_audio_create(int offline, uint sampleRate);
+
+    [LibraryImport(Library)]
+    internal static partial void tn_audio_destroy(nint engine);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_get_info(nint engine, out uint sampleRate, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_audio_load_clip(nint engine, byte* bytes, uint length);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_audio_create_clip(nint engine, float* samples, uint sampleCount, uint channels, uint sampleRate);
+
+    [LibraryImport(Library)]
+    internal static partial float tn_audio_clip_duration(nint engine, uint clip);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_remove_clip(nint engine, uint clip);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_audio_play(nint engine, in NativeSoundDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_update_source(nint engine, uint source, in NativeSoundDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_get_source(nint engine, uint source, out NativeSoundDesc desc);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_is_playing(nint engine, uint source);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_stop(nint engine, uint source);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_seek(nint engine, uint source, float seconds);
+
+    [LibraryImport(Library)]
+    internal static partial float tn_audio_get_time(nint engine, uint source);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_set_listener(nint engine, Vector3 position, Vector3 forward, Vector3 up, Vector3 velocity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_configure(nint engine, float masterGain, float dopplerFactor, float speedOfSound);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_sync_scene(nint engine, nint scene, uint listenerNode, float delta);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_render(nint engine, float* output, uint frames);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_xr_probe(out NativeXrInfo info, byte* buffer, int capacity);
+
     // ------------------------------------------------------------ renderer
 
     [LibraryImport(Library)]

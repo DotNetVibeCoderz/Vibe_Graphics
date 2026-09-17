@@ -436,13 +436,27 @@ pub struct TnCameraDesc {
     pub aspect: f32,
     pub near: f32,
     pub far: f32,
+    /// Frustum half angles for `projection` 2 (off-axis), radians.
+    pub angle_left: f32,
+    pub angle_right: f32,
+    pub angle_up: f32,
+    pub angle_down: f32,
 }
 
 impl From<TnCameraDesc> for Camera {
     fn from(value: TnCameraDesc) -> Self {
         let aspect = (value.aspect > 0.0).then_some(value.aspect);
         Camera {
-            projection: if value.projection == 1 {
+            projection: if value.projection == 2 {
+                Projection::OffAxis {
+                    left: value.angle_left,
+                    right: value.angle_right,
+                    up: value.angle_up,
+                    down: value.angle_down,
+                    near: value.near,
+                    far: value.far,
+                }
+            } else if value.projection == 1 {
                 Projection::Orthographic {
                     height: value.ortho_height,
                     aspect,
@@ -477,6 +491,22 @@ impl From<Camera> for TnCameraDesc {
                 aspect: aspect.unwrap_or(0.0),
                 near,
                 far,
+                angle_left: 0.0,
+                angle_right: 0.0,
+                angle_up: 0.0,
+                angle_down: 0.0,
+            },
+            Projection::OffAxis { left, right, up, down, near, far } => Self {
+                projection: 2,
+                fov_y: up - down,
+                ortho_height: 0.0,
+                aspect: 0.0,
+                near,
+                far,
+                angle_left: left,
+                angle_right: right,
+                angle_up: up,
+                angle_down: down,
             },
             Projection::Orthographic {
                 height,
@@ -490,6 +520,10 @@ impl From<Camera> for TnCameraDesc {
                 aspect: aspect.unwrap_or(0.0),
                 near,
                 far,
+                angle_left: 0.0,
+                angle_right: 0.0,
+                angle_up: 0.0,
+                angle_down: 0.0,
             },
         }
     }
@@ -3007,4 +3041,640 @@ pub unsafe extern "C" fn tn_gamepad_set_virtual(
 pub unsafe extern "C" fn tn_gamepad_rumble(pads: *mut crate::gamepad::Gamepads, slot: u32, strong: f32, weak: f32, duration_ms: u32) -> i32 {
     let pads = pads_ref!(pads);
     pads.rumble(slot as usize, strong, weak, duration_ms) as i32
+}
+
+// ------------------------------------------------------------------ physics
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct TnBodyDesc {
+    /// 0 dynamic, 1 fixed, 2 kinematic.
+    pub kind: u32,
+    pub additional_mass: f32,
+    pub linear_damping: f32,
+    pub angular_damping: f32,
+    pub gravity_scale: f32,
+    pub ccd: i32,
+    pub lock_rotations: i32,
+    pub can_sleep: i32,
+    pub linear_velocity: TnVec3,
+    pub angular_velocity: TnVec3,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct TnColliderDesc {
+    /// 0 box, 1 sphere, 2 capsule, 3 cylinder, 4 triangle mesh, 5 convex hull.
+    pub shape: u32,
+    pub half_extents: TnVec3,
+    pub radius: f32,
+    pub half_height: f32,
+    pub geometry: u32,
+    pub offset: TnVec3,
+    pub rotation: TnVec4,
+    pub friction: f32,
+    pub restitution: f32,
+    pub density: f32,
+    pub sensor: i32,
+    pub membership: u32,
+    pub filter: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnPhysicsHit {
+    pub node: u32,
+    pub distance: f32,
+    pub point: TnVec3,
+    pub normal: TnVec3,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnContactEvent {
+    pub node_a: u32,
+    pub node_b: u32,
+    pub started: i32,
+    pub sensor: i32,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_configure(scene: *mut Scene, gravity: TnVec3, fixed_timestep: f32, max_substeps: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.physics.set_gravity(gravity.into());
+    scene.physics.fixed_timestep = fixed_timestep.clamp(1.0 / 1000.0, 0.5);
+    scene.physics.max_substeps = max_substeps.clamp(1, 64);
+    status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_add_body(scene: *mut Scene, node: u32, desc: *const TnBodyDesc) -> i32 {
+    use crate::physics::{BodyDesc, BodyKind};
+    let scene = scene_ref!(scene);
+    let Some(d) = (unsafe { desc.as_ref() }) else {
+        set_last_error("body descriptor is null");
+        return status::NULL_POINTER;
+    };
+    let body = BodyDesc {
+        kind: BodyKind::from_u32(d.kind),
+        additional_mass: d.additional_mass,
+        linear_damping: d.linear_damping,
+        angular_damping: d.angular_damping,
+        gravity_scale: d.gravity_scale,
+        ccd: d.ccd != 0,
+        lock_rotations: d.lock_rotations != 0,
+        can_sleep: d.can_sleep != 0,
+        linear_velocity: d.linear_velocity.into(),
+        angular_velocity: d.angular_velocity.into(),
+    };
+    match scene.physics_add_body(node, body) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_add_collider(scene: *mut Scene, node: u32, desc: *const TnColliderDesc) -> i32 {
+    use crate::physics::{ColliderDesc, ShapeDesc};
+    let scene = scene_ref!(scene);
+    let Some(d) = (unsafe { desc.as_ref() }) else {
+        set_last_error("collider descriptor is null");
+        return status::NULL_POINTER;
+    };
+    let shape = match d.shape {
+        0 => ShapeDesc::Box { half_extents: d.half_extents.into() },
+        1 => ShapeDesc::Sphere { radius: d.radius },
+        2 => ShapeDesc::Capsule { half_height: d.half_height, radius: d.radius },
+        3 => ShapeDesc::Cylinder { half_height: d.half_height, radius: d.radius },
+        4 => ShapeDesc::TriMesh { geometry: d.geometry },
+        5 => ShapeDesc::ConvexHull { geometry: d.geometry },
+        _ => {
+            set_last_error("unknown collider shape");
+            return status::INVALID_ARGUMENT;
+        }
+    };
+    let rotation: Vec4 = d.rotation.into();
+    let collider = ColliderDesc {
+        shape,
+        offset: d.offset.into(),
+        rotation: Quat::from_xyzw(rotation.x, rotation.y, rotation.z, rotation.w),
+        friction: d.friction,
+        restitution: d.restitution,
+        density: d.density,
+        sensor: d.sensor != 0,
+        membership: d.membership,
+        filter: d.filter,
+    };
+    match scene.physics_add_collider(node, collider) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+/// Removes the node's body and colliders; returns 1 when something was removed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_remove(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.physics_remove(node) as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_has_body(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.physics_has_body(node) as i32
+}
+
+/// Advances the simulation; returns the number of fixed steps taken.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_step(scene: *mut Scene, delta: f32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.physics_step(delta) as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_apply_impulse(scene: *mut Scene, node: u32, impulse: TnVec3, torque_impulse: TnVec3) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_apply_impulse(node, impulse.into(), torque_impulse.into()) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_add_force(scene: *mut Scene, node: u32, force: TnVec3, torque: TnVec3) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_add_force(node, force.into(), torque.into()) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_set_velocity(scene: *mut Scene, node: u32, linear: TnVec3, angular: TnVec3) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_set_velocity(node, linear.into(), angular.into()) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_get_velocity(scene: *mut Scene, node: u32, linear: *mut TnVec3, angular: *mut TnVec3) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_velocity(node) {
+        Ok((l, a)) => {
+            unsafe {
+                if let Some(out) = linear.as_mut() {
+                    *out = l.into();
+                }
+                if let Some(out) = angular.as_mut() {
+                    *out = a.into();
+                }
+            }
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_teleport(scene: *mut Scene, node: u32, position: TnVec3, rotation: TnVec4) -> i32 {
+    let scene = scene_ref!(scene);
+    let r: Vec4 = rotation.into();
+    match scene.physics_teleport(node, position.into(), Quat::from_xyzw(r.x, r.y, r.z, r.w)) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+/// Returns 1 when sleeping, 0 when awake, negative on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_is_sleeping(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_is_sleeping(node) {
+        Ok(sleeping) => sleeping as i32,
+        Err(error) => fail(error),
+    }
+}
+
+/// Returns 1 and fills `out` on a hit, 0 when nothing was hit.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_raycast(
+    scene: *mut Scene,
+    origin: TnVec3,
+    direction: TnVec3,
+    max_distance: f32,
+    exclude: u32,
+    out: *mut TnPhysicsHit,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_raycast(origin.into(), direction.into(), max_distance, (exclude != 0).then_some(exclude)) {
+        Some(hit) => {
+            if let Some(out) = unsafe { out.as_mut() } {
+                *out = TnPhysicsHit { node: hit.node, distance: hit.distance, point: hit.point.into(), normal: hit.normal.into() };
+            }
+            1
+        }
+        None => 0,
+    }
+}
+
+/// Copies up to `capacity` pending contact events and removes them; returns the count copied.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_take_events(scene: *mut Scene, out: *mut TnContactEvent, capacity: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    let events = scene.physics_take_events();
+    let count = events.len().min(capacity as usize);
+    if !out.is_null() {
+        for (i, event) in events.iter().take(count).enumerate() {
+            unsafe {
+                *out.add(i) = TnContactEvent {
+                    node_a: event.node_a,
+                    node_b: event.node_b,
+                    started: event.started as i32,
+                    sensor: event.sensor as i32,
+                };
+            }
+        }
+    }
+    count as i32
+}
+
+/// Adds a joint (0 fixed, 1 ball, 2 hinge, 3 slider); returns its id or 0.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_add_joint(
+    scene: *mut Scene,
+    kind: u32,
+    node_a: u32,
+    node_b: u32,
+    anchor_a: TnVec3,
+    anchor_b: TnVec3,
+    axis: TnVec3,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    match scene.physics_add_joint(crate::physics::JointKind::from_u32(kind), node_a, node_b, anchor_a.into(), anchor_b.into(), axis.into()) {
+        Ok(id) => id,
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_remove_joint(scene: *mut Scene, joint: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.physics_remove_joint(joint) as i32
+}
+
+/// Moves a kinematic character; returns 1 when grounded, 0 when airborne, negative on error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_move_character(scene: *mut Scene, node: u32, desired: TnVec3, delta: f32, applied: *mut TnVec3) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.physics_move_character(node, desired.into(), delta) {
+        Ok((movement, grounded)) => {
+            if let Some(out) = unsafe { applied.as_mut() } {
+                *out = movement.into();
+            }
+            grounded as i32
+        }
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_physics_configure_character(scene: *mut Scene, max_slope_degrees: f32, step_height: f32, snap_to_ground: f32) -> i32 {
+    let scene = scene_ref!(scene);
+    scene.physics_configure_character(max_slope_degrees, step_height, snap_to_ground);
+    status::OK
+}
+
+// -------------------------------------------------------------------- audio
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct TnSoundDesc {
+    pub clip: u32,
+    pub gain: f32,
+    pub pitch: f32,
+    pub looping: i32,
+    pub spatial: i32,
+    pub position: TnVec3,
+    pub velocity: TnVec3,
+    pub min_distance: f32,
+    pub max_distance: f32,
+    pub rolloff: f32,
+    pub node: u32,
+    pub paused: i32,
+}
+
+impl From<&TnSoundDesc> for crate::audio::SourceDesc {
+    fn from(d: &TnSoundDesc) -> Self {
+        Self {
+            clip: d.clip,
+            gain: d.gain,
+            pitch: d.pitch,
+            looping: d.looping != 0,
+            spatial: d.spatial != 0,
+            position: d.position.into(),
+            velocity: d.velocity.into(),
+            min_distance: d.min_distance,
+            max_distance: d.max_distance,
+            rolloff: d.rolloff,
+            node: (d.node != 0).then_some(d.node),
+            paused: d.paused != 0,
+        }
+    }
+}
+
+impl From<crate::audio::SourceDesc> for TnSoundDesc {
+    fn from(d: crate::audio::SourceDesc) -> Self {
+        Self {
+            clip: d.clip,
+            gain: d.gain,
+            pitch: d.pitch,
+            looping: d.looping as i32,
+            spatial: d.spatial as i32,
+            position: d.position.into(),
+            velocity: d.velocity.into(),
+            min_distance: d.min_distance,
+            max_distance: d.max_distance,
+            rolloff: d.rolloff,
+            node: d.node.unwrap_or(0),
+            paused: d.paused as i32,
+        }
+    }
+}
+
+macro_rules! audio_ref {
+    ($engine:expr) => {
+        match unsafe { $engine.as_mut() } {
+            Some(engine) => engine,
+            None => {
+                set_last_error("audio engine pointer is null");
+                return status::NULL_POINTER;
+            }
+        }
+    };
+    ($engine:expr, $fallback:expr) => {
+        match unsafe { $engine.as_mut() } {
+            Some(engine) => engine,
+            None => {
+                set_last_error("audio engine pointer is null");
+                return $fallback;
+            }
+        }
+    };
+}
+
+/// Opens the default output device, or an offline mixer when `offline` != 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn tn_audio_create(offline: i32, sample_rate: u32) -> *mut crate::audio::AudioEngine {
+    let engine = if offline != 0 {
+        Ok(crate::audio::AudioEngine::offline(if sample_rate > 0 { sample_rate } else { 48_000 }))
+    } else {
+        crate::audio::AudioEngine::new()
+    };
+    match engine {
+        Ok(engine) => Box::into_raw(Box::new(engine)),
+        Err(error) => {
+            fail(error);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_destroy(engine: *mut crate::audio::AudioEngine) {
+    if !engine.is_null() {
+        drop(unsafe { Box::from_raw(engine) });
+    }
+}
+
+/// Copies the device name; writes the mixer sample rate.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_get_info(engine: *mut crate::audio::AudioEngine, sample_rate: *mut u32, buffer: *mut c_char, capacity: i32) -> i32 {
+    let engine = audio_ref!(engine);
+    if let Some(out) = unsafe { sample_rate.as_mut() } {
+        *out = engine.with_mixer(|m| m.sample_rate);
+    }
+    let name = engine.device_name.clone();
+    unsafe { copy_string(&name, buffer, capacity) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_load_clip(engine: *mut crate::audio::AudioEngine, bytes: *const u8, length: u32) -> u32 {
+    let engine = audio_ref!(engine, 0);
+    if bytes.is_null() || length == 0 {
+        set_last_error("audio buffer is null or empty");
+        return 0;
+    }
+    let data = unsafe { std::slice::from_raw_parts(bytes, length as usize) }.to_vec();
+    match crate::audio::AudioClip::decode(data) {
+        Ok(clip) => engine.with_mixer(|m| m.add_clip(clip)),
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_create_clip(
+    engine: *mut crate::audio::AudioEngine,
+    samples: *const f32,
+    sample_count: u32,
+    channels: u32,
+    sample_rate: u32,
+) -> u32 {
+    let engine = audio_ref!(engine, 0);
+    if samples.is_null() || sample_count == 0 {
+        set_last_error("sample buffer is null or empty");
+        return 0;
+    }
+    let data = unsafe { std::slice::from_raw_parts(samples, sample_count as usize) }.to_vec();
+    match crate::audio::AudioClip::from_samples(data, channels as u16, sample_rate) {
+        Ok(clip) => engine.with_mixer(|m| m.add_clip(clip)),
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+/// Clip length in seconds, negative for an invalid clip.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_clip_duration(engine: *mut crate::audio::AudioEngine, clip: u32) -> f32 {
+    let engine = audio_ref!(engine, -1.0);
+    engine.with_mixer(|m| m.clip(clip).map_or(-1.0, |c| c.duration()))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_remove_clip(engine: *mut crate::audio::AudioEngine, clip: u32) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| m.remove_clip(clip)) as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_play(engine: *mut crate::audio::AudioEngine, desc: *const TnSoundDesc) -> u32 {
+    let engine = audio_ref!(engine, 0);
+    let Some(desc) = (unsafe { desc.as_ref() }) else {
+        set_last_error("sound descriptor is null");
+        return 0;
+    };
+    match engine.with_mixer(|m| m.play(desc.into())) {
+        Ok(id) => id,
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_update_source(engine: *mut crate::audio::AudioEngine, source: u32, desc: *const TnSoundDesc) -> i32 {
+    let engine = audio_ref!(engine);
+    let Some(desc) = (unsafe { desc.as_ref() }) else {
+        set_last_error("sound descriptor is null");
+        return status::NULL_POINTER;
+    };
+    match engine.with_mixer(|m| m.update_source(source, desc.into())) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_get_source(engine: *mut crate::audio::AudioEngine, source: u32, out: *mut TnSoundDesc) -> i32 {
+    let engine = audio_ref!(engine);
+    match engine.with_mixer(|m| m.source(source)) {
+        Some(desc) => {
+            if let Some(out) = unsafe { out.as_mut() } {
+                *out = desc.into();
+            }
+            status::OK
+        }
+        None => {
+            set_last_error("the sound finished or was stopped");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_is_playing(engine: *mut crate::audio::AudioEngine, source: u32) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| m.is_playing(source)) as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_stop(engine: *mut crate::audio::AudioEngine, source: u32) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| m.stop(source)) as i32
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_seek(engine: *mut crate::audio::AudioEngine, source: u32, seconds: f32) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| m.seek(source, seconds)) as i32
+}
+
+/// Playback position in seconds, negative when the source is gone.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_get_time(engine: *mut crate::audio::AudioEngine, source: u32) -> f32 {
+    let engine = audio_ref!(engine, -1.0);
+    engine.with_mixer(|m| m.position_seconds(source).unwrap_or(-1.0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_set_listener(
+    engine: *mut crate::audio::AudioEngine,
+    position: TnVec3,
+    forward: TnVec3,
+    up: TnVec3,
+    velocity: TnVec3,
+) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| {
+        m.listener = crate::audio::Listener {
+            position: position.into(),
+            forward: forward.into(),
+            up: up.into(),
+            velocity: velocity.into(),
+        }
+    });
+    status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_configure(engine: *mut crate::audio::AudioEngine, master_gain: f32, doppler_factor: f32, speed_of_sound: f32) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| {
+        m.master_gain = master_gain.max(0.0);
+        m.doppler_factor = doppler_factor.max(0.0);
+        m.speed_of_sound = speed_of_sound.max(1.0);
+    });
+    status::OK
+}
+
+/// Places the listener on `listener_node` (0 keeps it) and moves node attached sources.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_sync_scene(engine: *mut crate::audio::AudioEngine, scene: *mut Scene, listener_node: u32, delta: f32) -> i32 {
+    let engine = audio_ref!(engine);
+    let scene = scene_ref!(scene);
+    engine.sync_scene(scene, (listener_node != 0).then_some(listener_node), delta);
+    status::OK
+}
+
+/// Renders `frames` stereo frames into `out` (offline engines only).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_render(engine: *mut crate::audio::AudioEngine, out: *mut f32, frames: u32) -> i32 {
+    let engine = audio_ref!(engine);
+    if !engine.is_offline() {
+        set_last_error("only offline engines can be rendered manually");
+        return status::INVALID_ARGUMENT;
+    }
+    if out.is_null() {
+        set_last_error("output buffer is null");
+        return status::NULL_POINTER;
+    }
+    let buffer = unsafe { std::slice::from_raw_parts_mut(out, frames as usize * 2) };
+    engine.with_mixer(|m| m.render(buffer, 2)) as i32
+}
+
+// ----------------------------------------------------------------------- XR
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnXrInfo {
+    pub loader_found: i32,
+    pub runtime_found: i32,
+    pub headset_found: i32,
+    pub vendor_id: u32,
+    pub recommended_width: u32,
+    pub recommended_height: u32,
+    pub view_count: u32,
+    pub orientation_tracking: i32,
+    pub position_tracking: i32,
+}
+
+/// Probes OpenXR; strings are written as "runtime name|runtime version|system name|message".
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_xr_probe(out: *mut TnXrInfo, buffer: *mut c_char, capacity: i32) -> i32 {
+    let probe = crate::xr::probe();
+    if let Some(out) = unsafe { out.as_mut() } {
+        *out = TnXrInfo {
+            loader_found: probe.loader_found as i32,
+            runtime_found: probe.runtime_found as i32,
+            headset_found: probe.headset_found as i32,
+            vendor_id: probe.vendor_id,
+            recommended_width: probe.recommended_width,
+            recommended_height: probe.recommended_height,
+            view_count: probe.view_count,
+            orientation_tracking: probe.orientation_tracking as i32,
+            position_tracking: probe.position_tracking as i32,
+        };
+    }
+    let text = format!("{}|{}|{}|{}", probe.runtime_name, probe.runtime_version, probe.system_name, probe.message.replace('|', "/"));
+    unsafe { copy_string(&text, buffer, capacity) }
 }

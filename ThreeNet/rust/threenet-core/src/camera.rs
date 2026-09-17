@@ -20,6 +20,17 @@ pub enum Projection {
         near: f32,
         far: f32,
     },
+    /// Asymmetric perspective given by the four half angles of the frustum
+    /// (radians, OpenXR convention: `left` and `down` are negative). Used for
+    /// stereo eyes and head mounted displays; ignores the target aspect.
+    OffAxis {
+        left: f32,
+        right: f32,
+        up: f32,
+        down: f32,
+        near: f32,
+        far: f32,
+    },
 }
 
 impl Default for Projection {
@@ -65,17 +76,25 @@ impl Camera {
         }
     }
 
+    /// Off-axis perspective from frustum half angles (see [`Projection::OffAxis`]).
+    pub fn off_axis(left: f32, right: f32, up: f32, down: f32, near: f32, far: f32) -> Self {
+        Self {
+            projection: Projection::OffAxis { left, right, up, down, near, far },
+            viewport: None,
+        }
+    }
+
     #[inline]
     pub fn near(&self) -> f32 {
         match self.projection {
-            Projection::Perspective { near, .. } | Projection::Orthographic { near, .. } => near,
+            Projection::Perspective { near, .. } | Projection::Orthographic { near, .. } | Projection::OffAxis { near, .. } => near,
         }
     }
 
     #[inline]
     pub fn far(&self) -> f32 {
         match self.projection {
-            Projection::Perspective { far, .. } | Projection::Orthographic { far, .. } => far,
+            Projection::Perspective { far, .. } | Projection::Orthographic { far, .. } | Projection::OffAxis { far, .. } => far,
         }
     }
 
@@ -111,6 +130,7 @@ impl Camera {
                     -half_w, half_w, -half_h, half_h, near, far,
                 )
             }
+            Projection::OffAxis { left, right, up, down, near, far } => off_axis_matrix(left, right, up, down, near, far),
         }
     }
 
@@ -132,7 +152,7 @@ impl Camera {
     /// Ray origin in world space for a normalised device coordinate.
     pub fn ray_origin(&self, ndc: (f32, f32), world: &Mat4, target_aspect: f32) -> Vec3 {
         match self.projection {
-            Projection::Perspective { .. } => world.w_axis.truncate(),
+            Projection::Perspective { .. } | Projection::OffAxis { .. } => world.w_axis.truncate(),
             Projection::Orthographic { height, aspect, .. } => {
                 let aspect = aspect.unwrap_or(target_aspect).max(1e-4);
                 let half_h = height * 0.5;
@@ -140,5 +160,40 @@ impl Camera {
                 world.transform_point3(local)
             }
         }
+    }
+}
+
+/// Right handed off-centre perspective with a `0..1` depth range.
+pub fn off_axis_matrix(left: f32, right: f32, up: f32, down: f32, near: f32, far: f32) -> Mat4 {
+    let near = near.max(1e-4);
+    let l = near * left.tan();
+    let r = near * right.tan();
+    let t = near * up.tan();
+    let b = near * down.tan();
+    let width = (r - l).max(1e-6);
+    let height = (t - b).max(1e-6);
+    let (depth_scale, depth_offset) = if far.is_infinite() {
+        (-1.0, -near)
+    } else {
+        (far / (near - far), near * far / (near - far))
+    };
+    Mat4::from_cols(
+        crate::math::Vec4::new(2.0 * near / width, 0.0, 0.0, 0.0),
+        crate::math::Vec4::new(0.0, 2.0 * near / height, 0.0, 0.0),
+        crate::math::Vec4::new((r + l) / width, (t + b) / height, depth_scale, -1.0),
+        crate::math::Vec4::new(0.0, 0.0, depth_offset, 0.0),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symmetric_off_axis_matches_perspective() {
+        let fov = 1.0f32;
+        let a = off_axis_matrix(-fov / 2.0, fov / 2.0, fov / 2.0, -fov / 2.0, 0.1, 100.0);
+        let b = Camera::perspective(fov, 0.1, 100.0).projection_matrix(1.0);
+        assert!(a.abs_diff_eq(b, 1e-4), "{a:?} vs {b:?}");
     }
 }

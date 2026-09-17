@@ -62,12 +62,12 @@ Made by Gravicode Studios, led by Kang Fadhil.
 
 ## Phase 6 - Extensions
 
-| Item | Status |
-|---|---|
-| Physics (Bullet / PhysX / Rapier) | ⬜ |
-| Spatial audio | ⬜ |
-| VR/AR via OpenXR | ⬜ |
-| Networking / multiplayer sync | ⬜ |
+| Item | Status | Notes |
+|---|---|---|
+| Physics (Bullet / PhysX / Rapier) | ✅ | Rapier 0.35: bodies, colliders (incl. trimesh / convex), forces, raycasts, contact events, joints, character controller |
+| Spatial audio | ✅ | cpal output + software mixer: panning, attenuation, Doppler, air absorption; WAV/OGG/MP3/FLAC via symphonia; offline rendering |
+| VR/AR via OpenXR | 🟡 | Runtime / headset probe, off-axis cameras, `StereoRig`; headset sessions and swapchain submission still open |
+| Networking / multiplayer sync | ✅ | `NetworkSession` (UDP): host relay, reliable ordered + unreliable messages, interpolated node replication, timeouts |
 
 ## Phase 7 - Ecosystem & tooling
 

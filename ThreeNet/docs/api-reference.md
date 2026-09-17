@@ -158,6 +158,23 @@ floor.CastShadow = false;      // receives only
 
 See [interactivity.md](interactivity.md).
 
+## Extensions
+
+- `Scene.Physics` (`PhysicsWorld`): `Gravity`, `FixedTimestep`, `MaxSubsteps`, `AddBody`, `AddCollider`, `Add`,
+  `Remove`, `HasBody`, `Step`, `Contact`, `TakeContactEvents`, `ApplyImpulse`, `AddForce`, `SetVelocity`,
+  `GetVelocity`, `Teleport`, `IsSleeping`, `Raycast`, `AddJoint` (`PhysicsJoint.Remove`), `MoveCharacter`,
+  `ConfigureCharacters`. Options: `RigidBodyOptions`, `ColliderOptions` (`Box`, `Sphere`, `Capsule`, `Cylinder`,
+  `TriangleMesh`, `ConvexHull`).
+- `AudioEngine`: `Open()`, `CreateOffline(rate)`, `LoadClip`, `CreateClip`, `Play(clip, SoundOptions)`,
+  `SetListener`, `Update(scene, listener, dt)`, `Render`, `MasterGain`, `DopplerFactor`, `SpeedOfSound`,
+  `DeviceName`, `SampleRate`. `SoundOptions.Flat/At/On`; `SoundInstance`: `IsPlaying`, `Time`, `Options`,
+  `Update`, `Stop`.
+- `ThreeNet.Networking`: `NetworkSession.Host/Connect`, `Update`, `Send`, `Replicate`, `StopReplicating`, `Peers`,
+  `LocalPeerId`, events; `NetworkOptions`; `ReplicatedNode`.
+- XR: `XrRuntime.Probe()` → `XrRuntimeInfo`; `Camera.OffAxis`; `StereoRig` (`Apply`, `RenderSideBySide`).
+
+See [extensions.md](extensions.md).
+
 ## Helpers
 
 `MathHelpers.ToRadians/ToDegrees/Rgba/FromHex/SrgbToLinear/LinearToSrgb`, `Colors.*` (linear palette).
