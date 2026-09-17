@@ -6,7 +6,8 @@ namespace MotoCross.Game;
 /// <summary>
 /// Builds the whole circuit: landscape mesh, the graded track ribbon, scenery
 /// (trees, rocks, tyre walls, banners, flags, the start gate and floodlights)
-/// and the sky dome. Everything is procedural, nothing is loaded from disk.
+/// and the sky dome. Trees, boulders and tyre stacks are Rodin (Hyper3D) models;
+/// everything else is procedural.
 /// </summary>
 public sealed class WorldBuilder(Scene scene, TerrainField terrain)
 {
@@ -211,41 +212,57 @@ public sealed class WorldBuilder(Scene scene, TerrainField terrain)
     /// <summary>Trees, rocks, hay bales, marker flags and floodlight towers.</summary>
     private void BuildScenery(Material concrete)
     {
+        ModelLibrary models = new(_scene);
         Geometry trunk = _scene.CreateCylinderGeometry(0.16f, 0.26f, 3.2f, 7);
         Geometry canopy = _scene.CreateConeGeometry(1.7f, 4.4f, 9);
-        Geometry canopyLow = _scene.CreateConeGeometry(2.1f, 3.2f, 9);
         Geometry rock = _scene.CreateSphereGeometry(1f, 9, 6);
         Geometry bale = _scene.CreateCylinderGeometry(0.6f, 0.6f, 1.2f, 10);
 
         Material bark = _scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.18f, 0.12f, 0.08f, 1f), 0f, 0.95f));
         Material leaves = _scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.08f, 0.22f, 0.07f, 1f), 0f, 0.85f));
-        Material leavesAutumn = _scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.24f, 0.19f, 0.06f, 1f), 0f, 0.85f));
         Material stone = _scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.24f, 0.23f, 0.22f, 1f), 0f, 0.9f));
         Material straw = _scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.52f, 0.42f, 0.15f, 1f), 0f, 0.95f));
 
-        for (int i = 0; i < 420; i++)
+        // Rodin trees are detailed (~35k triangles), so there are fewer, bigger
+        // ones, denser near the circuit where the rider actually sees them.
+        int placed = 0;
+        for (int attempt = 0; attempt < 2000 && placed < 190; attempt++)
         {
             float x = ((float)_random.NextDouble() - 0.5f) * TerrainField.WorldSize * 0.95f;
             float z = ((float)_random.NextDouble() - 0.5f) * TerrainField.WorldSize * 0.95f;
             GroundSample ground = _terrain.Sample(x, z);
-            if (ground.Distance < Track.HalfWidth + 6f)
+            if (ground.Distance < Track.HalfWidth + 7f || (ground.Distance > 70f && _random.NextDouble() > 0.35))
             {
                 continue;
             }
 
-            float scale = 0.7f + ((float)_random.NextDouble() * 0.9f);
-            Node tree = _scene.CreateNode(null, "tree");
-            tree.Position = new Vector3(x, ground.Height, z);
-            tree.Scale = new Vector3(scale);
-            tree.EulerAngles = new Vector3(0f, (float)_random.NextDouble() * MathF.Tau, 0f);
+            placed++;
+            bool pine = _random.NextDouble() > 0.4;
+            float height = pine ? 9f + ((float)_random.NextDouble() * 7f) : 7f + ((float)_random.NextDouble() * 5f);
+            float yaw = (float)_random.NextDouble() * MathF.Tau;
+            Vector3 position = new(x, ground.Height - 0.15f, z);
+            if (models.Place(pine ? "pine-tree" : "oak-tree", null, position, yaw, height, fitHeight: true) is { } placedTree)
+            {
+                // Only trees close to the circuit fall inside the shadow cascades
+                // often enough to be worth drawing into them.
+                if (ground.Distance > 35f)
+                {
+                    placedTree.SetShadowsRecursive(cast: false, receive: true);
+                }
 
+                continue;
+            }
+
+            Node tree = _scene.CreateNode(null, "tree");
+            tree.Position = position;
+            tree.Scale = new Vector3(height / 6.6f);
             Node stem = _scene.AddMesh(trunk, bark, tree, "trunk");
             stem.Position = new Vector3(0f, 1.6f, 0f);
-            Node crown = _scene.AddMesh(_random.NextDouble() > 0.5 ? canopy : canopyLow, _random.NextDouble() > 0.75 ? leavesAutumn : leaves, tree, "canopy");
+            Node crown = _scene.AddMesh(canopy, leaves, tree, "canopy");
             crown.Position = new Vector3(0f, 4.4f, 0f);
         }
 
-        for (int i = 0; i < 160; i++)
+        for (int i = 0; i < 90; i++)
         {
             float x = ((float)_random.NextDouble() - 0.5f) * TerrainField.WorldSize * 0.9f;
             float z = ((float)_random.NextDouble() - 0.5f) * TerrainField.WorldSize * 0.9f;
@@ -255,13 +272,34 @@ public sealed class WorldBuilder(Scene scene, TerrainField terrain)
                 continue;
             }
 
+            float size = 0.8f + ((float)_random.NextDouble() * 2.4f);
+            float yaw = (float)_random.NextDouble() * MathF.Tau;
+            // Sink boulders a little so they read as bedded into the slope.
+            Vector3 position = new(x, ground.Height - (size * 0.12f), z);
+            if (models.Place("boulder", null, position, yaw, size) is not null)
+            {
+                continue;
+            }
+
             Node node = _scene.AddMesh(rock, stone, name: "rock");
-            node.Position = new Vector3(x, ground.Height - 0.2f, z);
-            node.Scale = new Vector3(
-                0.4f + ((float)_random.NextDouble() * 1.1f),
-                0.3f + ((float)_random.NextDouble() * 0.5f),
-                0.4f + ((float)_random.NextDouble() * 1.1f));
-            node.EulerAngles = new Vector3(0f, (float)_random.NextDouble() * MathF.Tau, 0f);
+            node.Position = position;
+            node.Scale = new Vector3(size * 0.5f, size * 0.3f, size * 0.5f);
+            node.EulerAngles = new Vector3(0f, yaw, 0f);
+        }
+
+        // Tyre walls on the outside of every corner-ish feature entry.
+        foreach (TrackFeature feature in _track.Features)
+        {
+            float distance = feature.Start - 6f;
+            Vector3 centre = _track.PositionAt(distance);
+            Vector3 tangent = _track.TangentAt(distance);
+            Vector3 right = Vector3.Normalize(new Vector3(tangent.Z, 0f, -tangent.X));
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 position = centre + (right * (Track.HalfWidth + 1.8f)) + (tangent * ((i - 1.5f) * 1.25f));
+                GroundSample ground = _terrain.Sample(position.X, position.Z);
+                models.Place("tire-stack", null, new Vector3(position.X, ground.Height, position.Z), i * 0.9f, 1.15f);
+            }
         }
 
         // Hay bales in the run-off areas of the jump landings.

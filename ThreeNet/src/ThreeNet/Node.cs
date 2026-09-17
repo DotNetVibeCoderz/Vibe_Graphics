@@ -205,6 +205,25 @@ public sealed class Node : IEquatable<Node>
         set => NativeError.Check(NativeMethods.tn_node_set_shadow_flags(Scene.Handle, Id, CastShadow ? 1 : 0, value ? 1 : 0));
     }
 
+    /// <summary>
+    /// Sets <see cref="CastShadow"/> and <see cref="ReceiveShadow"/> on this node and
+    /// every descendant that has a mesh (handy for imported models).
+    /// </summary>
+    public void SetShadowsRecursive(bool cast, bool receive)
+    {
+        Stack<Node> pending = new();
+        pending.Push(this);
+        while (pending.TryPop(out Node? node))
+        {
+            // Nodes without a mesh report "no mesh"; they are simply skipped.
+            _ = NativeMethods.tn_node_set_shadow_flags(Scene.Handle, node.Id, cast ? 1 : 0, receive ? 1 : 0);
+            foreach (Node child in node.Children)
+            {
+                pending.Push(child);
+            }
+        }
+    }
+
     private uint GetShadowFlags()
     {
         NativeError.Check(NativeMethods.tn_node_get_shadow_flags(Scene.Handle, Id, out uint flags));

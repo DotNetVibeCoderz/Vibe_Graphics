@@ -25,6 +25,7 @@ dotnet run --project samples/ThreeNet.Samples.MotoCross
 | Circuit | Closed Catmull-Rom loop resampled per metre; kickers, tables, a double, rollers and whoops; banked berms (`Game/Track.cs`) |
 | Terrain | Analytic height field: noise hills blended into the graded corridor; coarse landscape mesh + fine track ribbon (`TerrainField`, `WorldBuilder`) |
 | Rider & bike | Rodin generated GLB (`Assets/rider-bike.glb`), scaled to 2.15 m; primitive rig as fallback (`BikeRig`) |
+| Scenery | Rodin GLBs `pine-tree`, `oak-tree`, `boulder`, `tire-stack` placed with a `ModelLibrary` (import once, `Node.Clone`); trees far from the track skip shadow maps (`Node.SetShadowsRecursive`); primitives as fallback |
 | Physics | Two contact points, suspension, surface dependent grip, slides, air control, landing impacts (`BikePhysics`) |
 | Effects | Billboard dust/roost pool, camera shake, speed FOV, headlight and floodlights at night |
 | Sound | Real-time synth on `winmm` waveOut: engine revs, wind, tyre scrub, landing thumps, lap chimes (Windows) |
