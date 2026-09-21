@@ -1,0 +1,105 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tn="clr-namespace:ThreeNet.Avalonia;assembly=ThreeNet.Avalonia"
+        x:Class="ThreeEditor.Views.MainWindow"
+        Title="Three.Net Editor" Width="1500" Height="900"
+        Background="#181B21">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+    <Menu Grid.Row="0">
+      <MenuItem Header="_File">
+        <MenuItem Header="_New scene" Click="OnNew" InputGesture="Ctrl+N" />
+        <MenuItem Header="_Open..." Click="OnOpen" InputGesture="Ctrl+O" />
+        <MenuItem Header="_Save" Click="OnSave" InputGesture="Ctrl+S" />
+        <MenuItem Header="Save _as..." Click="OnSaveAs" />
+        <Separator />
+        <MenuItem Header="Import _model..." Click="OnImportModel" />
+        <MenuItem Header="Import (_plugin formats)..." Click="OnImportPlugin" />
+        <MenuItem Header="Save screenshot..." Click="OnScreenshot" />
+        <Separator />
+        <MenuItem Header="E_xit" Click="OnExit" />
+      </MenuItem>
+      <MenuItem Header="_Edit">
+        <MenuItem Header="_Undo" Click="OnUndo" InputGesture="Ctrl+Z" />
+        <MenuItem Header="_Redo" Click="OnRedo" InputGesture="Ctrl+Y" />
+        <Separator />
+        <MenuItem Header="_Duplicate" Click="OnDuplicate" InputGesture="Ctrl+D" />
+        <MenuItem Header="De_lete" Click="OnDelete" InputGesture="Delete" />
+        <MenuItem Header="Move to root" Click="OnMoveToRoot" />
+      </MenuItem>
+      <MenuItem Header="_Add">
+        <MenuItem Header="Box" Click="OnAddBox" />
+        <MenuItem Header="Sphere" Click="OnAddSphere" />
+        <MenuItem Header="Plane" Click="OnAddPlane" />
+        <MenuItem Header="Cylinder" Click="OnAddCylinder" />
+        <MenuItem Header="Cone" Click="OnAddCone" />
+        <MenuItem Header="Torus" Click="OnAddTorus" />
+        <Separator />
+        <MenuItem Header="Directional light" Click="OnAddDirectional" />
+        <MenuItem Header="Point light" Click="OnAddPoint" />
+        <MenuItem Header="Spot light" Click="OnAddSpot" />
+        <MenuItem Header="Camera" Click="OnAddCamera" />
+        <MenuItem Header="Empty node" Click="OnAddEmpty" />
+      </MenuItem>
+      <MenuItem Header="_View">
+        <MenuItem Header="Frame selection" Click="OnFrame" InputGesture="F" />
+        <MenuItem Header="Toggle shadows" Click="OnToggleShadows" />
+        <MenuItem Header="Toggle SSAO" Click="OnToggleSsao" />
+        <MenuItem Header="Toggle grid" Click="OnToggleGrid" />
+      </MenuItem>
+      <MenuItem Header="_Plugins" Name="PluginsMenu">
+        <MenuItem Header="Reload plugins" Click="OnReloadPlugins" />
+        <Separator />
+      </MenuItem>
+      <MenuItem Header="_Help">
+        <MenuItem Header="About" Click="OnAbout" />
+      </MenuItem>
+    </Menu>
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,6" Spacing="0">
+      <Button Classes="tool" Click="OnNew" Content="New" />
+      <Button Classes="tool" Click="OnOpen" Content="Open" />
+      <Button Classes="tool" Click="OnSave" Content="Save" />
+      <Border Width="1" Background="#303643" Margin="6,2" />
+      <Button Classes="tool" Click="OnAddBox" Content="+ Box" />
+      <Button Classes="tool" Click="OnAddSphere" Content="+ Sphere" />
+      <Button Classes="tool" Click="OnAddDirectional" Content="+ Light" />
+      <Border Width="1" Background="#303643" Margin="6,2" />
+      <ToggleButton Name="PlayToggle" Classes="tool" Content="Play" IsCheckedChanged="OnPlayToggled" />
+      <Button Classes="tool" Click="OnFrame" Content="Frame" />
+      <Border Width="1" Background="#303643" Margin="6,2" />
+      <TextBlock Classes="field" Text="Drag a node with the left button; right drag orbits." Margin="8,0,0,0" />
+    </StackPanel>
+
+    <Grid Grid.Row="2" ColumnDefinitions="300,4,*,4,340">
+      <!-- Scene tree -->
+      <DockPanel Grid.Column="0" Margin="8,0,0,8">
+        <TextBlock DockPanel.Dock="Top" Classes="section" Text="SCENE" />
+        <TreeView Name="SceneTree" SelectionChanged="OnTreeSelectionChanged" Background="#1E222A" />
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" Background="#262B34" />
+
+      <!-- Viewport -->
+      <Border Grid.Column="2" Background="#101318" Margin="0,0,0,8">
+        <tn:ThreeNetView Name="Viewport" />
+      </Border>
+
+      <GridSplitter Grid.Column="3" Background="#262B34" />
+
+      <!-- Inspector -->
+      <DockPanel Grid.Column="4" Margin="0,0,8,8">
+        <TextBlock DockPanel.Dock="Top" Classes="section" Text="INSPECTOR" />
+        <ScrollViewer>
+          <StackPanel Name="InspectorPanel" Margin="0,0,6,0" Spacing="2" />
+        </ScrollViewer>
+      </DockPanel>
+    </Grid>
+
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Background="#12151A">
+      <TextBlock Name="StatusText" Margin="10,4" Classes="field" Text="Ready" />
+      <TextBlock Name="StatsText" Grid.Column="1" Margin="10,4" Classes="field" Text="" />
+    </Grid>
+  </Grid>
+</Window>

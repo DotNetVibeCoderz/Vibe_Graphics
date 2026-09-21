@@ -1,0 +1,23 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ThreeEditor.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,10,0,4" />
+      <Setter Property="Foreground" Value="#9DB2D0" />
+    </Style>
+    <Style Selector="TextBlock.field">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="#C7D2E4" />
+    </Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+    </Style>
+  </Application.Styles>
+
+</Application>

@@ -3,6 +3,22 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-21 - Phase 7: scene editor and plugins / Fase 7: editor scene dan plugin (0.5.0)
+
+- **Scene documents** (`ThreeNet.Scenes.SceneDocument`): a serialisable description of a scene - geometries
+  (primitives or model files), textures, materials, a node tree with lights, cameras and physics, and
+  environment settings. `Build(scene)` creates everything and reports missing assets instead of throwing;
+  JSON save / load keeps asset paths relative to the file.
+- **ThreeEditor** (`apps/ThreeEditor`): scene tree, viewport (picking and ground-plane dragging through
+  `InteractionManager`, orbit camera, editor grid), live inspector for transform, geometry, material,
+  light, camera and physics, undo / redo (100 steps), duplicate, reparent, model import, screenshots,
+  and a play mode that steps physics and restores the scene on stop.
+- **Plugin system** (`ThreeNet.Plugins`): `IThreeNetPlugin` implementations are discovered in a folder and
+  loaded into collectible `AssemblyLoadContext`s; they register commands (shown in the editor's Plugins
+  menu) and importers for their own file formats. Example: `samples/ThreePlugin.Sample` (scatter boxes,
+  ring of lights, `.points` importer), built into the editor's `plugins` folder.
+- New doc: `docs/editor.md`. Phase 7 is complete; every roadmap phase now has working code.
+
 ## 2026-09-17 - 0.4.1 / 0.4.2: Android verified on an emulator
 
 - The 0.4.0 Android binaries needed `libc++_shared.so`, so the CI emulator run failed with

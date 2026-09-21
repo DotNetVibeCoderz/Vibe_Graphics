@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>ThreeEditor</RootNamespace>
+    <AssemblyName>ThreeEditor</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ThreeNet.Avalonia\ThreeNet.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Build the example plugin into the editor's plugins folder. -->
+    <ProjectReference Include="..\..\samples\ThreePlugin.Sample\ThreePlugin.Sample.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopySamplePlugin" AfterTargets="Build">
+    <ItemGroup>
+      <_SamplePlugin Include="$(MSBuildThisFileDirectory)..\..\samples\ThreePlugin.Sample\bin\$(Configuration)\$(TargetFramework)\ThreePlugin.Sample.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SamplePlugin)" DestinationFolder="$(OutputPath)plugins" Condition="Exists('%(_SamplePlugin.FullPath)')" />
+  </Target>
+
+</Project>

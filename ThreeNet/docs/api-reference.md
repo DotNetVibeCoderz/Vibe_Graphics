@@ -175,6 +175,20 @@ See [interactivity.md](interactivity.md).
 
 See [extensions.md](extensions.md).
 
+## Scenes and plugins
+
+- `ThreeNet.Scenes.SceneDocument`: `Build(scene)` → `SceneBuildResult` (`Nodes`, `Materials`, `Warnings`,
+  `ActiveCamera`), `Save`/`Load`/`ToJson`/`FromJson`, `CreateDefault()`, `AllNodes`, `Find`, `ParentOf`,
+  `Remove`, `NextId`, `BaseDirectory`. Definitions: `GeometryDefinition` (primitives or `Model`),
+  `TextureDefinition`, `MaterialDefinition`, `LightDefinition`, `CameraDefinition`, `PhysicsDefinition`,
+  `NodeDefinition`, `EnvironmentDefinition`.
+- `ThreeNet.Plugins`: `IThreeNetPlugin` (`Initialize(IPluginHost)`), `PluginManager` (`LoadDirectory`,
+  `Load`, `Run`, `Import`, `Unload`, `Commands`, `Importers`, `Logged`, `DefaultDirectory`),
+  `PluginCommand`, `PluginImporter`, `PluginContext` (`Document`, `Selection`, `Scene`, `Report`,
+  `RequestRebuild`).
+
+See [editor.md](editor.md).
+
 ## Helpers
 
 `MathHelpers.ToRadians/ToDegrees/Rgba/FromHex/SrgbToLinear/LinearToSrgb`, `Colors.*` (linear palette).

@@ -10,6 +10,7 @@
 | [extensions.md](extensions.md) | Physics (Rapier), spatial audio, networking, OpenXR probe and stereo cameras |
 | [platforms.md](platforms.md) | Runtimes (Windows, Linux, macOS, Android, iOS, browser), build features, mobile and web builds |
 | [native-core.md](native-core.md) | Building, testing and extending the Rust core |
+| [editor.md](editor.md) | ThreeEditor (scene editor), scene documents and the plugin system |
 | [threegallery.md](threegallery.md) | The sample gallery and how to add a sample |
 | [threeappgen.md](threeappgen.md) | ThreeAppGen, Jack - The Code Bender, settings, kernel functions, templates |
 | [threejs-conversion.md](threejs-conversion.md) | Converting Three.js projects to Three.Net |

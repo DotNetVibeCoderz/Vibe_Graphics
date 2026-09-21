@@ -2,11 +2,13 @@
   <Folder Name="/apps/">
     <Project Path="apps/HomeComplexCad/HomeComplexCad.csproj" />
     <Project Path="apps/ThreeAppGen/ThreeAppGen.csproj" />
+    <Project Path="apps/ThreeEditor/ThreeEditor.csproj" />
     <Project Path="apps/ThreeGallery/ThreeGallery.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ThreeNet.Samples.HelloCube/ThreeNet.Samples.HelloCube.csproj" />
     <Project Path="samples/ThreeNet.Samples.MotoCross/ThreeNet.Samples.MotoCross.csproj" />
+    <Project Path="samples/ThreePlugin.Sample/ThreePlugin.Sample.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/ThreeNet.Avalonia/ThreeNet.Avalonia.csproj" />
