@@ -3,11 +3,17 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
-## 2026-09-17 - 0.4.1: self-contained Android core
+## 2026-09-17 - 0.4.1 / 0.4.2: Android verified on an emulator
 
 - The 0.4.0 Android binaries needed `libc++_shared.so`, so the CI emulator run failed with
   `DllNotFoundException`. `rust/.cargo/config.toml` now links libc++ and libc++abi statically for Android
   targets; the core only depends on system libraries (libc, libm, libdl, libandroid, libaaudio).
+- The CI emulator then ran the sample end to end: `THREENET_OK adapter: SwiftShader Device (Subzero)
+  (Cpu, Vulkan) ABI 7 ... ball rests at y=0.60, draws 3, triangles 5292` - rendering, physics and the HUD
+  all work on Android.
+- 0.4.1 published `ThreeNet`, `ThreeNet.Native` (win-x64, linux-x64, osx-arm64, osx-x64, android-arm64,
+  android-x64, ios-arm64, iossimulator-arm64, browser-wasm) and `ThreeNet.Avalonia`.
+- 0.4.2: the Rust crate version follows the packages, so `ThreeNetRuntime.NativeVersion` no longer reports 0.1.0.
 
 ## 2026-09-17 - Phase 5: multiplatform runtime / Fase 5: runtime multiplatform (0.4.0)
 

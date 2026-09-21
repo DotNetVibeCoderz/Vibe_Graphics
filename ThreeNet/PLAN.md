@@ -56,7 +56,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 |---|---|---|
 | Windows | ✅ | Tested (DX12) |
 | Linux, macOS | ✅ | Built and tested in CI (linux-x64, osx-arm64) plus osx-x64 cross build |
-| Android / iOS native core | 🟡 | Android arm64/x64 built with the NDK (API 26) and packaged, emulator smoke test in CI, sample app; iOS static libraries built in CI and linked through buildTransitive targets, not device tested |
+| Android / iOS native core | 🟡 | Android arm64/x64 built with the NDK (API 26), packaged and **verified on the CI emulator** (Vulkan/SwiftShader: render + physics + HUD); iOS static libraries built in CI and linked through buildTransitive targets, not device tested |
 | WebAssembly build of the core (WebGPU) | 🟡 | `wasm32-unknown-emscripten` static library (WebGL2 via the GLES backend) built and packaged for `browser-wasm`; not browser tested yet |
 | Consistent API across platforms | ✅ | Same C ABI everywhere |
 

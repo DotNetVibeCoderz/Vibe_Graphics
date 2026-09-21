@@ -58,7 +58,7 @@ public record struct OverlayElementOptions
     /// <summary>Texture coordinates (u0, v0, u1, v1).</summary>
     public Vector4 Uv;
     public string? Text;
-    /// <summary>Font index: 0 is the built-in Inter Regular, others come from <see cref="Overlay.LoadFont"/>.</summary>
+    /// <summary>Font index: 0 is the built-in Inter Regular, others come from <see cref="Overlay.LoadFont(string)"/>.</summary>
     public int Font;
     public float FontSize;
     public OverlayTextAlign Align;
