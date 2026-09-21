@@ -14,6 +14,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ThreeNet\ThreeNet.csproj" />
+    <!--
+      The plugin tests load this assembly from disk into their own load context,
+      so it is built but deliberately not referenced.
+    -->
+    <ProjectReference Include="..\..\samples\ThreePlugin.Sample\ThreePlugin.Sample.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
+
+  <Target Name="CopySamplePlugin" AfterTargets="Build">
+    <ItemGroup>
+      <_SamplePlugin Include="$(MSBuildThisFileDirectory)..\..\samples\ThreePlugin.Sample\bin\$(Configuration)\$(TargetFramework)\ThreePlugin.Sample.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_SamplePlugin)" DestinationFolder="$(OutputPath)plugins" Condition="Exists('%(_SamplePlugin.FullPath)')" />
+  </Target>
 
 </Project>

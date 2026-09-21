@@ -150,21 +150,14 @@ public class SceneDocumentTests
         Assert.Throws<InvalidOperationException>(() => manager.AddCommand(new PluginCommand("x", "y", _ => { })));
     }
 
-    /// <summary>Finds the built sample plugin without referencing it (it must load in its own context).</summary>
+    /// <summary>
+    /// The sample plugin is copied next to the tests by the build (it must not be
+    /// referenced, so that it loads into its own context).
+    /// </summary>
     private static string FindSamplePlugin()
     {
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "samples", "ThreePlugin.Sample")))
-        {
-            directory = directory.Parent;
-        }
-
-        Assert.NotNull(directory);
-        string[] candidates = Directory.GetFiles(
-            Path.Combine(directory.FullName, "samples", "ThreePlugin.Sample", "bin"),
-            "ThreePlugin.Sample.dll",
-            SearchOption.AllDirectories);
-        Assert.NotEmpty(candidates);
-        return candidates.OrderByDescending(File.GetLastWriteTimeUtc).First();
+        string plugin = Path.Combine(AppContext.BaseDirectory, "plugins", "ThreePlugin.Sample.dll");
+        Assert.True(File.Exists(plugin), $"the sample plugin was not built into {plugin}");
+        return plugin;
     }
 }
