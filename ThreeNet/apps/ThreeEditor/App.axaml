@@ -3,20 +3,181 @@
              x:Class="ThreeEditor.App"
              RequestedThemeVariant="Dark">
 
+  <Application.Resources>
+    <!--
+      Drafting table palette. The chrome is a warm neutral graphite on purpose:
+      a blue tinted shell shifts how the eye reads colours in the viewport next
+      to it. Saturation is reserved for two jobs only - axis colours (X/Y/Z,
+      wherever an axis is actually meant) and one amber that means "this is
+      selected or running".
+    -->
+    <Color x:Key="SurfaceBaseColor">#15161A</Color>
+    <Color x:Key="SurfacePanelColor">#1C1D22</Color>
+    <Color x:Key="SurfaceRaisedColor">#24262C</Color>
+    <Color x:Key="HairlineColor">#31333B</Color>
+    <Color x:Key="TextPrimaryColor">#EDEAE3</Color>
+    <Color x:Key="TextMutedColor">#9C9A93</Color>
+    <Color x:Key="AmberColor">#DFA23C</Color>
+    <Color x:Key="AxisXColor">#DF6B58</Color>
+    <Color x:Key="AxisYColor">#7CB05F</Color>
+    <Color x:Key="AxisZColor">#4B8CCB</Color>
+
+    <SolidColorBrush x:Key="SurfaceBase" Color="{StaticResource SurfaceBaseColor}" />
+    <SolidColorBrush x:Key="SurfacePanel" Color="{StaticResource SurfacePanelColor}" />
+    <SolidColorBrush x:Key="SurfaceRaised" Color="{StaticResource SurfaceRaisedColor}" />
+    <SolidColorBrush x:Key="Hairline" Color="{StaticResource HairlineColor}" />
+    <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="TextMuted" Color="{StaticResource TextMutedColor}" />
+    <SolidColorBrush x:Key="Amber" Color="{StaticResource AmberColor}" />
+    <SolidColorBrush x:Key="AmberDim" Color="#4A3A20" />
+    <SolidColorBrush x:Key="AxisX" Color="{StaticResource AxisXColor}" />
+    <SolidColorBrush x:Key="AxisY" Color="{StaticResource AxisYColor}" />
+    <SolidColorBrush x:Key="AxisZ" Color="{StaticResource AxisZColor}" />
+
+    <!-- The theme accent is the palette amber, so checkboxes, selection and
+         focus all speak with the one accent instead of stock blue. -->
+    <Color x:Key="SystemAccentColor">#DFA23C</Color>
+    <Color x:Key="SystemAccentColorLight1">#E8B45F</Color>
+    <Color x:Key="SystemAccentColorLight2">#EFC684</Color>
+    <Color x:Key="SystemAccentColorLight3">#F5D9AE</Color>
+    <Color x:Key="SystemAccentColorDark1">#C4882A</Color>
+    <Color x:Key="SystemAccentColorDark2">#9C6B20</Color>
+    <Color x:Key="SystemAccentColorDark3">#6E4B16</Color>
+
+    <!-- Numbers are the content of this tool, so they get a face of their own. -->
+    <FontFamily x:Key="DataFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
-    <Style Selector="TextBlock.section">
+
+    <!-- Drafting sheet annotation: small, wide tracked, uppercase. -->
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="10.5" />
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,10,0,4" />
-      <Setter Property="Foreground" Value="#9DB2D0" />
+      <Setter Property="LetterSpacing" Value="1.3" />
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
     </Style>
+
     <Style Selector="TextBlock.field">
+      <Setter Property="FontSize" Value="12.5" />
       <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="Foreground" Value="#C7D2E4" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
     </Style>
+
+    <Style Selector="TextBlock.data">
+      <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+    </Style>
+
+    <!-- Toolbar buttons read as flat marks until touched. -->
     <Style Selector="Button.tool">
-      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource Hairline}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="9,4" />
       <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource TextMuted}" />
+    </Style>
+
+    <Style Selector="ToggleButton.segment">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource Hairline}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+    </Style>
+    <Style Selector="ToggleButton.segment:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AmberDim}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Amber}" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource Amber}" />
+    </Style>
+
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Hairline}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="6,2" />
+    </Style>
+
+    <!-- Every editable number is monospaced so columns of values line up. -->
+    <Style Selector="NumericUpDown">
+      <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Hairline}" />
+      <Setter Property="CornerRadius" Value="3" />
+    </Style>
+    <Style Selector="NumericUpDown /template/ TextBox">
+      <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ComboBox">
+      <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Hairline}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="MinHeight" Value="26" />
+    </Style>
+
+    <Style Selector="Menu">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <Style Selector="TreeViewItem">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="MinHeight" Value="26" />
+    </Style>
+
+    <!-- Section header: a hairline rule plus a disclosure mark, no chrome. -->
+    <Style Selector="ToggleButton.section">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0,10,0,4" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <!-- A section header is a label and a rule, never a filled control. -->
+    <Style Selector="ToggleButton.section:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.section:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.section:checked:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ToggleButton.section:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <!-- Selected row: a quiet amber wash, not a saturated bar. -->
+    <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{StaticResource AmberDim}" />
+    </Style>
+    <Style Selector="TreeViewItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{StaticResource AmberDim}" />
     </Style>
   </Application.Styles>
 

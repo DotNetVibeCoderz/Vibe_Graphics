@@ -12,6 +12,7 @@ public sealed class ShadowsSample : GallerySample
 {
     private Node? _sun;
     private Node? _spot;
+    private Node? _lantern;
     private readonly List<(Node Node, float Phase, float Radius)> _movers = [];
 
     public override string Title => "Shadows & SSAO";
@@ -19,7 +20,7 @@ public sealed class ShadowsSample : GallerySample
     public override string Category => "Lighting";
 
     public override string Summary =>
-        "Directional cascades plus a spot light shadow, with screen space ambient occlusion filling the creases.";
+        "Directional cascades, a spot light shadow and a point light casting a cube map shadow, with SSAO filling the creases.";
 
     public override RendererOptions ConfigureRenderer(RendererOptions options) => options with
     {
@@ -85,6 +86,21 @@ public sealed class ShadowsSample : GallerySample
         _spot.Position = new Vector3(-5f, 6.5f, 4f);
         _spot.LookAt(new Vector3(0f, 1f, 0f));
 
+        // A point light shadows in every direction: six cube faces.
+        _lantern = scene.AddLight(
+            Light.Point(MathHelpers.FromHex(0xFFD9A0).AsVector3(), 30f, range: 14f) with { CastShadow = true },
+            name: "lantern");
+        _lantern.Position = new Vector3(3.2f, 2.2f, 2.6f);
+        scene.AddMesh(
+            scene.CreateSphereGeometry(0.12f, 16, 12),
+            scene.CreateMaterial(MaterialOptions.Basic(MathHelpers.FromHex(0xFFD9A0)) with
+            {
+                Emissive = MathHelpers.FromHex(0xFFD9A0).AsVector3(),
+                EmissiveIntensity = 6f,
+            }),
+            _lantern,
+            "lantern bulb");
+
         scene.Environment = scene.Environment with
         {
             Background = MathHelpers.FromHex(0x1A1D24),
@@ -103,6 +119,12 @@ public sealed class ShadowsSample : GallerySample
                 MathF.Cos(angle) * radius,
                 0.9f + (MathF.Abs(MathF.Sin(angle * 1.6f)) * 1.8f),
                 MathF.Sin(angle) * radius);
+        }
+
+        // The lantern circles slowly so its cube shadow sweeps the pillars.
+        if (_lantern is not null)
+        {
+            _lantern.Position = new Vector3(3.2f + (MathF.Sin(t * 0.4f) * 1.6f), 2.2f, 2.6f + (MathF.Cos(t * 0.4f) * 1.2f));
         }
 
         // Sweeping the sun makes the cascade transitions easy to inspect.

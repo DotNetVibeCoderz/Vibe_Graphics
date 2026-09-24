@@ -5,7 +5,7 @@
 
 const PI: f32 = 3.141592653589793;
 const MAX_LIGHTS: u32 = 128u;
-const MAX_SHADOW_LAYERS: u32 = 8u;
+const MAX_SHADOW_LAYERS: u32 = 16u;
 
 const SHADING_BASIC: f32 = 0.0;
 const SHADING_LAMBERT: f32 = 1.0;
@@ -48,7 +48,7 @@ struct Light {
     color: vec4<f32>,
     // x = cos(inner), y = cos(outer), z = width, w = height
     params: vec4<f32>,
-    // x = first shadow layer (-1 = none), y = cascades, z = depth bias, w = normal bias
+    // x = first shadow layer (-1 = none), y = cascades (or 6 cube faces), z = depth bias, w = normal bias
     shadow: vec4<f32>,
     // x = shadow strength
     shadow_extra: vec4<f32>,
@@ -63,8 +63,8 @@ struct ShadowData {
     cascade_splits: vec4<f32>,
     // x = texel size, y = PCF radius, z = cascade blend, w = enabled
     params: vec4<f32>,
-    // World space size of one shadow texel, per layer (8 values).
-    texel_world: array<vec4<f32>, 2>,
+    // World space size of one shadow texel, per layer (MAX_SHADOW_LAYERS values).
+    texel_world: array<vec4<f32>, 4>,
 };
 
 @group(0) @binding(0) var<uniform> frame: Frame;
@@ -180,6 +180,22 @@ fn shadow_visibility(light: Light, world_position: vec3<f32>, normal: vec3<f32>,
     var layer = i32(light.shadow.x);
     let cascades = i32(light.shadow.y);
     var fade = 0.0;
+
+    if (kind == LIGHT_POINT) {
+        // Cube shadow: six layers, picked by the major axis of the light to
+        // fragment vector, in the order the planner writes them.
+        let offset_to_fragment = world_position - light.position.xyz;
+        let magnitude = abs(offset_to_fragment);
+        var face = 0;
+        if (magnitude.x >= magnitude.y && magnitude.x >= magnitude.z) {
+            face = select(1, 0, offset_to_fragment.x > 0.0);
+        } else if (magnitude.y >= magnitude.z) {
+            face = select(3, 2, offset_to_fragment.y > 0.0);
+        } else {
+            face = select(5, 4, offset_to_fragment.z > 0.0);
+        }
+        layer = layer + face;
+    }
 
     if (kind == LIGHT_DIRECTIONAL) {
         let last_split = shadows.cascade_splits[max(cascades - 1, 0)];

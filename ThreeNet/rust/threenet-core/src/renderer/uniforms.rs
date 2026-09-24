@@ -248,7 +248,7 @@ impl ObjectUniform {
 }
 
 /// Shadow map layers available per frame; matches `MAX_SHADOW_LAYERS` in the shader.
-pub const MAX_SHADOW_LAYERS: usize = 8;
+pub const MAX_SHADOW_LAYERS: usize = 16;
 
 /// Maximum cascades for one directional light.
 pub const MAX_CASCADES: usize = 4;
@@ -264,7 +264,7 @@ pub struct ShadowUniform {
     /// `x` = texel size (1 / map size), `y` = PCF radius in texels, `z` = cascade blend width (0..1), `w` = enabled.
     pub params: [f32; 4],
     /// World space size of one shadow texel for each layer, used to scale the normal bias.
-    pub texel_world: [[f32; 4]; 2],
+    pub texel_world: [[f32; 4]; MAX_SHADOW_LAYERS / 4],
 }
 
 impl Default for ShadowUniform {

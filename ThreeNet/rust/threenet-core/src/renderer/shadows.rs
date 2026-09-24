@@ -23,6 +23,10 @@ use crate::renderer::uniforms::{
 };
 use crate::scene::GeometryId;
 
+/// Layers allocated up front: three cascades plus a few spot lights. A scene
+/// with point lights grows the array on demand, up to `MAX_SHADOW_LAYERS`.
+pub const DEFAULT_SHADOW_LAYERS: usize = 8;
+
 /// User facing shadow settings, taken from the renderer configuration.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowSettings {
@@ -84,6 +88,8 @@ pub struct ShadowMaps {
     pipeline: wgpu::RenderPipeline,
     /// Bumped whenever the texture is recreated, so dependent bind groups rebuild.
     generation: u64,
+    /// Layers currently allocated in the array.
+    allocated_layers: usize,
     layers: Vec<ShadowLayer>,
 }
 
@@ -194,7 +200,7 @@ impl ShadowMaps {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let (texture, array_view, layer_views) = create_texture(device, 1);
+        let (texture, array_view, layer_views) = create_texture(device, 1, DEFAULT_SHADOW_LAYERS as u32);
         Self {
             size: 1,
             texture,
@@ -207,6 +213,7 @@ impl ShadowMaps {
             pass_stride,
             pipeline,
             generation: 0,
+            allocated_layers: DEFAULT_SHADOW_LAYERS,
             layers: Vec::new(),
         }
     }
@@ -236,23 +243,49 @@ impl ShadowMaps {
         self.layers.len()
     }
 
-    /// Reallocates the layers when the requested size changes. Disabled shadows
-    /// keep a 1x1 array bound so the lighting bind group layout stays identical.
-    pub fn ensure_size(&mut self, device: &wgpu::Device, settings: &ShadowSettings) {
+    /// Reallocates when the requested size or the number of layers the scene
+    /// needs changes. Disabled shadows keep a 1x1 array bound so the lighting
+    /// bind group layout stays identical.
+    pub fn ensure_size(&mut self, device: &wgpu::Device, settings: &ShadowSettings, required_layers: usize) {
         let size = if settings.enabled {
             settings.map_size.clamp(256, 8192)
         } else {
             1
         };
-        if size == self.size {
+        // Grow to what the scene asks for (a point light wants six layers), never
+        // shrink below the default: a full array at 2048 is a lot of memory.
+        let layers = required_layers
+            .max(DEFAULT_SHADOW_LAYERS)
+            .min(MAX_SHADOW_LAYERS)
+            .max(self.allocated_layers);
+        if size == self.size && layers == self.allocated_layers {
             return;
         }
-        let (texture, array_view, layer_views) = create_texture(device, size);
+        let (texture, array_view, layer_views) = create_texture(device, size, layers as u32);
         self.texture = texture;
         self.array_view = array_view;
         self.layer_views = layer_views;
         self.size = size;
+        self.allocated_layers = layers;
         self.generation += 1;
+    }
+
+    /// Layers this frame's lights need, so `ensure_size` can grow the array.
+    pub fn required_layers(sources: &[LightSource], settings: &ShadowSettings) -> usize {
+        if !settings.enabled {
+            return 0;
+        }
+
+        let cascades = settings.cascades.clamp(1, MAX_CASCADES as u32) as usize;
+        sources
+            .iter()
+            .filter(|source| source.light.cast_shadow)
+            .map(|source| match source.light.kind {
+                LightKind::Directional => cascades,
+                LightKind::Point => 6,
+                _ => 1,
+            })
+            .sum()
     }
 
     /// Assigns shadow layers to lights, computes their matrices and uploads the
@@ -292,7 +325,7 @@ impl ShadowMaps {
 
                 match light.kind {
                     LightKind::Directional => {
-                        if self.layers.len() + cascades > MAX_SHADOW_LAYERS {
+                        if self.layers.len() + cascades > self.allocated_layers {
                             continue;
                         }
                         let first = self.layers.len();
@@ -316,7 +349,7 @@ impl ShadowMaps {
                         lights[index].shadow[1] = cascades as f32;
                     }
                     LightKind::Spot => {
-                        if self.layers.len() >= MAX_SHADOW_LAYERS {
+                        if self.layers.len() >= self.allocated_layers {
                             continue;
                         }
                         let layer = self.layers.len();
@@ -342,6 +375,43 @@ impl ShadowMaps {
                         self.layers.push(ShadowLayer { view_projection });
                         lights[index].shadow[0] = layer as f32;
                         lights[index].shadow[1] = 1.0;
+                    }
+                    LightKind::Point => {
+                        // A cube of six 90 degree views around the light.
+                        if self.layers.len() + 6 > self.allocated_layers {
+                            continue;
+                        }
+                        let first = self.layers.len();
+                        let position = source.world.w_axis.truncate();
+                        let range = if light.range > 0.0 {
+                            light.range
+                        } else {
+                            settings.distance
+                        };
+                        // The order here is what the shader's face selection expects.
+                        let faces = [
+                            (Vec3::X, Vec3::Y),
+                            (Vec3::NEG_X, Vec3::Y),
+                            (Vec3::Y, Vec3::Z),
+                            (Vec3::NEG_Y, Vec3::Z),
+                            (Vec3::Z, Vec3::Y),
+                            (Vec3::NEG_Z, Vec3::Y),
+                        ];
+                        let fov = std::f32::consts::FRAC_PI_2;
+                        // One texel covers this much world space a quarter of the way out.
+                        let texel_world = 2.0 * (fov * 0.5).tan() * range * 0.25 / self.size as f32;
+                        for (face, (direction, up)) in faces.iter().enumerate() {
+                            let view =
+                                glam::camera::rh::view::look_to_mat4(position, *direction, *up);
+                            let proj =
+                                glam::camera::rh::proj::directx::perspective(fov, 1.0, 0.05, range);
+                            let view_projection = proj * view;
+                            set_texel(&mut uniform, first + face, texel_world);
+                            uniform.matrices[first + face] = view_projection.to_cols_array_2d();
+                            self.layers.push(ShadowLayer { view_projection });
+                        }
+                        lights[index].shadow[0] = first as f32;
+                        lights[index].shadow[1] = 6.0;
                     }
                     _ => {}
                 }
@@ -426,13 +496,14 @@ impl ShadowMaps {
 fn create_texture(
     device: &wgpu::Device,
     size: u32,
+    layers: u32,
 ) -> (wgpu::Texture, wgpu::TextureView, Vec<wgpu::TextureView>) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("threenet.shadow.maps"),
         size: wgpu::Extent3d {
             width: size,
             height: size,
-            depth_or_array_layers: MAX_SHADOW_LAYERS as u32,
+            depth_or_array_layers: layers,
         },
         mip_level_count: 1,
         sample_count: 1,
@@ -446,7 +517,7 @@ fn create_texture(
         dimension: Some(wgpu::TextureViewDimension::D2Array),
         ..Default::default()
     });
-    let layer_views = (0..MAX_SHADOW_LAYERS as u32)
+    let layer_views = (0..layers)
         .map(|layer| {
             texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some("threenet.shadow.layer_view"),

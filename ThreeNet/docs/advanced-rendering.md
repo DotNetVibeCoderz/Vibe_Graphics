@@ -49,6 +49,19 @@ glow.Update(newSource);          // hot reload; on error the previous version st
 string wgsl = glow.CompiledWgsl; // inspect what the GLSL became
 ```
 
+## Shadows from every light type
+
+Directional lights use cascades, spot lights a single perspective map, and point lights a cube of six
+faces picked per pixel from the major axis of the light-to-fragment vector:
+
+```csharp
+scene.AddLight(Light.Point(Vector3.One, 30f, range: 14f) with { CastShadow = true });
+```
+
+Layers are allocated on demand: eight by default (three cascades plus a few spot lights), growing to
+sixteen when a scene has point lights, so a cube map costs memory only where one is used. `FrameStats.ShadowLayers`
+reports what a frame planned - six per shadowed point light.
+
 ## Deferred renderer
 
 `RendererOptions.RenderPath = RenderPath.Deferred` writes opaque geometry into a G-buffer (five

@@ -3,6 +3,20 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-24 - Point light shadows and an editor redesign (0.6.0)
+
+- **Point lights cast shadows**: six cube faces per light, selected per pixel from the major axis of the
+  light to fragment vector. Shadow layers are now allocated on demand (8 by default, up to 16) so a cube
+  map costs memory only in scenes that use one. GPU tests in Rust and .NET check that a cube shadows a
+  floor and that the shadow disappears when `CastShadow` is off; the ThreeGallery shadows sample gained a
+  circling lantern.
+- **ThreeEditor redesign** (`frontend-design`): warm graphite chrome that does not tint the viewport,
+  axis colour (X red, Y green, Z blue) wherever an axis is actually meant - transform fields, the origin
+  marker in the scene and the viewport readout - and one amber for "selected" or "running". Numbers are
+  monospaced. New in the UI: hierarchy filter, per row visibility toggles, right click menu, collapsible
+  inspector sections, geometry fields named for the shape, snapping to 0.25 m while dragging, render
+  toggles on the command bar, and a viewport readout drawn with the engine's own HUD overlay.
+
 ## 2026-09-21 - Phase 7: scene editor and plugins / Fase 7: editor scene dan plugin (0.5.0)
 
 - **Scene documents** (`ThreeNet.Scenes.SceneDocument`): a serialisable description of a scene - geometries

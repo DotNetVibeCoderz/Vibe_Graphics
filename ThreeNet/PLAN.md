@@ -25,7 +25,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | SSAO | ✅ | Normal/depth prepass, half res hemisphere kernel, bilateral blur |
 | Depth of field, motion blur | ✅ | Golden angle bokeh DoF, depth reprojection camera motion blur (HDR, both paths) |
 | Deferred renderer | ✅ | `RenderPath.Deferred`: 5 target G-buffer + fullscreen lighting, up to 128 lights; transparents forward |
-| Shadow maps | ✅ | Directional cascades (up to 4) + spot, PCF, 8 layers, per node cast/receive |
+| Shadow maps | ✅ | Directional cascades (up to 4), spot, and point lights with cube maps (six faces); PCF, up to 16 layers allocated on demand, per node cast/receive |
 | Modular shaders / custom shader injection (WGSL, GLSL/HLSL via naga) | ✅ | `user_vertex` / `user_surface` hooks in WGSL or GLSL (naga), CPU validation, hot reload. HLSL input is not offered by naga |
 
 ## Phase 3 - Asset pipeline
@@ -83,8 +83,13 @@ Made by Gravicode Studios, led by Kang Fadhil.
 
 ## Next up / Berikutnya
 
-1. OpenXR sessions and swapchain submission (Vulkan / D3D12 interop from wgpu).
-2. Run the browser (WebGL2) and iOS builds on real targets; WebGPU for the browser.
-3. Point light (cube map) shadows and contact hardening.
-4. GPU skinning and instanced rendering for large crowds.
-5. Scene editor / inspector.
+Open work, with why it is still open:
+
+1. **OpenXR sessions and swapchain submission.** Needs Vulkan / D3D12 interop out of wgpu and a headset to
+   verify against; the runtime probe and off-axis stereo cameras are in.
+2. **Browser (WebGL2) and iOS on real targets.** Both are built and packaged by CI, but nothing here can run
+   an iOS device or a browser build end to end, so neither is claimed as tested.
+3. **GPU skinning and instanced rendering.** CPU skinning is correct and keeps bounds and picking accurate;
+   a GPU path would be a second code path (bounds and raycasts would still need the CPU pose), so it waits
+   for a scene that actually needs the throughput.
+4. **Contact hardening shadows and light probes.**

@@ -653,7 +653,9 @@ impl Renderer {
         self.collect_draw_items(scene, &frustum, camera_position, camera_layers);
         let shadow_settings = self.config.shadow_settings();
         let ssao_settings = self.config.ssao_settings();
-        self.shadow_maps.ensure_size(&self.device, &shadow_settings);
+        let required_layers = ShadowMaps::required_layers(&self.light_sources, &shadow_settings);
+        self.shadow_maps
+            .ensure_size(&self.device, &shadow_settings, required_layers);
         let deferred = self.config.render_path == RenderPath::Deferred;
         // The forward path needs the depth prepass for its camera effects too.
         let camera_effects = self.config.depth_of_field || self.config.motion_blur;

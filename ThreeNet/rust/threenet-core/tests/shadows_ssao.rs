@@ -230,3 +230,116 @@ fn ssao_darkens_contact_areas_only() {
         );
     }
 }
+
+/// Pixel a world point lands on, for a camera node looking at the scene.
+fn project(scene: &mut Scene, camera_node: u32, point: Vec3) -> (u32, u32) {
+    scene.update_world_transforms();
+    let world = scene.node(camera_node).unwrap().world_matrix();
+    let camera = scene.node(camera_node).unwrap().camera.unwrap();
+    let clip = camera.projection_matrix(1.0) * world.inverse() * point.extend(1.0);
+    let ndc = clip.truncate() / clip.w;
+    (
+        ((ndc.x * 0.5 + 0.5) * SIZE as f32) as u32,
+        ((0.5 - ndc.y * 0.5) * SIZE as f32) as u32,
+    )
+}
+
+#[test]
+fn point_light_casts_a_cube_shadow() {
+    let config = RendererConfig {
+        shadows: true,
+        shadow_map_size: 1024,
+        msaa_samples: 1,
+        ..Default::default()
+    };
+    let Some(mut renderer) = renderer(config) else {
+        return;
+    };
+
+    // Floor, a cube above it and a point light off to one side: the cube's
+    // shadow lands beside its own footprint, where the camera can see it.
+    let mut scene = Scene::new();
+    scene.environment.background = [0.0, 0.0, 0.0, 1.0];
+    scene.environment.ambient_intensity = 0.0;
+    let white = scene.add_material(Material::pbr(Vec4::new(0.8, 0.8, 0.8, 1.0), 0.0, 0.9));
+
+    let floor_geometry = scene.add_geometry(primitives::plane(20.0, 20.0, 1, 1));
+    let floor = scene.add_mesh(None, floor_geometry, white).unwrap();
+    scene.node_mut(floor).unwrap().transform.rotation =
+        threenet_core::math::Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+
+    let cube_geometry = scene.add_geometry(primitives::cuboid(1.0, 1.0, 1.0, 1));
+    let cube = scene.add_mesh(None, cube_geometry, white).unwrap();
+    scene.node_mut(cube).unwrap().transform.translation = Vec3::new(0.0, 1.0, 0.0);
+
+    let light_node = scene.create_node(None).unwrap();
+    {
+        let node = scene.node_mut(light_node).unwrap();
+        node.light = Some(Light {
+            kind: threenet_core::light::LightKind::Point,
+            color: Vec3::ONE,
+            intensity: 30.0,
+            range: 40.0,
+            cast_shadow: true,
+            shadow_bias: 0.001,
+            shadow_normal_bias: 1.5,
+            ..Light::default()
+        });
+        node.transform.translation = Vec3::new(2.0, 4.0, 2.0);
+    }
+
+    let camera_node = scene.create_node(None).unwrap();
+    {
+        let node = scene.node_mut(camera_node).unwrap();
+        node.camera = Some(Camera::perspective(std::f32::consts::FRAC_PI_4, 0.1, 100.0));
+        node.transform.translation = Vec3::new(-3.0, 4.0, 7.0);
+    }
+    scene.mark_dirty(scene.root());
+    scene
+        .node_mut(camera_node)
+        .unwrap()
+        .transform
+        .look_at(Vec3::new(-0.7, 0.0, -0.7), Vec3::Y);
+    scene.mark_dirty(camera_node);
+
+    // The light through the cube centre meets the floor here.
+    let shadow_point = Vec3::new(-2.0 / 3.0, 0.0, -2.0 / 3.0);
+    let lit_point = Vec3::new(2.5, 0.0, -2.5);
+    let (shadow_x, shadow_y) = project(&mut scene, camera_node, shadow_point);
+    let (lit_x, lit_y) = project(&mut scene, camera_node, lit_point);
+
+    renderer.render(&mut scene, Some(camera_node)).unwrap();
+    let with_shadow = renderer.read_pixels().unwrap();
+    assert_eq!(renderer.stats().shadow_layers, 6, "one cube map per point light");
+
+    if let Ok(dir) = std::env::var("THREENET_TEST_OUTPUT") {
+        image::save_buffer(
+            format!("{dir}/point-shadow.png"),
+            &with_shadow,
+            SIZE,
+            SIZE,
+            image::ExtendedColorType::Rgba8,
+        )
+        .unwrap();
+    }
+
+    let shadowed = luminance(&with_shadow, shadow_x, shadow_y);
+    let lit = luminance(&with_shadow, lit_x, lit_y);
+    assert!(lit > 20.0, "the floor should be lit by the point light: {lit}");
+    assert!(
+        shadowed < lit * 0.5,
+        "the cube should shadow the floor: {shadowed} vs {lit}"
+    );
+
+    // Without the shadow the same spot is lit again.
+    scene.node_mut(light_node).unwrap().light.as_mut().unwrap().cast_shadow = false;
+    scene.mark_dirty(light_node);
+    renderer.render(&mut scene, Some(camera_node)).unwrap();
+    let without = renderer.read_pixels().unwrap();
+    let unshadowed = luminance(&without, shadow_x, shadow_y);
+    assert_eq!(renderer.stats().shadow_layers, 0);
+    assert!(
+        unshadowed > shadowed * 1.8,
+        "without shadows the floor stays lit: {unshadowed} vs {shadowed}"
+    );
+}

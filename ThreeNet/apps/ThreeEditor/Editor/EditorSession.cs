@@ -444,7 +444,12 @@ public sealed class EditorSession : IDisposable
         string directory = PluginManager.DefaultDirectory;
         Directory.CreateDirectory(directory);
         IReadOnlyList<LoadedPlugin> loaded = Plugins.LoadDirectory(directory);
-        Log(loaded.Count == 0 ? $"no plugins in {directory}" : $"{loaded.Count} plugin(s) loaded");
+        Log(loaded.Count switch
+        {
+            0 => $"No plugins found in {directory}",
+            1 => $"Loaded 1 plugin: {loaded[0].Instance.Name}",
+            _ => $"Loaded {loaded.Count} plugins",
+        });
     }
 
     public PluginContext PluginContext() => new(Document)

@@ -201,6 +201,62 @@ public class RendererTests
     }
 
     [Fact]
+    public void PointLightCastsACubeShadow()
+    {
+        using Renderer? renderer = TryCreateRenderer();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        using Scene scene = new() { Environment = SceneEnvironment.Default with { Background = Vector4.Zero, AmbientIntensity = 0f } };
+        Material white = scene.CreateMaterial(MaterialOptions.Pbr(new Vector4(0.8f, 0.8f, 0.8f, 1f), 0f, 0.9f));
+        Node floor = scene.AddMesh(scene.CreatePlaneGeometry(20f, 20f), white, name: "floor");
+        floor.EulerAngles = new Vector3(-MathF.PI / 2f, 0f, 0f);
+        Node cube = scene.AddMesh(scene.CreateBoxGeometry(), white, name: "cube");
+        cube.Position = new Vector3(0f, 1f, 0f);
+
+        // The light sits above and to one side, so the shadow lands beside the cube.
+        Node lamp = scene.AddLight(
+            Light.Point(Vector3.One, 30f, range: 40f) with { CastShadow = true, ShadowNormalBias = 1.5f },
+            name: "lamp");
+        lamp.Position = new Vector3(2f, 4f, 2f);
+
+        Node camera = scene.AddCamera(Camera.Perspective(45f.ToRadians()), new Vector3(-3f, 4f, 7f));
+        camera.LookAt(new Vector3(-0.7f, 0f, -0.7f));
+
+        renderer.Options = renderer.Options with { Shadows = true, ShadowMapSize = 1024 };
+        renderer.Render(scene, camera);
+        byte[] pixels = renderer.ReadPixels();
+        Assert.Equal(6, renderer.Stats.ShadowLayers);
+
+        // Where the light through the cube meets the floor, versus open floor.
+        (int X, int Y) shadow = Project(scene, camera, new Vector3(-2f / 3f, 0f, -2f / 3f));
+        (int X, int Y) open = Project(scene, camera, new Vector3(2.5f, 0f, -2.5f));
+        float shadowed = Luminance(pixels, shadow.X, shadow.Y);
+        float lit = Luminance(pixels, open.X, open.Y);
+        Assert.True(lit > 20f, $"the floor should be lit: {lit}");
+        Assert.True(shadowed < lit * 0.5f, $"the cube should shadow the floor: {shadowed} vs {lit}");
+
+        lamp.Light = lamp.Light!.Value with { CastShadow = false };
+        renderer.Render(scene, camera);
+        Assert.Equal(0, renderer.Stats.ShadowLayers);
+        Assert.True(Luminance(renderer.ReadPixels(), shadow.X, shadow.Y) > shadowed * 1.8f, "the shadow goes away");
+    }
+
+    /// <summary>Pixel a world point lands on for a camera node, in a 128x128 target.</summary>
+    private static (int X, int Y) Project(Scene scene, Node camera, Vector3 point)
+    {
+        Matrix4x4.Invert(camera.WorldMatrix, out Matrix4x4 view);
+        Camera lens = camera.Camera!.Value;
+        float tan = MathF.Tan(lens.FieldOfView * 0.5f);
+        Vector3 viewSpace = Vector3.Transform(point, view);
+        float x = viewSpace.X / (-viewSpace.Z * tan);
+        float y = viewSpace.Y / (-viewSpace.Z * tan);
+        return ((int)((x * 0.5f + 0.5f) * 128f), (int)((0.5f - y * 0.5f) * 128f));
+    }
+
+    [Fact]
     public void SsaoRendersWithoutErrors()
     {
         using Renderer? renderer = TryCreateRenderer();
