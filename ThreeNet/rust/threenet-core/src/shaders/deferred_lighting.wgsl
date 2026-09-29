@@ -58,6 +58,15 @@ fn fs_lighting(input: FullscreenVertex) -> @location(0) vec4<f32> {
     surface.shading_model = extra.y;
     surface.receive_shadow = extra.z;
 
+    var mode = debug_view();
+    if (mode == DEBUG_UV) {
+        // UVs are not written to the G-buffer; the forward path has them.
+        mode = DEBUG_UNAVAILABLE;
+    }
+    if (mode != DEBUG_OFF) {
+        return debug_channel(mode, surface, world_position, view_depth, input.clip_position.xy, vec2<f32>(0.0));
+    }
+
     let color = shade_surface(surface, world_position, view_depth, input.clip_position.xy);
     return vec4<f32>(apply_fog(color, length(world_position - frame.camera_position.xyz)), 1.0);
 }

@@ -19,8 +19,10 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | ![Converted Crystal Garden](docs/images/converted-crystal-garden.png) | ![Hello Cube](docs/images/hello-cube.png) |
 | **Shadow maps + SSAO** | **Motocross sample (Rodin rider & bike)** |
 | ![Shadows and SSAO](docs/images/gallery-shadows.png) | ![Motocross](docs/images/moto-rodin.png) |
-| **ThreeEditor - scene editor** | |
-| ![ThreeEditor](docs/images/editor.png) | |
+| **ThreeEditor - scene editor** | **DemoGraphics - inspect bench** |
+| ![ThreeEditor](docs/images/editor.png) | ![DemoGraphics inspect](docs/images/demographics-inspect.png) |
+| **DemoGraphics - dawn coast** | |
+| ![DemoGraphics](docs/images/demographics-coast.png) | |
 | **Interaction & HUD** | **Physics & spatial audio** |
 | ![Interaction and HUD](docs/images/gallery-interaction-hud.png) | ![Physics](docs/images/gallery-physics.png) |
 | **Custom WGSL / GLSL shaders** | **Deferred renderer - 100 lights** |
@@ -44,6 +46,7 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 20 samples |
 | **ThreeAppGen** - AI code editor (Jack - The Code Bender) + Three.js converter | `apps/ThreeAppGen` | working |
 | **Home Complex CAD Viewer** - housing estate explorer (interiors, day/night, land & building info) | `apps/HomeComplexCad` | working |
+| **DemoGraphics** - graphics bench: gallery, laboratory, benchmark, inspector and sandbox | `samples/DemoGraphics` | 11 scenes |
 | Samples | `samples/` | Hello Cube, **Motocross** game, Android smoke test, example plugin, Three.js demo project |
 | Tests | `tests/`, `rust/threenet-core/tests` | Rust, .NET and converter tests |
 
@@ -64,6 +67,9 @@ dotnet run --project samples/ThreeNet.Samples.HelloCube
 
 # run the sample gallery
 dotnet run --project apps/ThreeGallery
+
+# run the graphics bench (11 scenes, benchmark, debug views)
+dotnet run --project samples/DemoGraphics
 
 # run the scene editor
 dotnet run --project apps/ThreeEditor
@@ -125,6 +131,7 @@ development log in [Progress.md](Progress.md).
 | **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 20 contoh |
 | **ThreeAppGen** - editor kode AI (Jack - The Code Bender) + konverter Three.js | `apps/ThreeAppGen` | berjalan |
 | **Home Complex CAD Viewer** - penjelajah kompleks perumahan (interior, siang/malam, info tanah & bangunan) | `apps/HomeComplexCad` | berjalan |
+| **DemoGraphics** - bengkel grafis: galeri, laboratorium, benchmark, inspektur dan sandbox | `samples/DemoGraphics` | 11 scene |
 | Contoh | `samples/` | Hello Cube, game **Motocross**, uji Android, contoh plugin, project demo Three.js |
 | Test | `tests/`, `rust/threenet-core/tests` | test Rust, .NET dan konverter |
 
@@ -140,6 +147,7 @@ development log in [Progress.md](Progress.md).
 dotnet build ThreeNet.slnx                                  # build semua (inti Rust ikut di-build)
 dotnet run --project samples/ThreeNet.Samples.HelloCube     # contoh jendela native
 dotnet run --project apps/ThreeGallery                      # galeri contoh
+dotnet run --project samples/DemoGraphics                   # bengkel grafis (11 scene, benchmark, debug view)
 dotnet run --project apps/ThreeAppGen                       # app generator
 ```
 

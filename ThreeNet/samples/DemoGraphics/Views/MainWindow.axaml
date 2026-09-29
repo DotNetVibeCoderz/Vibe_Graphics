@@ -1,0 +1,172 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:tn="clr-namespace:ThreeNet.Avalonia;assembly=ThreeNet.Avalonia"
+        xmlns:views="clr-namespace:DemoGraphics.Views"
+        x:Class="DemoGraphics.Views.MainWindow"
+        Title="DemoGraphics - Three.Net"
+        Width="1580" Height="940"
+        MinWidth="1180" MinHeight="720">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ===================== command rail ===================== -->
+    <Border Grid.Row="0" Classes="panel" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto" Height="54">
+
+        <StackPanel Grid.Column="0" Margin="18,0,22,0" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Classes="wordmark" Text="DEMOGRAPHICS" />
+          <TextBlock Classes="eyebrow" Text="THREE.NET OPTICAL BENCH" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
+          <ToggleButton x:Name="GalleryTab" Classes="mode" Content="GALLERY" IsChecked="True" />
+          <ToggleButton x:Name="LabTab" Classes="mode" Content="LABORATORY" />
+          <ToggleButton x:Name="BenchTab" Classes="mode" Content="BENCHMARK" />
+          <ToggleButton x:Name="InspectTab" Classes="mode" Content="INSPECT" />
+          <ToggleButton x:Name="SandboxTab" Classes="mode" Content="SANDBOX" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" Margin="0,0,16,0" VerticalAlignment="Center">
+          <Border Classes="card" Padding="9,5">
+            <StackPanel Spacing="1">
+              <TextBlock Classes="eyebrow" Text="ADAPTER" />
+              <TextBlock x:Name="AdapterText" Classes="readout" Text="detecting" />
+            </StackPanel>
+          </Border>
+          <Border Classes="card" Padding="9,5">
+            <StackPanel Spacing="1">
+              <TextBlock Classes="eyebrow" Text="TIMING" />
+              <TextBlock x:Name="TimingText" Classes="readout" Text="-" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ===================== body ===================== -->
+    <Grid Grid.Row="1" ColumnDefinitions="256,1,*,1,360">
+
+      <!-- catalogue -->
+      <Border Grid.Column="0" Classes="panel">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <StackPanel Grid.Row="0" Margin="12,12,12,8" Spacing="6">
+            <TextBlock Classes="eyebrow" Text="SCENE CATALOGUE" />
+            <TextBox x:Name="FilterBox" PlaceholderText="Filter scenes" />
+          </StackPanel>
+
+          <ScrollViewer Grid.Row="1">
+            <ListBox x:Name="SceneList" />
+          </ScrollViewer>
+
+          <StackPanel Grid.Row="2" Margin="12,8,12,12" Spacing="4">
+            <TextBlock Classes="eyebrow" Text="SHARED WEATHER" />
+            <TextBlock x:Name="WeatherText" Classes="readout" Text="-" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <!-- viewport -->
+      <Grid Grid.Column="2" RowDefinitions="*,Auto" Background="{StaticResource Ink}">
+        <Panel Grid.Row="0" x:Name="ViewportHost">
+          <tn:ThreeNetView x:Name="Viewport" />
+          <tn:ThreeNetView x:Name="ViewportB" IsVisible="False" />
+
+          <!-- seam between the two configurations -->
+          <Grid x:Name="SeamGrid" ColumnDefinitions="*,*" IsVisible="False">
+            <Border Grid.Column="1" Width="1" HorizontalAlignment="Left" Background="{StaticResource Cyan}" />
+            <TextBlock Grid.Column="0" Classes="eyebrow" Text="A" Margin="0,0,10,8"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                       Foreground="{StaticResource Cyan}" />
+            <TextBlock Grid.Column="1" Classes="eyebrow" Text="B" Margin="10,0,0,8"
+                       HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                       Foreground="{StaticResource Cyan}" />
+          </Grid>
+
+          <!-- performance read-out -->
+          <Border Classes="hud" x:Name="HudPanel" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14" MinWidth="214">
+            <StackPanel Spacing="2">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock x:Name="FpsText" Classes="figure" Text="--" />
+                <TextBlock Grid.Column="1" Classes="eyebrow" Text="FPS" VerticalAlignment="Bottom" Margin="0,0,0,4" />
+              </Grid>
+              <StackPanel x:Name="HudRows" Spacing="1" />
+            </StackPanel>
+          </Border>
+
+          <!-- viewport tools -->
+          <Border Classes="hud" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="14" Padding="6">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Button x:Name="ResetViewButton" Content="Reset view" />
+              <ToggleButton x:Name="SpinToggle" Content="Orbit" />
+              <ToggleButton x:Name="PauseToggle" Content="Pause" />
+              <Button x:Name="HudButton" Content="Read-out" />
+              <Button x:Name="CaptureButton" Classes="measure" Content="Capture" />
+            </StackPanel>
+          </Border>
+
+          <!-- scene caption -->
+          <Border Classes="hud" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14" MaxWidth="520">
+            <StackPanel Spacing="3">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock x:Name="SceneCodeText" Classes="code" Text="---" VerticalAlignment="Center" />
+                <TextBlock x:Name="SceneTitleText" Classes="heading" Text="Scene" />
+              </StackPanel>
+              <TextBlock x:Name="SceneSummaryText" Classes="body" Text="" TextWrapping="Wrap" />
+              <TextBlock x:Name="HintText" Classes="eyebrow" Text="LEFT DRAG ORBIT · RIGHT DRAG PAN · WHEEL ZOOM · CLICK INSPECT" />
+            </StackPanel>
+          </Border>
+
+          <!-- inspection banner -->
+          <Border x:Name="DebugBanner" Classes="hud" IsVisible="False"
+                  HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0"
+                  BorderBrush="{StaticResource Violet}">
+            <TextBlock x:Name="DebugBannerText" Classes="eyebrow" Foreground="{StaticResource Violet}" Text="DEBUG VIEW" />
+          </Border>
+        </Panel>
+
+        <!-- frame time ribbon -->
+        <Border Grid.Row="1" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0">
+          <Grid ColumnDefinitions="Auto,*,Auto" Background="{StaticResource Panel}">
+            <StackPanel Grid.Column="0" Margin="12,0,12,0" VerticalAlignment="Center" Spacing="1">
+              <TextBlock Classes="eyebrow" Text="FRAME TIME" />
+              <TextBlock x:Name="RibbonScaleText" Classes="code" Text="0 - 50 MS" />
+            </StackPanel>
+            <views:FrameTimeRibbon Grid.Column="1" x:Name="Ribbon" Height="46" />
+            <StackPanel Grid.Column="2" Margin="12,0,14,0" VerticalAlignment="Center" Spacing="1">
+              <TextBlock x:Name="RibbonLowText" Classes="readout" Text="1% low --" />
+              <TextBlock x:Name="RibbonStutterText" Classes="code" Text="STUTTERS --" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+      <!-- control column -->
+      <Border Grid.Column="4" Classes="panel">
+        <Grid RowDefinitions="Auto,*">
+          <Border Grid.Row="0" BorderBrush="{StaticResource Rule}" BorderThickness="0,0,0,1" Padding="14,11">
+            <StackPanel Spacing="2">
+              <TextBlock x:Name="PanelTitleText" Classes="heading" Text="Gallery" />
+              <TextBlock x:Name="PanelSubtitleText" Classes="eyebrow" Text="PRESETS AND WEATHER" />
+            </StackPanel>
+          </Border>
+          <ScrollViewer Grid.Row="1" Padding="14,4,14,18">
+            <StackPanel x:Name="ControlColumn" Spacing="0" />
+          </ScrollViewer>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- ===================== status strip ===================== -->
+    <Border Grid.Row="2" Classes="panel" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="14,6">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock x:Name="StatusText" Classes="readout" Text="Ready" />
+        <TextBlock Grid.Column="1" x:Name="FooterText" Classes="code"
+                   Text="THREE.NET · GRAVICODE STUDIOS · KANG FADHIL" />
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

@@ -9,6 +9,7 @@ mod post;
 pub mod resources;
 pub mod shadows;
 pub mod ssao;
+pub mod timing;
 pub mod uniforms;
 
 use std::time::Instant;
@@ -25,6 +26,7 @@ use crate::renderer::post::{PostProcess, PostSettings};
 use crate::renderer::resources::{DefaultTextures, MipmapGenerator, ResourceCache};
 use crate::renderer::shadows::{LightSource, ShadowCaster, ShadowMaps, ShadowSettings};
 use crate::renderer::ssao::{GBufferItem, Ssao, SsaoSettings};
+use crate::renderer::timing::GpuTimer;
 use crate::renderer::uniforms::{
     FrameUniform, LightUniform, LightsUniform, MAX_LIGHTS, ObjectUniform,
 };
@@ -51,6 +53,84 @@ impl RenderPath {
             _ => RenderPath::Forward,
         }
     }
+}
+
+/// Replaces the shaded image with one channel of the surface, for inspecting
+/// what the renderer fed the lighting. Tone mapping, exposure, bloom and the
+/// camera effects are bypassed while a view other than [`DebugView::Off`] is
+/// active, so the numbers reach the screen unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u32)]
+pub enum DebugView {
+    /// Normal shading.
+    #[default]
+    Off = 0,
+    /// Albedo / diffuse colour, lighting removed.
+    BaseColor = 1,
+    /// World space shading normal, remapped to `0..1`.
+    WorldNormal = 2,
+    Roughness = 3,
+    Metallic = 4,
+    /// Material occlusion multiplied by SSAO when it is on.
+    Occlusion = 5,
+    Emissive = 6,
+    /// Linear view depth over the camera range, square rooted for contrast.
+    Depth = 7,
+    /// Lighting with the albedo taken out (white surfaces).
+    Lighting = 8,
+    /// Shadow visibility of every shadow casting light.
+    Shadow = 9,
+    /// Texture coordinates; the deferred path draws magenta because the
+    /// G-buffer does not carry UVs.
+    Uv = 10,
+}
+
+impl DebugView {
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            1 => DebugView::BaseColor,
+            2 => DebugView::WorldNormal,
+            3 => DebugView::Roughness,
+            4 => DebugView::Metallic,
+            5 => DebugView::Occlusion,
+            6 => DebugView::Emissive,
+            7 => DebugView::Depth,
+            8 => DebugView::Lighting,
+            9 => DebugView::Shadow,
+            10 => DebugView::Uv,
+            _ => DebugView::Off,
+        }
+    }
+
+    /// True for every view that replaces the lit image.
+    #[inline]
+    pub fn is_active(self) -> bool {
+        self != DebugView::Off
+    }
+}
+
+/// What the GPU in use can do, for capability driven UI.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Capabilities {
+    /// wgpu backend: 0 = none, 1 = Vulkan, 2 = Metal, 3 = D3D12, 4 = OpenGL, 5 = WebGPU.
+    pub backend: u32,
+    /// 0 = other, 1 = integrated GPU, 2 = discrete GPU, 3 = virtual GPU, 4 = CPU.
+    pub device_type: u32,
+    pub vendor_id: u32,
+    pub device_id: u32,
+    pub max_texture_size: u32,
+    pub max_buffer_size: u64,
+    pub max_bind_groups: u32,
+    pub max_msaa_samples: u32,
+    pub timestamp_queries: bool,
+    /// BC (DXT / BPTC) compressed textures can be uploaded without decoding.
+    pub texture_compression_bc: bool,
+    pub texture_compression_etc2: bool,
+    pub texture_compression_astc: bool,
+    /// Wireframe rasterisation (`Material::wireframe`).
+    pub polygon_mode_line: bool,
+    /// Float textures can be filtered, not only sampled point wise.
+    pub float32_filterable: bool,
 }
 
 /// Adapter selection hint.
@@ -129,6 +209,11 @@ pub struct RendererConfig {
     pub motion_blur_strength: f32,
     /// Samples along the motion vector (4-32).
     pub motion_blur_samples: u32,
+    /// Replaces the image with one surface channel; see [`DebugView`].
+    pub debug_view: DebugView,
+    /// Draws every surface as lines, whatever its material says. Ignored on
+    /// adapters without `POLYGON_MODE_LINE`.
+    pub wireframe: bool,
 }
 
 impl RendererConfig {
@@ -188,6 +273,8 @@ impl Default for RendererConfig {
             motion_blur: false,
             motion_blur_strength: 0.6,
             motion_blur_samples: 12,
+            debug_view: DebugView::Off,
+            wireframe: false,
         }
     }
 }
@@ -205,6 +292,9 @@ pub struct FrameStats {
     /// Draw calls spent in the shadow and SSAO passes.
     pub shadow_draw_calls: u32,
     pub cpu_time_ms: f32,
+    /// Time the GPU spent on the last timed frame; `0.0` when the adapter has
+    /// no timestamp queries (see [`Capabilities::timestamp_queries`]).
+    pub gpu_time_ms: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -283,6 +373,7 @@ pub struct Renderer {
     light_sources: Vec<LightSource>,
     object_data: Vec<u8>,
     stats: FrameStats,
+    gpu_timer: GpuTimer,
     start: Instant,
 }
 
@@ -367,6 +458,11 @@ impl Renderer {
             & (wgpu::Features::TEXTURE_COMPRESSION_BC
                 | wgpu::Features::TEXTURE_COMPRESSION_ETC2
                 | wgpu::Features::TEXTURE_COMPRESSION_ASTC);
+        // Frame timing is optional: ask for it only when both halves are there,
+        // since an encoder timestamp needs the second one.
+        if adapter.features().contains(timing::required_features()) {
+            features |= timing::required_features();
+        }
 
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("threenet.device"),
@@ -477,6 +573,7 @@ impl Renderer {
         );
 
         let overlay_renderer = overlay::OverlayRenderer::new(&device);
+        let gpu_timer = GpuTimer::new(&device, &queue);
         Ok(Self {
             instance,
             adapter,
@@ -515,6 +612,7 @@ impl Renderer {
             light_sources: Vec::new(),
             object_data: Vec::new(),
             stats: FrameStats::default(),
+            gpu_timer,
             start: Instant::now(),
         })
     }
@@ -547,6 +645,67 @@ impl Renderer {
     pub fn adapter_name(&self) -> String {
         let info = self.adapter.get_info();
         format!("{} ({:?}, {:?})", info.name, info.device_type, info.backend)
+    }
+
+    /// Driver name and version as the adapter reports them, empty when it
+    /// reports neither.
+    pub fn adapter_driver(&self) -> String {
+        let info = self.adapter.get_info();
+        match (info.driver.trim(), info.driver_info.trim()) {
+            ("", "") => String::new(),
+            ("", details) => details.to_string(),
+            (driver, "") => driver.to_string(),
+            (driver, details) => format!("{driver} {details}"),
+        }
+    }
+
+    /// What this GPU and device can do, so a host can offer only the features
+    /// that actually work here.
+    pub fn capabilities(&self) -> Capabilities {
+        let info = self.adapter.get_info();
+        let features = self.device.features();
+        let limits = self.device.limits();
+        let mut max_msaa_samples = 1;
+        for samples in [8u32, 4, 2] {
+            if self
+                .adapter
+                .get_texture_format_features(HDR_FORMAT)
+                .flags
+                .sample_count_supported(samples)
+            {
+                max_msaa_samples = samples;
+                break;
+            }
+        }
+        Capabilities {
+            backend: match info.backend {
+                wgpu::Backend::Vulkan => 1,
+                wgpu::Backend::Metal => 2,
+                wgpu::Backend::Dx12 => 3,
+                wgpu::Backend::Gl => 4,
+                wgpu::Backend::BrowserWebGpu => 5,
+                _ => 0,
+            },
+            device_type: match info.device_type {
+                wgpu::DeviceType::IntegratedGpu => 1,
+                wgpu::DeviceType::DiscreteGpu => 2,
+                wgpu::DeviceType::VirtualGpu => 3,
+                wgpu::DeviceType::Cpu => 4,
+                _ => 0,
+            },
+            vendor_id: info.vendor,
+            device_id: info.device,
+            max_texture_size: limits.max_texture_dimension_2d,
+            max_buffer_size: limits.max_buffer_size,
+            max_bind_groups: limits.max_bind_groups,
+            max_msaa_samples,
+            timestamp_queries: self.gpu_timer.is_supported(),
+            texture_compression_bc: features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
+            texture_compression_etc2: features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2),
+            texture_compression_astc: features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC),
+            polygon_mode_line: features.contains(wgpu::Features::POLYGON_MODE_LINE),
+            float32_filterable: features.contains(wgpu::Features::FLOAT32_FILTERABLE),
+        }
     }
 
     /// Applies new settings. Changing MSAA or bloom reallocates the targets.
@@ -670,11 +829,13 @@ impl Renderer {
         self.deferred.ensure_targets(&self.device, deferred, self.config.width, self.config.height);
 
         // ------------------------------------------------------- gpu upload
+        self.gpu_timer.poll(&self.device);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("threenet.frame"),
             });
+        let timed = self.gpu_timer.begin(&mut encoder);
 
         self.resources.retain_live(scene);
         self.upload_resources(scene, &mut encoder);
@@ -786,6 +947,7 @@ impl Renderer {
                     &self.draw_items,
                     1,
                     DrawFilter::DeferredOpaque,
+                    self.config.wireframe,
                 )
             };
 
@@ -843,6 +1005,7 @@ impl Renderer {
                 &self.draw_items,
                 1,
                 DrawFilter::DeferredForward,
+                self.config.wireframe,
             );
             counts.0 += late.0;
             counts.1 += late.1;
@@ -886,6 +1049,7 @@ impl Renderer {
                 &self.draw_items,
                 self.samples,
                 DrawFilter::All,
+                self.config.wireframe,
             )
         };
 
@@ -895,12 +1059,15 @@ impl Renderer {
 
         // --------------------------------------------------- camera effects
         let view_projection = projection * view;
+        // A debug view shows raw surface values, so nothing that reshapes the
+        // image may run after the scene pass.
+        let debug = self.config.debug_view.is_active();
         let effects_settings = EffectsSettings {
-            depth_of_field: self.config.depth_of_field,
+            depth_of_field: self.config.depth_of_field && !debug,
             focus_distance: self.config.dof_focus_distance,
             focus_range: self.config.dof_focus_range,
             max_blur: self.config.dof_max_blur,
-            motion_blur: self.config.motion_blur,
+            motion_blur: self.config.motion_blur && !debug,
             motion_strength: self.config.motion_blur_strength,
             motion_samples: self.config.motion_blur_samples,
             projection,
@@ -926,9 +1093,13 @@ impl Renderer {
 
         // ---------------------------------------------------- post + present
         let settings = PostSettings {
-            exposure: self.config.exposure,
-            tone_mapping: self.config.tone_mapping,
-            bloom_intensity: if self.config.bloom {
+            exposure: if debug { 1.0 } else { self.config.exposure },
+            tone_mapping: if debug {
+                ToneMapping::None
+            } else {
+                self.config.tone_mapping
+            },
+            bloom_intensity: if self.config.bloom && !debug {
                 self.config.bloom_intensity
             } else {
                 0.0
@@ -952,7 +1123,9 @@ impl Renderer {
                 };
                 let Some(frame) = frame else {
                     // Skip this frame; the surface will be ready on the next one.
+                    self.gpu_timer.end(&mut encoder, timed);
                     self.queue.submit(Some(encoder.finish()));
+                    self.gpu_timer.after_submit(timed);
                     return Ok(());
                 };
                 let view = frame
@@ -979,7 +1152,9 @@ impl Renderer {
                     &self.resources,
                     &self.defaults,
                 );
+                self.gpu_timer.end(&mut encoder, timed);
                 self.queue.submit(Some(encoder.finish()));
+                self.gpu_timer.after_submit(timed);
                 self.queue.present(frame);
             }
             None => {
@@ -1009,10 +1184,13 @@ impl Renderer {
                     &self.resources,
                     &self.defaults,
                 );
+                self.gpu_timer.end(&mut encoder, timed);
                 self.queue.submit(Some(encoder.finish()));
+                self.gpu_timer.after_submit(timed);
             }
         }
 
+        self.stats.gpu_time_ms = self.gpu_timer.last_ms();
         self.stats.cpu_time_ms = cpu_start.elapsed().as_secs_f32() * 1000.0;
         Ok(())
     }
@@ -1274,6 +1452,7 @@ impl Renderer {
                 },
                 self.config.ssao_direct_strength.clamp(0.0, 1.0),
             ],
+            self.config.debug_view as u32,
         );
         self.queue
             .write_buffer(&self.frame_buffer, 0, bytemuck::bytes_of(&frame));
@@ -1459,6 +1638,7 @@ fn draw_scene_items(
     items: &[DrawItem],
     samples: u32,
     filter: DrawFilter,
+    force_wireframe: bool,
 ) -> (u32, u32) {
     let mut draw_calls = 0u32;
     let mut triangles = 0u32;
@@ -1485,6 +1665,7 @@ fn draw_scene_items(
 
         let custom = material.shader.and_then(|id| scene.shader(id));
         let mut key = PipelineKey::for_material(material, mesh.topology, samples, HDR_FORMAT, custom);
+        key.wireframe |= force_wireframe;
         if filter == DrawFilter::DeferredOpaque {
             key = key.gbuffer();
         }

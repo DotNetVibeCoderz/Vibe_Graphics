@@ -30,6 +30,8 @@ pub struct FrameUniform {
     pub misc: [f32; 4],
     /// `xy` = render target size in pixels, `z` = SSAO enabled, `w` = SSAO strength on direct light.
     pub screen: [f32; 4],
+    /// `x` = active debug view (`0` = off), `yzw` reserved.
+    pub debug: [f32; 4],
 }
 
 impl FrameUniform {
@@ -46,6 +48,7 @@ impl FrameUniform {
         far: f32,
         time: f32,
         screen: [f32; 4],
+        debug_view: u32,
     ) -> Self {
         let view_projection = projection * view;
         Self {
@@ -75,6 +78,7 @@ impl FrameUniform {
                 far,
             ],
             screen,
+            debug: [debug_view as f32, 0.0, 0.0, 0.0],
         }
     }
 }

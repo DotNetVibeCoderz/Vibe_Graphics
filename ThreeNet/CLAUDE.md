@@ -28,6 +28,8 @@ dotnet run --project samples/ThreeNet.Samples.HelloCube
 dotnet run --project apps/ThreeGallery
 dotnet run --project apps/ThreeEditor         # scene editor (plugins load from its plugins/ folder)
 dotnet run --project apps/ThreeAppGen            # add `-- --convert <folder>` to open the Three.js converter page
+dotnet run --project samples/DemoGraphics                 # graphics bench: gallery / lab / benchmark / inspect / sandbox
+dotnet run --project samples/DemoGraphics -- --check      # builds and renders every scene offscreen (smoke test)
 dotnet run --project samples/ThreeNet.Samples.MotoCross
 dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tamu" --group Dahlia --hour 20 --mode fp`
 ```
@@ -58,6 +60,10 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 - `samples/ThreeNet.Samples.MotoCross` and `apps/HomeComplexCad`: larger showcase apps; Rodin generated GLBs live
   in their `Assets/` folders and are instanced with `Node.Clone`. The renderer keeps at most 64 enabled lights.
 - `apps/ThreeGallery`: each `Samples/*.cs` is embedded and shown as live source; register new samples in `SampleCatalog`.
+- `samples/DemoGraphics`: the graphics bench. `Framework/DemoScene.cs` is the contract every scene follows
+  (parameters declared as data, presets, camera path, metrics); `Framework/ShaderHooks.cs` holds the WGSL for
+  water, sky, foliage, terrain, particles and neon; `Diagnostics/` has the frame log, benchmark runner and
+  capture. Register a scene in `SceneCatalog.All`, then verify with `--check`.
 - `apps/ThreeEditor`: scene editor on `ThreeNet.Scenes.SceneDocument` (JSON scenes). `EditorSession` owns the
   document, the live scene, selection, undo (JSON snapshots) and plugins; `MainWindow` builds the inspector in
   code. Plugins (`ThreeNet.Plugins`) load from `plugins/` next to the executable; the example is
@@ -86,6 +92,8 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 - Avalonia 12: no `GetVisualRoot()` (use `TopLevel.GetTopLevel`), `PlaceholderText` not `Watermark`, don't define
   your own `InitializeComponent`, Android uses `AvaloniaAndroidApplication<TApp>` + non-generic `AvaloniaMainActivity`.
 - PowerShell `Set-Content -Encoding utf8` writes a BOM, which breaks WGSL; write files with the editor tools.
+- WGSL: `smoothstep(a, b, x)` is undefined when `a >= b` (it returned 1 everywhere on Intel), and `patch` is a
+  reserved keyword. Custom shader hooks are validated against both passes, so a typo surfaces as an exception.
 - Cargo features `basis`, `audio-output`, `gamepad`, `xr` (default on) wrap platform dependencies; builds without
   them must keep the same FFI (stub implementations). winit is excluded on Android / Emscripten. Check portable
   code with `cargo check --target wasm32-unknown-emscripten --no-default-features --features gltf-lights`.

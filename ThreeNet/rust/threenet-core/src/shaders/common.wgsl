@@ -37,6 +37,8 @@ struct Frame {
     misc: vec4<f32>,
     // xy = target size, z = SSAO enabled, w = SSAO strength on direct light
     screen: vec4<f32>,
+    // x = debug view (0 = off), yzw reserved
+    debug: vec4<f32>,
 };
 
 struct Light {
@@ -335,6 +337,109 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
     }
 
     return lit * mix(1.0, ao, frame.screen.w) + ambient + surface.emissive;
+}
+
+// -------------------------------------------------------------- debug views
+
+const DEBUG_OFF: u32 = 0u;
+const DEBUG_BASE_COLOR: u32 = 1u;
+const DEBUG_WORLD_NORMAL: u32 = 2u;
+const DEBUG_ROUGHNESS: u32 = 3u;
+const DEBUG_METALLIC: u32 = 4u;
+const DEBUG_OCCLUSION: u32 = 5u;
+const DEBUG_EMISSIVE: u32 = 6u;
+const DEBUG_DEPTH: u32 = 7u;
+const DEBUG_LIGHTING: u32 = 8u;
+const DEBUG_SHADOW: u32 = 9u;
+const DEBUG_UV: u32 = 10u;
+/// Channels a pass cannot answer are drawn magenta rather than black, so a
+/// missing channel never looks like a black surface.
+const DEBUG_UNAVAILABLE: u32 = 255u;
+
+fn debug_view() -> u32 {
+    return u32(frame.debug.x);
+}
+
+/// Smallest shadow visibility over every shadow casting light at one point.
+fn shadow_mask(surface: Surface, world_position: vec3<f32>, view_depth: f32) -> f32 {
+    var mask = 1.0;
+    let count = u32(frame.misc.x);
+    for (var i: u32 = 0u; i < count; i = i + 1u) {
+        let light = light_buffer.lights[i];
+        if (light.shadow.x < 0.0 || light.position.w == LIGHT_AMBIENT) {
+            continue;
+        }
+        let visibility = shadow_visibility(
+            light,
+            world_position,
+            surface.normal,
+            view_depth,
+            surface.receive_shadow,
+        );
+        mask = min(mask, visibility);
+    }
+    return mask;
+}
+
+/// Returns one channel of a shaded point instead of its lit colour. Tone
+/// mapping, exposure, bloom and the camera effects are switched off while a
+/// debug view is on, so what reaches the screen is the value itself.
+fn debug_channel(
+    mode: u32,
+    surface_in: Surface,
+    world_position: vec3<f32>,
+    view_depth: f32,
+    pixel: vec2<f32>,
+    uv: vec2<f32>,
+) -> vec4<f32> {
+    var surface = surface_in;
+    var color = vec3<f32>(1.0, 0.0, 1.0);
+    switch (mode) {
+        case 1u: {
+            color = surface.albedo;
+        }
+        case 2u: {
+            color = surface.normal * 0.5 + vec3<f32>(0.5);
+        }
+        case 3u: {
+            color = vec3<f32>(surface.roughness);
+        }
+        case 4u: {
+            color = vec3<f32>(surface.metallic);
+        }
+        case 5u: {
+            var ao = surface.occlusion;
+            if (frame.screen.z > 0.5) {
+                ao = ao * textureSampleLevel(ao_texture, ao_sampler, pixel / frame.screen.xy, 0.0).r;
+            }
+            color = vec3<f32>(ao);
+        }
+        case 6u: {
+            color = surface.emissive;
+        }
+        case 7u: {
+            // Square root keeps the near range, where the detail is, readable.
+            let far = max(frame.misc.w, frame.misc.z + 1e-3);
+            color = vec3<f32>(sqrt(clamp(view_depth / far, 0.0, 1.0)));
+        }
+        case 8u: {
+            // Lighting with the albedo taken out of the picture.
+            surface.albedo = vec3<f32>(1.0);
+            surface.metallic = 0.0;
+            surface.emissive = vec3<f32>(0.0);
+            color = shade_surface(surface, world_position, view_depth, pixel);
+        }
+        case 9u: {
+            color = vec3<f32>(shadow_mask(surface, world_position, view_depth));
+        }
+        case 10u: {
+            color = vec3<f32>(fract(uv), 0.0);
+        }
+        default: {
+            color = vec3<f32>(1.0, 0.0, 1.0);
+        }
+    }
+    return vec4<f32>(color, 1.0);
 }
 
 /// Exponential squared distance fog.

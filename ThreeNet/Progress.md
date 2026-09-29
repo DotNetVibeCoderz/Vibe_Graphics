@@ -3,6 +3,32 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-09-30 - DemoGraphics, debug views and GPU timing (0.7.0)
+
+- **DemoGraphics** (`samples/DemoGraphics`): a graphics bench rather than a slideshow. Eleven scenes
+  (water and sky, a 24 hour clock, a forest, a neon city, a material museum, lighting, shadows, a physical
+  camera, particles, physics and animation) behind five modes: Gallery, Laboratory, Benchmark, Inspect and
+  Sandbox. Scenes declare their parameters as data, so the control sheet, the presets and the capture
+  sidecar all read one list. One shared weather state drives every scene: raising the wind moves the water,
+  the trees and the smoke together.
+- **Benchmark and capture**: fixed camera paths per scene, warm-up then measurement, 1% lows, percentiles
+  and stutter counts, exported as JSON and CSV with the adapter, driver and internal resolution in the
+  header. A capture writes a PNG plus a sidecar holding the scene, preset, parameters, weather, render
+  settings and frame stats.
+- **`DemoGraphics --check`** builds and renders every scene offscreen, compiling every custom shader in both
+  render paths, and exits non-zero on failure - a smoke test that needs no window.
+- **Library: debug views** (`RendererOptions.DebugView`). Base colour, world normal, roughness, metallic,
+  occlusion, emissive, depth, lighting only, shadow mask and UVs, in forward and deferred. Exposure, tone
+  mapping, bloom and the camera effects are bypassed while a view is on so the values arrive unchanged.
+  `RendererOptions.Wireframe` forces line polygons for any material.
+- **Library: measurement.** `FrameStats.GpuTimeMs` from timestamp queries (read back without stalling, `0`
+  where unsupported), plus `Renderer.Capabilities` and `Renderer.AdapterDriver`: backend, device type,
+  vendor and device ids, limits, maximum MSAA, compressed texture families and float filtering. ABI 8.
+- **UI** (`frontend-design`): an instrument, not a brochure. DIN panel labels, monospaced numerals, square
+  corners, and colour used as a scale - cyan measured and in budget, amber live, violet inspection, crimson
+  over budget. The signature is the frame time ribbon under the viewport: one column per frame, coloured by
+  the budget it fits, with the 1% low and stutter count beside it.
+
 ## 2026-09-24 - Point light shadows and an editor redesign (0.6.0)
 
 - **Point lights cast shadows**: six cube faces per light, selected per pixel from the major axis of the

@@ -70,6 +70,61 @@ public enum RenderPath : uint
     Deferred = 1,
 }
 
+/// <summary>
+/// Replaces the shaded image with one channel of the surface, for inspecting
+/// what the renderer fed the lighting. While a view other than
+/// <see cref="Off"/> is active the renderer skips exposure, tone mapping, bloom
+/// and the camera effects, so the values reach the screen unchanged (encoded to
+/// sRGB by the output surface like any other colour).
+/// </summary>
+public enum DebugView : uint
+{
+    /// <summary>Normal shading.</summary>
+    Off = 0,
+    /// <summary>Albedo / diffuse colour with the lighting removed.</summary>
+    BaseColor = 1,
+    /// <summary>World space shading normal, remapped to 0..1.</summary>
+    WorldNormal = 2,
+    Roughness = 3,
+    Metallic = 4,
+    /// <summary>Material occlusion, multiplied by SSAO when it is on.</summary>
+    Occlusion = 5,
+    Emissive = 6,
+    /// <summary>Linear view depth over the camera range, square rooted for contrast.</summary>
+    Depth = 7,
+    /// <summary>Lighting with the albedo taken out (white surfaces).</summary>
+    Lighting = 8,
+    /// <summary>Shadow visibility of every shadow casting light.</summary>
+    Shadow = 9,
+    /// <summary>
+    /// Texture coordinates. The deferred path draws magenta instead, because the
+    /// G-buffer does not carry UVs.
+    /// </summary>
+    Uv = 10,
+}
+
+/// <summary>Graphics API a renderer ended up on.</summary>
+public enum GpuBackend : uint
+{
+    Unknown = 0,
+    Vulkan = 1,
+    Metal = 2,
+    Direct3D12 = 3,
+    OpenGl = 4,
+    WebGpu = 5,
+}
+
+/// <summary>What kind of device the adapter is.</summary>
+public enum GpuDeviceType : uint
+{
+    Other = 0,
+    IntegratedGpu = 1,
+    DiscreteGpu = 2,
+    VirtualGpu = 3,
+    /// <summary>A software rasteriser such as WARP, SwiftShader or lavapipe.</summary>
+    Cpu = 4,
+}
+
 /// <summary>Pixel format of a texture upload.</summary>
 public enum TextureFormat : uint
 {

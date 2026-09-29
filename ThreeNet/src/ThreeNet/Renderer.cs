@@ -60,6 +60,17 @@ public struct RendererOptions
     public float MotionBlurStrength;
     /// <summary>Samples along the motion vector (4-32).</summary>
     public int MotionBlurSamples;
+    /// <summary>
+    /// Shows one channel of the surface instead of the shaded image. Exposure,
+    /// tone mapping, bloom and the camera effects are skipped while a view is on.
+    /// </summary>
+    public DebugView DebugView;
+    /// <summary>
+    /// Draws every surface as lines whatever its material says. Ignored on
+    /// adapters without wireframe rasterisation
+    /// (<see cref="GpuCapabilities.WireframeRendering"/>).
+    /// </summary>
+    public bool Wireframe;
 
     /// <summary>Balanced defaults: 720p, vsync on, 4x MSAA, ACES tone mapping.</summary>
     public static RendererOptions Default => new();
@@ -97,6 +108,8 @@ public struct RendererOptions
         MotionBlur = false;
         MotionBlurStrength = 0.6f;
         MotionBlurSamples = 12;
+        DebugView = DebugView.Off;
+        Wireframe = false;
     }
 
     internal NativeRendererDesc ToNative() => new()
@@ -132,10 +145,18 @@ public struct RendererOptions
         MotionBlur = MotionBlur ? 1 : 0,
         MotionBlurStrength = MotionBlurStrength,
         MotionBlurSamples = (uint)Math.Clamp(MotionBlurSamples, 4, 32),
+        DebugView = (uint)DebugView,
+        Wireframe = Wireframe ? 1 : 0,
     };
 }
 
 /// <summary>Counters collected while rendering the last frame.</summary>
+/// <param name="GpuTimeMs">
+/// Time the GPU spent on the most recently measured frame. The measurement is
+/// read back without stalling, so it can lag a frame or two behind, and it stays
+/// 0 on adapters without timestamp queries
+/// (<see cref="GpuCapabilities.TimestampQueries"/>).
+/// </param>
 public readonly record struct FrameStats(
     int DrawCalls,
     int Triangles,
@@ -144,7 +165,42 @@ public readonly record struct FrameStats(
     int Lights,
     float CpuTimeMs,
     int ShadowLayers = 0,
-    int ShadowDrawCalls = 0);
+    int ShadowDrawCalls = 0,
+    float GpuTimeMs = 0f);
+
+/// <summary>
+/// What the GPU a renderer ended up on can do, so a host can offer only the
+/// features that actually work there.
+/// </summary>
+/// <param name="Backend">Graphics API the renderer ended up on.</param>
+/// <param name="DeviceType">Discrete, integrated, virtual or a software rasteriser.</param>
+/// <param name="VendorId">PCI vendor id as the adapter reports it.</param>
+/// <param name="DeviceId">PCI device id as the adapter reports it.</param>
+/// <param name="MaxTextureSize">Largest 2D texture edge in pixels.</param>
+/// <param name="MaxBufferSize">Largest single GPU buffer in bytes.</param>
+/// <param name="MaxBindGroups">Bind groups a pipeline may use; the renderer needs four.</param>
+/// <param name="MaxMsaaSamples">Highest MSAA sample count the HDR target supports here.</param>
+/// <param name="TimestampQueries">GPU frame timing is available (see <see cref="FrameStats.GpuTimeMs"/>).</param>
+/// <param name="TextureCompressionBc">BC / DXT / BPTC blocks upload without being decoded first.</param>
+/// <param name="TextureCompressionEtc2">ETC2 blocks upload without being decoded first.</param>
+/// <param name="TextureCompressionAstc">ASTC blocks upload without being decoded first.</param>
+/// <param name="WireframeRendering">Wireframe rasterisation (<see cref="MaterialOptions.Wireframe"/>).</param>
+/// <param name="Float32Filterable">32 bit float textures can be filtered, not only point sampled.</param>
+public readonly record struct GpuCapabilities(
+    GpuBackend Backend,
+    GpuDeviceType DeviceType,
+    uint VendorId,
+    uint DeviceId,
+    int MaxTextureSize,
+    long MaxBufferSize,
+    int MaxBindGroups,
+    int MaxMsaaSamples,
+    bool TimestampQueries,
+    bool TextureCompressionBc,
+    bool TextureCompressionEtc2,
+    bool TextureCompressionAstc,
+    bool WireframeRendering,
+    bool Float32Filterable);
 
 /// <summary>
 /// Draws a <see cref="Scene"/>. A renderer either owns a swap chain for a
@@ -213,7 +269,36 @@ public sealed class Renderer : IDisposable
                 (int)stats.Lights,
                 stats.CpuTimeMs,
                 (int)stats.ShadowLayers,
-                (int)stats.ShadowDrawCalls);
+                (int)stats.ShadowDrawCalls,
+                stats.GpuTimeMs);
+        }
+    }
+
+    /// <summary>Driver name and version, empty when the adapter reports neither.</summary>
+    public unsafe string AdapterDriver => NativeError.ReadString((buffer, capacity) =>
+        NativeMethods.tn_renderer_get_adapter_driver(Handle, (byte*)buffer, capacity));
+
+    /// <summary>Features and limits of the GPU this renderer is running on.</summary>
+    public GpuCapabilities Capabilities
+    {
+        get
+        {
+            NativeError.Check(NativeMethods.tn_renderer_get_capabilities(Handle, out NativeCapabilities caps));
+            return new GpuCapabilities(
+                (GpuBackend)caps.Backend,
+                (GpuDeviceType)caps.DeviceType,
+                caps.VendorId,
+                caps.DeviceId,
+                (int)caps.MaxTextureSize,
+                (long)caps.MaxBufferSize,
+                (int)caps.MaxBindGroups,
+                (int)caps.MaxMsaaSamples,
+                caps.TimestampQueries != 0,
+                caps.TextureCompressionBc != 0,
+                caps.TextureCompressionEtc2 != 0,
+                caps.TextureCompressionAstc != 0,
+                caps.PolygonModeLine != 0,
+                caps.Float32Filterable != 0);
         }
     }
 

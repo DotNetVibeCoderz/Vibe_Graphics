@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char, c_void};
 
 use crate::animation::{AnimationClip, AnimationPlayer, Channel, Interpolation, TargetPath};
-use crate::renderer::RenderPath;
+use crate::renderer::{DebugView, RenderPath};
 use crate::shader::{CustomShader, ShaderLanguage};
 use crate::camera::{Camera, Projection};
 use crate::error::Error;
@@ -578,6 +578,10 @@ pub struct TnRendererDesc {
     pub motion_blur: i32,
     pub motion_blur_strength: f32,
     pub motion_blur_samples: u32,
+    /// Replaces the image with one surface channel; see `DebugView`.
+    pub debug_view: u32,
+    /// Draws every surface as lines regardless of its material.
+    pub wireframe: i32,
 }
 
 impl From<TnRendererDesc> for RendererConfig {
@@ -614,6 +618,8 @@ impl From<TnRendererDesc> for RendererConfig {
             motion_blur: value.motion_blur != 0,
             motion_blur_strength: value.motion_blur_strength,
             motion_blur_samples: value.motion_blur_samples,
+            debug_view: DebugView::from_u32(value.debug_view),
+            wireframe: value.wireframe != 0,
         }
     }
 }
@@ -629,6 +635,28 @@ pub struct TnFrameStats {
     pub cpu_time_ms: f32,
     pub shadow_layers: u32,
     pub shadow_draw_calls: u32,
+    /// `0.0` on adapters without timestamp queries.
+    pub gpu_time_ms: f32,
+}
+
+/// What the GPU in use can do. Booleans are `0` or `1`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TnCapabilities {
+    pub backend: u32,
+    pub device_type: u32,
+    pub vendor_id: u32,
+    pub device_id: u32,
+    pub max_texture_size: u32,
+    pub max_buffer_size: u64,
+    pub max_bind_groups: u32,
+    pub max_msaa_samples: u32,
+    pub timestamp_queries: i32,
+    pub texture_compression_bc: i32,
+    pub texture_compression_etc2: i32,
+    pub texture_compression_astc: i32,
+    pub polygon_mode_line: i32,
+    pub float32_filterable: i32,
 }
 
 #[repr(C)]
@@ -1963,6 +1991,7 @@ pub unsafe extern "C" fn tn_renderer_get_stats(
             cpu_time_ms: stats.cpu_time_ms,
             shadow_layers: stats.shadow_layers,
             shadow_draw_calls: stats.shadow_draw_calls,
+            gpu_time_ms: stats.gpu_time_ms,
         }
     };
     status::OK
@@ -1976,6 +2005,48 @@ pub unsafe extern "C" fn tn_renderer_get_adapter_name(
 ) -> i32 {
     let renderer = renderer_ref!(renderer);
     unsafe { copy_string(&renderer.adapter_name(), buffer, capacity) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_get_adapter_driver(
+    renderer: *mut Renderer,
+    buffer: *mut c_char,
+    capacity: i32,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    unsafe { copy_string(&renderer.adapter_driver(), buffer, capacity) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_get_capabilities(
+    renderer: *mut Renderer,
+    out_capabilities: *mut TnCapabilities,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    if out_capabilities.is_null() {
+        set_last_error("output pointer is null");
+        return status::NULL_POINTER;
+    }
+    let caps = renderer.capabilities();
+    unsafe {
+        *out_capabilities = TnCapabilities {
+            backend: caps.backend,
+            device_type: caps.device_type,
+            vendor_id: caps.vendor_id,
+            device_id: caps.device_id,
+            max_texture_size: caps.max_texture_size,
+            max_buffer_size: caps.max_buffer_size,
+            max_bind_groups: caps.max_bind_groups,
+            max_msaa_samples: caps.max_msaa_samples,
+            timestamp_queries: caps.timestamp_queries as i32,
+            texture_compression_bc: caps.texture_compression_bc as i32,
+            texture_compression_etc2: caps.texture_compression_etc2 as i32,
+            texture_compression_astc: caps.texture_compression_astc as i32,
+            polygon_mode_line: caps.polygon_mode_line as i32,
+            float32_filterable: caps.float32_filterable as i32,
+        }
+    };
+    status::OK
 }
 
 // ------------------------------------------------------------------- loaders

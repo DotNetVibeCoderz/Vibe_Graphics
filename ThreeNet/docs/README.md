@@ -14,6 +14,7 @@
 | [threegallery.md](threegallery.md) | The sample gallery and how to add a sample |
 | [threeappgen.md](threeappgen.md) | ThreeAppGen, Jack - The Code Bender, settings, kernel functions, templates |
 | [threejs-conversion.md](threejs-conversion.md) | Converting Three.js projects to Three.Net |
+| [demo-graphics.md](demo-graphics.md) | DemoGraphics: the gallery, laboratory, benchmark, inspector and sandbox |
 | [sample-apps.md](sample-apps.md) | Motocross game and the Home Complex CAD viewer |
 
 Roadmap: [../PLAN.md](../PLAN.md) · Progress: [../Progress.md](../Progress.md)

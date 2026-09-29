@@ -11,6 +11,7 @@ struct Frame {
     fog_params: vec4<f32>,
     misc: vec4<f32>,
     screen: vec4<f32>,
+    debug: vec4<f32>,
 };
 
 struct ObjectData {

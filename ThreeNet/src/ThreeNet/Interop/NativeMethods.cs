@@ -517,6 +517,12 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library)]
     internal static partial int tn_renderer_get_adapter_name(nint renderer, byte* buffer, int capacity);
 
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_get_adapter_driver(nint renderer, byte* buffer, int capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_get_capabilities(nint renderer, out NativeCapabilities capabilities);
+
     // ------------------------------------------------------------- loaders
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]

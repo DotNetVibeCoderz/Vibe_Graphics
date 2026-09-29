@@ -74,6 +74,86 @@ public class RendererTests
     }
 
     [Fact]
+    public void DebugViewsReplaceTheShadedImageWithOneChannel()
+    {
+        // Exposure and tone mapping are left on: a debug view has to ignore both.
+        using Renderer? renderer = TryCreateRenderer(bloom: true);
+        if (renderer is null)
+        {
+            return;
+        }
+
+        (Scene scene, Node camera, _) = BuildScene();
+        using (scene)
+        {
+            static float ToLinear(byte value)
+            {
+                float channel = value / 255f;
+                return channel <= 0.04045f ? channel / 12.92f : MathF.Pow((channel + 0.055f) / 1.055f, 2.4f);
+            }
+
+            byte[] Center(DebugView view)
+            {
+                renderer.Options = renderer.Options with { DebugView = view, Exposure = 3f };
+                renderer.Render(scene, camera);
+                byte[] pixels = renderer.ReadPixels();
+                int center = ((64 * 128) + 64) * 4;
+                return [pixels[center], pixels[center + 1], pixels[center + 2]];
+            }
+
+            byte[] baseColor = Center(DebugView.BaseColor);
+            Assert.InRange(ToLinear(baseColor[0]), 0.85f, 0.95f);   // the material is 0.9 red
+            Assert.InRange(ToLinear(baseColor[1]), 0.15f, 0.25f);
+
+            byte[] roughness = Center(DebugView.Roughness);
+            Assert.InRange(ToLinear(roughness[0]), 0.3f, 0.4f);     // ... and 0.35 rough
+            Assert.Equal(roughness[0], roughness[1]);
+
+            byte[] normal = Center(DebugView.WorldNormal);
+            Assert.True(ToLinear(normal[2]) > 0.9f, "the centre of the sphere faces the camera");
+
+            byte[] lit = Center(DebugView.Off);
+            Assert.False(lit.SequenceEqual(baseColor), "turning the view off should shade again");
+        }
+    }
+
+    [Fact]
+    public void ReportsWhatTheGpuCanDo()
+    {
+        using Renderer? renderer = TryCreateRenderer();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        GpuCapabilities capabilities = renderer.Capabilities;
+        Assert.True(capabilities.MaxTextureSize >= 2048, "every adapter supports 2048 px textures");
+        Assert.True(capabilities.MaxBindGroups >= 4, "the renderer itself binds four groups");
+        Assert.InRange(capabilities.MaxMsaaSamples, 1, 8);
+        Assert.NotEqual(GpuBackend.Unknown, capabilities.Backend);
+        Assert.Contains(renderer.AdapterName, renderer.AdapterName);   // never throws
+
+        (Scene scene, Node camera, _) = BuildScene();
+        using (scene)
+        {
+            // Timing is read back without stalling, so it needs a few frames.
+            for (int i = 0; i < 8; i++)
+            {
+                renderer.Render(scene, camera);
+            }
+
+            if (capabilities.TimestampQueries)
+            {
+                Assert.True(renderer.Stats.GpuTimeMs > 0f, "a timed frame should report GPU time");
+            }
+            else
+            {
+                Assert.Equal(0f, renderer.Stats.GpuTimeMs);
+            }
+        }
+    }
+
+    [Fact]
     public void CullsObjectsOutsideTheFrustum()
     {
         using Renderer? renderer = TryCreateRenderer();

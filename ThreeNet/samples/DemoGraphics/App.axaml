@@ -1,0 +1,353 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DemoGraphics.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Resources>
+    <!--
+      Optical bench.
+
+      DemoGraphics is an instrument, not a brochure: it shows a renderer, lets
+      you turn its parts on and off, and measures what that costs. So the chrome
+      is machined rather than soft - square corners, engraved rules, DIN style
+      labels - and it stays dark and almost colourless so the viewport beside it
+      is the only bright thing on screen.
+
+      Colour is a measuring scale here, never decoration. Each hue means exactly
+      one thing everywhere in the app:
+
+        cyan     measured, and inside budget
+        amber    live, running, changed by hand
+        violet   inspection: debug views and the pipeline read-outs
+        crimson  over budget, unsupported, destructive
+        lime     passed
+        X Y Z    crimson / lime / blue, only where an axis is meant
+    -->
+    <Color x:Key="InkColor">#0C0F13</Color>
+    <Color x:Key="PanelColor">#141922</Color>
+    <Color x:Key="RaisedColor">#1C232E</Color>
+    <Color x:Key="RuleColor">#29323F</Color>
+    <Color x:Key="TextColor">#E8EEF4</Color>
+    <Color x:Key="MutedColor">#8595A5</Color>
+    <Color x:Key="DimColor">#5C6A79</Color>
+    <Color x:Key="CyanColor">#45C4CF</Color>
+    <Color x:Key="AmberColor">#E8A93C</Color>
+    <Color x:Key="VioletColor">#9A86F0</Color>
+    <Color x:Key="CrimsonColor">#E0564E</Color>
+    <Color x:Key="LimeColor">#8FCB6B</Color>
+
+    <SolidColorBrush x:Key="Ink" Color="{StaticResource InkColor}" />
+    <SolidColorBrush x:Key="Panel" Color="{StaticResource PanelColor}" />
+    <SolidColorBrush x:Key="Raised" Color="{StaticResource RaisedColor}" />
+    <SolidColorBrush x:Key="Rule" Color="{StaticResource RuleColor}" />
+    <SolidColorBrush x:Key="Text" Color="{StaticResource TextColor}" />
+    <SolidColorBrush x:Key="Muted" Color="{StaticResource MutedColor}" />
+    <SolidColorBrush x:Key="Dim" Color="{StaticResource DimColor}" />
+    <SolidColorBrush x:Key="Cyan" Color="{StaticResource CyanColor}" />
+    <SolidColorBrush x:Key="CyanWash" Color="#18333A" />
+    <SolidColorBrush x:Key="Amber" Color="{StaticResource AmberColor}" />
+    <SolidColorBrush x:Key="AmberWash" Color="#3A2C14" />
+    <SolidColorBrush x:Key="Violet" Color="{StaticResource VioletColor}" />
+    <SolidColorBrush x:Key="VioletWash" Color="#241F3D" />
+    <SolidColorBrush x:Key="Crimson" Color="{StaticResource CrimsonColor}" />
+    <SolidColorBrush x:Key="Lime" Color="{StaticResource LimeColor}" />
+    <SolidColorBrush x:Key="AxisX" Color="{StaticResource CrimsonColor}" />
+    <SolidColorBrush x:Key="AxisY" Color="{StaticResource LimeColor}" />
+    <SolidColorBrush x:Key="AxisZ" Color="#5B93D6" />
+
+    <!-- Cyan is what "measured" looks like, so it is also the theme accent. -->
+    <Color x:Key="SystemAccentColor">#45C4CF</Color>
+    <Color x:Key="SystemAccentColorLight1">#63D2DB</Color>
+    <Color x:Key="SystemAccentColorLight2">#88DFE6</Color>
+    <Color x:Key="SystemAccentColorLight3">#B2ECF0</Color>
+    <Color x:Key="SystemAccentColorDark1">#2FA4AF</Color>
+    <Color x:Key="SystemAccentColorDark2">#23848D</Color>
+    <Color x:Key="SystemAccentColorDark3">#17646B</Color>
+
+    <!--
+      DIN 1451 (shipped on Windows as Bahnschrift) for engraved panel labels,
+      Inter for prose, and a monospaced face for every number so columns of
+      measurements line up and a changing digit never shifts the layout.
+    -->
+    <FontFamily x:Key="PanelFont">Bahnschrift SemiBold Condensed,Bahnschrift,Segoe UI Variable Display,Inter,sans-serif</FontFamily>
+    <FontFamily x:Key="DataFont">Cascadia Mono,Consolas,JetBrains Mono,Menlo,monospace</FontFamily>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{StaticResource Ink}" />
+      <Setter Property="FontFamily" Value="Inter,Segoe UI,sans-serif" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <!-- ========================================================= type scale -->
+
+    <!-- Engraved panel label: the voice of the whole app. -->
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="FontFamily" Value="{StaticResource PanelFont}" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="LetterSpacing" Value="1.7" />
+      <Setter Property="Foreground" Value="{StaticResource Dim}" />
+    </Style>
+
+    <Style Selector="TextBlock.wordmark">
+      <Setter Property="FontFamily" Value="{StaticResource PanelFont}" />
+      <Setter Property="FontSize" Value="19" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+    </Style>
+
+    <Style Selector="TextBlock.heading">
+      <Setter Property="FontFamily" Value="{StaticResource PanelFont}" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="LetterSpacing" Value="0.4" />
+    </Style>
+
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="LineHeight" Value="17" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+
+    <!-- Numbers. -->
+    <Style Selector="TextBlock.readout">
+      <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <Style Selector="TextBlock.readout.muted">
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+
+    <Style Selector="TextBlock.figure">
+      <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+      <Setter Property="FontSize" Value="23" />
+      <Setter Property="Foreground" Value="{StaticResource Cyan}" />
+    </Style>
+
+    <Style Selector="TextBlock.code">
+      <Setter Property="FontFamily" Value="{StaticResource DataFont}" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+      <Setter Property="Foreground" Value="{StaticResource Dim}" />
+    </Style>
+
+    <!-- ========================================================== surfaces -->
+
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{StaticResource Panel}" />
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource Raised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <!-- Floating read-out over the viewport: glass, never a solid slab. -->
+    <Style Selector="Border.hud">
+      <Setter Property="Background" Value="#D4090C11" />
+      <Setter Property="BorderBrush" Value="#242E3A" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <!-- ========================================================== controls -->
+
+    <Style Selector="Button">
+      <Setter Property="Background" Value="{StaticResource Raised}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#242C38" />
+      <Setter Property="BorderBrush" Value="#3A4654" />
+    </Style>
+
+    <Style Selector="Button:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource Dim}" />
+    </Style>
+
+    <Style Selector="Button.measure">
+      <Setter Property="Background" Value="{StaticResource CyanWash}" />
+      <Setter Property="BorderBrush" Value="#2C6A72" />
+      <Setter Property="Foreground" Value="{StaticResource Cyan}" />
+    </Style>
+
+    <Style Selector="Button.measure:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1F444C" />
+      <Setter Property="BorderBrush" Value="{StaticResource Cyan}" />
+    </Style>
+
+    <Style Selector="Button.danger">
+      <Setter Property="Foreground" Value="{StaticResource Crimson}" />
+    </Style>
+
+    <Style Selector="ToggleButton">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="ToggleButton:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1F2834" />
+      <Setter Property="BorderBrush" Value="#3A4654" />
+    </Style>
+
+    <!-- On means live: amber. -->
+    <Style Selector="ToggleButton:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AmberWash}" />
+      <Setter Property="BorderBrush" Value="#6B5220" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource Amber}" />
+    </Style>
+
+    <Style Selector="ToggleButton:checked:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#4A3819" />
+      <Setter Property="BorderBrush" Value="{StaticResource Amber}" />
+    </Style>
+
+    <Style Selector="ToggleButton:disabled /template/ ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="#4A5663" />
+    </Style>
+
+    <!-- Mode tabs: a filed notch under the active one, no button chrome. -->
+    <Style Selector="ToggleButton.mode">
+      <Setter Property="FontFamily" Value="{StaticResource PanelFont}" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="LetterSpacing" Value="1.2" />
+      <Setter Property="BorderThickness" Value="0,0,0,2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="13,9,13,7" />
+    </Style>
+
+    <Style Selector="ToggleButton.mode:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#3A4654" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <Style Selector="ToggleButton.mode:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource Cyan}" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <Style Selector="ToggleButton.mode:checked:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource Cyan}" />
+    </Style>
+
+    <!-- Preset chips carry a configuration, so they read as amber when active. -->
+    <Style Selector="ToggleButton.preset">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Padding" Value="8,3" />
+    </Style>
+
+    <!-- Inspection controls are violet, matching the debug views they drive. -->
+    <Style Selector="ToggleButton.inspect:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource VioletWash}" />
+      <Setter Property="BorderBrush" Value="#4A3F7A" />
+      <Setter Property="TextElement.Foreground" Value="{StaticResource Violet}" />
+    </Style>
+
+    <Style Selector="ToggleButton.inspect:checked:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#302A52" />
+      <Setter Property="BorderBrush" Value="{StaticResource Violet}" />
+    </Style>
+
+    <Style Selector="CheckBox">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="22" />
+    </Style>
+
+    <Style Selector="ComboBox">
+      <Setter Property="Background" Value="{StaticResource Raised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="8,2" />
+    </Style>
+
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="{StaticResource Raised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Rule}" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="8,3" />
+    </Style>
+
+    <!-- Slider: a filed track with a small hard thumb, sized for dense rows. -->
+    <Style Selector="Slider">
+      <Setter Property="MinHeight" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style Selector="Slider /template/ Thumb">
+      <Setter Property="Width" Value="11" />
+      <Setter Property="Height" Value="11" />
+      <Setter Property="CornerRadius" Value="1" />
+    </Style>
+
+    <!-- Scene catalogue. -->
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ListBoxItem">
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#191F29" />
+    </Style>
+
+    <!-- Selected scene: a cyan gauge mark on the left edge. -->
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1A222D" />
+      <Setter Property="BorderBrush" Value="{StaticResource Cyan}" />
+      <Setter Property="BorderThickness" Value="2,0,0,0" />
+    </Style>
+
+    <Style Selector="ListBoxItem:selected TextBlock.heading">
+      <Setter Property="Foreground" Value="{StaticResource Cyan}" />
+    </Style>
+
+    <Style Selector="ListBoxItem:selected TextBlock.code">
+      <Setter Property="Foreground" Value="{StaticResource Cyan}" />
+    </Style>
+
+    <Style Selector="GridSplitter">
+      <Setter Property="Background" Value="{StaticResource Rule}" />
+    </Style>
+  </Application.Styles>
+
+</Application>

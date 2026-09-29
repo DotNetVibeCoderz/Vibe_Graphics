@@ -74,6 +74,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Item | Status | Notes |
 |---|---|---|
 | ThreeGallery (Avalonia) | ✅ | 20 samples, live source, stats, screenshots |
+| DemoGraphics (Avalonia) | ✅ | `samples/DemoGraphics`: 11 scenes across gallery / laboratory / benchmark / inspect / sandbox, shared weather, A/B compare, debug views, JSON+CSV benchmark export, reproducible captures, `--check` smoke test |
 | ThreeAppGen - AI code editor (Jack - The Code Bender) | ✅ | Semantic Kernel, OpenAI/Azure, Claude, Gemini, Ollama, tools |
 | Three.js → Three.Net converter (desktop / web / mobile) | ✅ | Static inventory + LLM + build validation + auto-fix |
 | Scene editor / inspector | ✅ | `apps/ThreeEditor`: scene tree, viewport picking / dragging, live inspector (transform, geometry, material, light, camera, physics), undo/redo, play mode, JSON scenes (`SceneDocument`) |
@@ -93,3 +94,5 @@ Open work, with why it is still open:
    a GPU path would be a second code path (bounds and raycasts would still need the CPU pose), so it waits
    for a scene that actually needs the throughput.
 4. **Contact hardening shadows and light probes.**
+5. **GPU particles.** The particle laboratory rewrites geometry on the CPU each frame, which is honest but
+   caps out in the low thousands; a compute path would need compute pipelines in the core first.

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>DemoGraphics</RootNamespace>
+    <AssemblyName>DemoGraphics</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ThreeNet.Avalonia\ThreeNet.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Models the repository already ships. Every scene that uses one falls back
+      to procedural geometry when the file is missing, so a trimmed checkout
+      still runs.
+    -->
+    <None Include="..\ThreeNet.Samples.MotoCross\Assets\oak-tree.glb" Link="Assets\oak-tree.glb" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\ThreeNet.Samples.MotoCross\Assets\pine-tree.glb" Link="Assets\pine-tree.glb" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\ThreeNet.Samples.MotoCross\Assets\boulder.glb" Link="Assets\boulder.glb" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\apps\ThreeGallery\Assets\RiggedSimple.glb" Link="Assets\RiggedSimple.glb" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

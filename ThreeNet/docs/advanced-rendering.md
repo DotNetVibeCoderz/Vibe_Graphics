@@ -62,6 +62,48 @@ Layers are allocated on demand: eight by default (three cascades plus a few spot
 sixteen when a scene has point lights, so a cube map costs memory only where one is used. `FrameStats.ShadowLayers`
 reports what a frame planned - six per shadowed point light.
 
+## Debug views
+
+`RendererOptions.DebugView` replaces the shaded image with one channel of the surface, in both render paths.
+Exposure, tone mapping, bloom and the camera effects are skipped while a view is on, so the values reach the
+screen unchanged (encoded to sRGB by the output surface, like any other colour).
+
+```csharp
+renderer.Options = renderer.Options with { DebugView = DebugView.WorldNormal };
+```
+
+| View | Shows |
+|---|---|
+| `BaseColor` | Albedo with the lighting removed |
+| `WorldNormal` | World space shading normal, remapped to 0..1 (normal maps and custom shaders included) |
+| `Roughness`, `Metallic` | The value the lighting was given, as grey |
+| `Occlusion` | Material occlusion multiplied by SSAO when it is on |
+| `Emissive` | Emission only |
+| `Depth` | Linear view depth over the camera range, square rooted for contrast |
+| `Lighting` | Lighting with the albedo taken out (white surfaces) |
+| `Shadow` | Shadow visibility of every shadow casting light |
+| `Uv` | Texture coordinates; the deferred path draws magenta, because the G-buffer carries no UVs |
+
+`RendererOptions.Wireframe` draws every surface as lines whatever its material says, for the same purpose. It
+needs an adapter with line polygons (`GpuCapabilities.WireframeRendering`).
+
+## Frame timing and capabilities
+
+```csharp
+GpuCapabilities capabilities = renderer.Capabilities;
+if (capabilities.TimestampQueries)
+{
+    Console.WriteLine($"{renderer.Stats.GpuTimeMs:F2} ms on the GPU");
+}
+```
+
+`FrameStats.GpuTimeMs` comes from timestamp queries around the frame's command buffer. The result is read back
+without stalling, so it lags a frame or two behind and stays `0` on adapters without the feature.
+`Renderer.Capabilities` also reports the backend and device type, the vendor and device ids, the largest
+texture and buffer, the highest MSAA count the HDR target supports, which compressed texture families upload
+natively, and whether float textures can be filtered - enough to offer only the settings that work on the
+machine in front of you. `Renderer.AdapterName` and `Renderer.AdapterDriver` name the GPU and its driver.
+
 ## Deferred renderer
 
 `RendererOptions.RenderPath = RenderPath.Deferred` writes opaque geometry into a G-buffer (five

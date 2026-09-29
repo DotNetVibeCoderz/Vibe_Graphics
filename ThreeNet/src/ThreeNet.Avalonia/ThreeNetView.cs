@@ -307,7 +307,15 @@ public class ThreeNetView : Control
         try
         {
             Frame?.Invoke(this, new FrameEventArgs(_renderer!, delta, now.TotalSeconds));
-            _renderer!.Render(scene, Camera);
+            // The handler may have swapped the scene or torn the renderer down
+            // (loading the next scene, for instance), so both are re-read here
+            // instead of drawing whatever was live when the frame started.
+            if (Scene is not { } current || _renderer is null)
+            {
+                return;
+            }
+
+            _renderer.Render(current, Camera);
             CopyToBitmap();
         }
         catch (ThreeNetException exception)

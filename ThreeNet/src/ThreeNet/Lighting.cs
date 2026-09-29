@@ -24,8 +24,8 @@ public struct Light
     public Vector2 Size;
     /// <summary>
     /// Renders this light into a shadow map. Directional lights use cascaded
-    /// shadow maps, spot lights a perspective map; point lights do not cast
-    /// shadows yet. Requires <see cref="RendererOptions.Shadows"/>.
+    /// shadow maps, spot lights a single perspective map and point lights a cube
+    /// of six faces. Requires <see cref="RendererOptions.Shadows"/>.
     /// </summary>
     public bool CastShadow;
     public bool Enabled;

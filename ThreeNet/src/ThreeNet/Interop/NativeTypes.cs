@@ -237,6 +237,8 @@ internal struct NativeRendererDesc
     public int MotionBlur;
     public float MotionBlurStrength;
     public uint MotionBlurSamples;
+    public uint DebugView;
+    public int Wireframe;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -250,6 +252,26 @@ internal struct NativeFrameStats
     public float CpuTimeMs;
     public uint ShadowLayers;
     public uint ShadowDrawCalls;
+    public float GpuTimeMs;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeCapabilities
+{
+    public uint Backend;
+    public uint DeviceType;
+    public uint VendorId;
+    public uint DeviceId;
+    public uint MaxTextureSize;
+    public ulong MaxBufferSize;
+    public uint MaxBindGroups;
+    public uint MaxMsaaSamples;
+    public int TimestampQueries;
+    public int TextureCompressionBc;
+    public int TextureCompressionEtc2;
+    public int TextureCompressionAstc;
+    public int PolygonModeLine;
+    public int Float32Filterable;
 }
 
 [StructLayout(LayoutKind.Sequential)]
