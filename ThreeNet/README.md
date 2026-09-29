@@ -21,8 +21,8 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 | ![Shadows and SSAO](docs/images/gallery-shadows.png) | ![Motocross](docs/images/moto-rodin.png) |
 | **ThreeEditor - scene editor** | **DemoGraphics - inspect bench** |
 | ![ThreeEditor](docs/images/editor.png) | ![DemoGraphics inspect](docs/images/demographics-inspect.png) |
-| **DemoGraphics - dawn coast** | |
-| ![DemoGraphics](docs/images/demographics-coast.png) | |
+| **DemoGraphics - dawn coast** | **DemoGraphics - benchmark results** |
+| ![DemoGraphics](docs/images/demographics-coast.png) | ![DemoGraphics benchmark](docs/images/demographics-benchmark.png) |
 | **Interaction & HUD** | **Physics & spatial audio** |
 | ![Interaction and HUD](docs/images/gallery-interaction-hud.png) | ![Physics](docs/images/gallery-physics.png) |
 | **Custom WGSL / GLSL shaders** | **Deferred renderer - 100 lights** |
