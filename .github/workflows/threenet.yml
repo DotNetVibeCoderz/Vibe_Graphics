@@ -61,19 +61,22 @@ jobs:
       - name: Test
         # GPU tests skip themselves when the runner has no adapter. The Windows
         # runner only has WARP, whose driver crashes (access violation) in the
-        # shadow map / SSAO tests; they run in the next, non-blocking step there.
+        # shadow map / SSAO / debug view tests; they run in the next,
+        # non-blocking step there.
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cargo test --release --manifest-path rust/threenet-core/Cargo.toml -- --skip shadow --skip ssao
+            cargo test --release --manifest-path rust/threenet-core/Cargo.toml -- --skip shadow --skip ssao --skip debug_view
           else
             cargo test --release --manifest-path rust/threenet-core/Cargo.toml
           fi
 
-      - name: Shadow and SSAO GPU tests (WARP, informational)
+      - name: Shadow, SSAO and debug view GPU tests (WARP, informational)
         if: runner.os == 'Windows'
         continue-on-error: true
-        run: cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test shadows_ssao -- --test-threads=1
+        run: |
+          cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test shadows_ssao -- --test-threads=1
+          cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test debug_views -- --test-threads=1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -273,11 +276,11 @@ jobs:
 
       - name: Test the binding
         # Shadow / SSAO rendering crashes the runner's WARP driver; covered by the native jobs and locally.
-        run: dotnet test tests/ThreeNet.Tests -c Release -p:SkipRustBuild=true --filter "FullyQualifiedName!~Shadow&FullyQualifiedName!~Ssao"
+        run: dotnet test tests/ThreeNet.Tests -c Release -p:SkipRustBuild=true --filter "FullyQualifiedName!~Shadow&FullyQualifiedName!~Ssao&FullyQualifiedName!~DebugView"
 
-      - name: Shadow and SSAO binding tests (WARP, informational)
+      - name: Shadow, SSAO and debug view binding tests (WARP, informational)
         continue-on-error: true
-        run: dotnet test tests/ThreeNet.Tests -c Release -p:SkipRustBuild=true --filter "FullyQualifiedName~Shadow|FullyQualifiedName~Ssao"
+        run: dotnet test tests/ThreeNet.Tests -c Release -p:SkipRustBuild=true --filter "FullyQualifiedName~Shadow|FullyQualifiedName~Ssao|FullyQualifiedName~DebugView"
 
       - name: Test the converter (fast tests)
         run: dotnet test tests/ThreeAppGen.Tests -c Release -p:SkipRustBuild=true --filter "Category!=LLM&Category!=Slow"
