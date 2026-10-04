@@ -18,11 +18,14 @@ Catatan pengembangan Three.Net. Terbaru di atas.
     adapter start-up;
   - live viewport: 1080x1951 with 4x MSAA, shadows and bloom at about 48 fps, 19 draws, 8,092 triangles.
   Touch was not exercised by automation: this phone blocks `adb shell input` event injection.
-- **macOS on an Apple M1** (13.4), using the dylib CI publishes and a small C harness against the C ABI, so no
-  .NET SDK or Rust toolchain was needed on that machine: `Apple M1 (IntegratedGpu, Metal)` renders the PBR,
-  shadow, SSAO and tone mapping path correctly at 3 draws / 4418 triangles / 3.3 ms CPU. Two platform
-  differences are now documented and come through `Renderer.Capabilities`: Metal here has **no timestamp
-  queries** (`GpuTimeMs` stays 0) and caps MSAA at **4x**.
+- **macOS, on two machines.** On an Apple M1 (13.4) with no .NET SDK or Rust toolchain installed, the dylib
+  CI publishes was driven by a small C harness against the C ABI: `Apple M1 (IntegratedGpu, Metal)` renders
+  the PBR, shadow, SSAO and tone mapping path correctly. On a MacBook Pro 16" 2019 (15.2, Core i9) the whole
+  thing was built from source: the Rust core in 2m09s, then **64 Rust tests, 55 binding tests, 11 converter
+  tests and all 12 DemoGraphics scenes**, all passing on `AMD Radeon Pro 555X (DiscreteGpu, Metal)` - which
+  also confirms the high performance preference picks the discrete GPU over the Intel one.
+  Metal has **no timestamp queries** on either machine, so `GpuTimeMs` stays 0 there, and the MSAA ceiling is
+  per adapter (8 on the Radeon, 4 on the M1) - both already reported by `Renderer.Capabilities`.
 - **The macOS dylib was not relocatable**: rustc left the build path as its install name, so anything linking
   the shipped binary looked for it under `/Users/runner`. CI now runs `install_name_tool -id @rpath/...` on
   both macOS artifacts.

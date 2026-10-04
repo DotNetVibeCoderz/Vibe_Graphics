@@ -73,19 +73,26 @@ with 4x MSAA, cascaded shadows and bloom at around 48 fps, and the offscreen smo
 
 ![Three.Net on Metal](images/macos-metal.png)
 
-Verified on an Apple M1 (macOS 13.4): the core picks the **Metal** backend and reports
-`Apple M1 (IntegratedGpu, Metal)`. Two differences from the Direct3D 12 and Vulkan backends are worth
-planning for, and both show up in `Renderer.Capabilities`:
+The core picks the **Metal** backend, and on a machine with two GPUs it takes the discrete one. Checked on
+two:
 
-| Capability | Metal on M1 |
-|---|---|
-| `TimestampQueries` | **no** - `FrameStats.GpuTimeMs` stays 0; measure with CPU time there |
-| `MaxMsaaSamples` | **4**, where Direct3D 12 offers 8 |
-| BC, ETC2 and ASTC textures | all supported |
-| `Float32Filterable` | no |
+| | MacBook Pro 16" 2019 (macOS 15.2) | Mac with Apple M1 (macOS 13.4) |
+|---|---|---|
+| Adapter chosen | `AMD Radeon Pro 555X (DiscreteGpu, Metal)` over the Intel UHD 630 | `Apple M1 (IntegratedGpu, Metal)` |
+| `TimestampQueries` | **no** | **no** |
+| `MaxMsaaSamples` | 8 | **4** |
+| BC / ETC2 / ASTC textures | all | all |
+| `Float32Filterable` | no | no |
+| `AdapterDriver` | empty - Metal reports no driver string | empty |
 
-Ask the capabilities rather than assuming: DemoGraphics clamps its quality presets with
-`RenderControls.ClampTo(capabilities)` for exactly this reason.
+Two things to plan for. `FrameStats.GpuTimeMs` stays 0 on macOS, because Metal here has no timestamp queries,
+so measure with CPU time on that platform. And the MSAA ceiling is per adapter, not per backend - 8 on the
+Radeon, 4 on the M1 - which is the argument for asking `Renderer.Capabilities` instead of assuming:
+DemoGraphics clamps its quality presets with `RenderControls.ClampTo(capabilities)` for exactly this reason.
+
+The whole solution builds on macOS, and everything that does not need a window passes there: 64 Rust tests
+(the GPU ones included), 55 binding tests, 11 converter tests, and all 12 DemoGraphics scenes through
+`--check`. On the Radeon Pro 555X those scenes render in 1.2-5.1 ms a frame at 480x270.
 
 The dylib CI ships has `@rpath/libthreenet_core.dylib` as its install name, so a native consumer can link it
 from an app bundle. A dylib built locally keeps its build path instead, which is fine on that machine; run
