@@ -1818,6 +1818,54 @@ pub unsafe extern "C" fn tn_renderer_create_win32(
     }
 }
 
+/// Creates a renderer that draws into an Android surface.
+///
+/// `window` is an `ANativeWindow*`, which a host gets from a `Surface` with
+/// `ANativeWindow_fromSurface`. The caller keeps ownership: the window must
+/// outlive the renderer, and the renderer must be destroyed before the surface
+/// goes away.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_create_android(
+    window: *mut c_void,
+    desc: *const TnRendererDesc,
+) -> *mut Renderer {
+    #[cfg(target_os = "android")]
+    {
+        use raw_window_handle::{
+            AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle,
+        };
+        let Some(desc) = (unsafe { desc.as_ref() }) else {
+            set_last_error("renderer descriptor is null");
+            return std::ptr::null_mut();
+        };
+        let Some(handle) = std::ptr::NonNull::new(window) else {
+            set_last_error("the native window is null");
+            return std::ptr::null_mut();
+        };
+        let window_handle = AndroidNdkWindowHandle::new(handle);
+        let display = RawDisplayHandle::Android(AndroidDisplayHandle::new());
+        match unsafe {
+            Renderer::new_with_raw_handles(
+                display,
+                RawWindowHandle::AndroidNdk(window_handle),
+                (*desc).into(),
+            )
+        } {
+            Ok(renderer) => Box::into_raw(Box::new(renderer)),
+            Err(error) => {
+                fail(error);
+                std::ptr::null_mut()
+            }
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (window, desc);
+        set_last_error("tn_renderer_create_android is only available on Android");
+        std::ptr::null_mut()
+    }
+}
+
 /// Creates a renderer for an X11 window.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_renderer_create_xlib(

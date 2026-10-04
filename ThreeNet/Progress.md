@@ -3,6 +3,22 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-10-04 - Live rendering on Android (0.8.0)
+
+- **`Renderer.CreateForAndroid`** (`tn_renderer_create_android`): the renderer can draw straight into an
+  Android surface. The host passes the `ANativeWindow*` it gets from a `Surface` with
+  `ANativeWindow_fromSurface`; ownership stays with the caller, so the window is released after the renderer
+  is disposed. ABI 9.
+- **`samples/ThreeNet.Samples.Android` gained a live viewport** (`LiveActivity`): a `SurfaceView` rendered on
+  its own thread at display rate, with one finger to orbit and two to zoom, cascaded shadows, bloom, Rapier
+  physics and the engine HUD showing frame rate, draw calls and triangles.
+- **Verified on a real device** for the first time - a Xiaomi M2012K11AG (Snapdragon 870, Adreno 650,
+  Android 11), where the core reports `Adreno (TM) 650 (IntegratedGpu, Vulkan)`:
+  - offscreen smoke test: physics settles the ball at y=0.60, 3 draws, 5292 triangles, 667 ms including
+    adapter start-up;
+  - live viewport: 1080x1951 with 4x MSAA, shadows and bloom at about 48 fps, 19 draws, 8,092 triangles.
+  Touch was not exercised by automation: this phone blocks `adb shell input` event injection.
+
 ## 2026-09-30 - DemoGraphics, debug views and GPU timing (0.7.0)
 
 - **DemoGraphics** (`samples/DemoGraphics`): a graphics bench rather than a slideshow. Eleven scenes

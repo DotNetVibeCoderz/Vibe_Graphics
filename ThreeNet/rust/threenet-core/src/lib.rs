@@ -45,4 +45,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 8;
+pub const ABI_VERSION: u32 = 9;

@@ -69,7 +69,7 @@ lights face -Z.
 
 | Member | Description |
 |---|---|
-| `CreateOffscreen(options)`, `CreateForWin32(hwnd, options)`, `CreateForX11(window, display, screen, options)`, `CreateForAppKit(nsView, options)` | Factories |
+| `CreateOffscreen(options)`, `CreateForWin32(hwnd, options)`, `CreateForX11(window, display, screen, options)`, `CreateForAppKit(nsView, options)`, `CreateForAndroid(nativeWindow, options)` | Factories |
 | `Render(scene, camera?)` | Draws a frame |
 | `Resize(width, height)`, `Options`, `Width`, `Height`, `AspectRatio` | Target |
 | `ReadPixels()`, `ReadPixels(Span<byte>)`, `PixelBufferSize` | Offscreen readback |

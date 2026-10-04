@@ -24,8 +24,9 @@ code runs everywhere and reports "not included in this build" instead of failing
 | `xr` | yes | OpenXR runtime discovery | browser |
 | `gltf-lights` | yes | KHR_lights_punctual import | - |
 
-Native windows (`AppWindow`, winit) are not built for Android and the browser: those hosts own the surface,
-so render with `Renderer.CreateOffscreen` (Avalonia's `ThreeNetView` already does).
+Native windows (`AppWindow`, winit) are not built for Android and the browser: those hosts own the surface.
+Render into the host's own surface instead - `Renderer.CreateForAndroid` on Android - or offscreen with
+`Renderer.CreateOffscreen` (Avalonia's `ThreeNetView` already does).
 
 ## Android
 
@@ -37,8 +38,36 @@ cargo ndk -t arm64-v8a -t x86_64 --platform 26 build --release --manifest-path r
 
 `rust/.cargo/config.toml` links the C++ runtime statically, so the library has no `libc++_shared.so`
 dependency. With the NuGet package, `runtimes/android-*/native/libthreenet_core.so` is picked up automatically. From source,
-add the libraries as `AndroidNativeLibrary` items like `samples/ThreeNet.Samples.Android`, which renders a scene
-offscreen (PBR, physics, HUD) and shows it in an `ImageView`; it logs `THREENET_OK` with the adapter name.
+add the libraries as `AndroidNativeLibrary` items like `samples/ThreeNet.Samples.Android`.
+
+That sample has both ways of drawing on a phone:
+
+- **Offscreen** (`MainActivity`): renders a scene with PBR, physics and the HUD, reads the pixels back into a
+  `Bitmap` and shows it in an `ImageView`. It logs `THREENET_OK` with the adapter name, which is what the CI
+  emulator job greps for.
+- **Live** (`LiveActivity`): draws straight into a `SurfaceView` at display rate. The Java `Surface` becomes the
+  native window handle with `ANativeWindow_fromSurface` from `libandroid.so`, and that pointer goes to
+  `Renderer.CreateForAndroid`:
+
+```csharp
+[DllImport("android")] static extern nint ANativeWindow_fromSurface(nint env, nint surface);
+
+nint window = ANativeWindow_fromSurface(JNIEnv.Handle, holder.Surface!.Handle);
+using Renderer renderer = Renderer.CreateForAndroid(window, RendererOptions.Default with
+{
+    Width = width, Height = height, VSync = true, MsaaSamples = 4, Shadows = true,
+});
+```
+
+The caller keeps the window: release it with `ANativeWindow_release` only after the renderer is disposed, and
+tear the renderer down in `SurfaceDestroyed` before the surface goes away. Rendering runs on its own thread;
+`Resize` follows `SurfaceChanged`.
+
+![Three.Net live on Android](images/android-live.png)
+
+Measured on a Xiaomi M2012K11AG (Snapdragon 870, Adreno 650, Android 11): the live viewport runs at 1080x1951
+with 4x MSAA, cascaded shadows and bloom at around 48 fps, and the offscreen smoke test reports
+`Adreno (TM) 650 (IntegratedGpu, Vulkan)`.
 
 ## iOS
 

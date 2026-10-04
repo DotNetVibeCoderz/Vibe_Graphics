@@ -56,7 +56,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 |---|---|---|
 | Windows | ✅ | Tested (DX12) |
 | Linux, macOS | ✅ | Built and tested in CI (linux-x64, osx-arm64) plus osx-x64 cross build |
-| Android / iOS native core | 🟡 | Android arm64/x64 built with the NDK (API 26), packaged and **verified on the CI emulator** (Vulkan/SwiftShader: render + physics + HUD); iOS static libraries built in CI and linked through buildTransitive targets, not device tested |
+| Android / iOS native core | 🟡 | Android **verified on a real device** (Xiaomi M2012K11AG, Adreno 650, Vulkan): offscreen render + physics + HUD, and live rendering into a `SurfaceView` through `Renderer.CreateForAndroid` at ~48 fps with MSAA, shadows and bloom; also built for x64 and checked on the CI emulator. iOS static libraries built in CI and linked through buildTransitive targets, not device tested |
 | WebAssembly build of the core (WebGPU) | 🟡 | `wasm32-unknown-emscripten` static library (WebGL2 via the GLES backend) built and packaged for `browser-wasm`; not browser tested yet |
 | Consistent API across platforms | ✅ | Same C ABI everywhere |
 
@@ -89,7 +89,8 @@ Open work, with why it is still open:
 1. **OpenXR sessions and swapchain submission.** Needs Vulkan / D3D12 interop out of wgpu and a headset to
    verify against; the runtime probe and off-axis stereo cameras are in.
 2. **Browser (WebGL2) and iOS on real targets.** Both are built and packaged by CI, but nothing here can run
-   an iOS device or a browser build end to end, so neither is claimed as tested.
+   an iOS device or a browser build end to end, so neither is claimed as tested. (Android is now covered: it
+   renders live on a real phone.)
 3. **GPU skinning and instanced rendering.** CPU skinning is correct and keeps bounds and picking accurate;
    a GPU path would be a second code path (bounds and raycasts would still need the CPU pose), so it waits
    for a scene that actually needs the throughput.

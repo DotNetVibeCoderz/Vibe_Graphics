@@ -328,6 +328,26 @@ public sealed class Renderer : IDisposable
         return new Renderer(handle, options);
     }
 
+    /// <summary>
+    /// Creates a renderer that draws into an Android surface.
+    /// </summary>
+    /// <param name="nativeWindow">
+    /// An <c>ANativeWindow*</c>, which a host gets from a <c>Surface</c> with
+    /// <c>ANativeWindow_fromSurface</c> in <c>libandroid.so</c>. The caller keeps
+    /// ownership: release it only after disposing the renderer.
+    /// </param>
+    public static Renderer CreateForAndroid(nint nativeWindow, RendererOptions options)
+    {
+        NativeRendererDesc desc = options.ToNative();
+        nint handle = NativeMethods.tn_renderer_create_android(nativeWindow, in desc);
+        if (handle == nint.Zero)
+        {
+            throw new ThreeNetException($"failed to create the Android renderer: {NativeError.GetLastMessage()}");
+        }
+
+        return new Renderer(handle, options);
+    }
+
     /// <summary>Creates a renderer for an X11 window.</summary>
     public static Renderer CreateForX11(ulong window, nint display, int screen, RendererOptions options)
     {

@@ -23,7 +23,10 @@ public class MainActivity : Activity
         LinearLayout layout = new(this) { Orientation = Orientation.Vertical };
         TextView status = new(this) { Text = "Rendering..." };
         ImageView image = new(this);
+        Button live = new(this) { Text = "Open the live viewport" };
+        live.Click += (_, _) => StartActivity(typeof(LiveActivity));
         layout.AddView(status);
+        layout.AddView(live);
         layout.AddView(image);
         SetContentView(layout);
 

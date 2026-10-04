@@ -491,6 +491,9 @@ internal static unsafe partial class NativeMethods
     internal static partial nint tn_renderer_create_win32(nint hwnd, nint hinstance, in NativeRendererDesc desc);
 
     [LibraryImport(Library)]
+    internal static partial nint tn_renderer_create_android(nint window, in NativeRendererDesc desc);
+
+    [LibraryImport(Library)]
     internal static partial nint tn_renderer_create_xlib(ulong window, nint display, int screen, in NativeRendererDesc desc);
 
     [LibraryImport(Library)]
