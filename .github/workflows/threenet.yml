@@ -78,6 +78,13 @@ jobs:
           cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test shadows_ssao -- --test-threads=1
           cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test debug_views -- --test-threads=1
 
+      - name: Make the dylib relocatable
+        # rustc leaves the build path as the install name, so anything linking
+        # the shipped dylib looks for it under /Users/runner. Found by running
+        # the published binary on a real Mac.
+        if: runner.os == 'macOS'
+        run: install_name_tool -id @rpath/${{ matrix.lib }} rust/target/release/${{ matrix.lib }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.rid }}
@@ -142,6 +149,10 @@ jobs:
           else
             cargo build --release --manifest-path rust/threenet-core/Cargo.toml --target ${{ matrix.target }} ${{ matrix.features }}
           fi
+
+      - name: Make the dylib relocatable
+        if: matrix.kind != 'staticlib' && startsWith(matrix.target, 'x86_64-apple')
+        run: install_name_tool -id @rpath/${{ matrix.lib }} rust/target/${{ matrix.target }}/release/${{ matrix.lib }}
 
       - uses: actions/upload-artifact@v4
         with:

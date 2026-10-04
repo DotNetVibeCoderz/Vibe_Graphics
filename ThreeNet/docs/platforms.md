@@ -69,6 +69,28 @@ Measured on a Xiaomi M2012K11AG (Snapdragon 870, Adreno 650, Android 11): the li
 with 4x MSAA, cascaded shadows and bloom at around 48 fps, and the offscreen smoke test reports
 `Adreno (TM) 650 (IntegratedGpu, Vulkan)`.
 
+## macOS
+
+![Three.Net on Metal](images/macos-metal.png)
+
+Verified on an Apple M1 (macOS 13.4): the core picks the **Metal** backend and reports
+`Apple M1 (IntegratedGpu, Metal)`. Two differences from the Direct3D 12 and Vulkan backends are worth
+planning for, and both show up in `Renderer.Capabilities`:
+
+| Capability | Metal on M1 |
+|---|---|
+| `TimestampQueries` | **no** - `FrameStats.GpuTimeMs` stays 0; measure with CPU time there |
+| `MaxMsaaSamples` | **4**, where Direct3D 12 offers 8 |
+| BC, ETC2 and ASTC textures | all supported |
+| `Float32Filterable` | no |
+
+Ask the capabilities rather than assuming: DemoGraphics clamps its quality presets with
+`RenderControls.ClampTo(capabilities)` for exactly this reason.
+
+The dylib CI ships has `@rpath/libthreenet_core.dylib` as its install name, so a native consumer can link it
+from an app bundle. A dylib built locally keeps its build path instead, which is fine on that machine; run
+`install_name_tool -id @rpath/libthreenet_core.dylib` before shipping one.
+
 ## iOS
 
 The package's `buildTransitive` targets add `libthreenet_core.a` as a `NativeReference` (force loaded, with

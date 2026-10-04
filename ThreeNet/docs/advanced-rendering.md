@@ -98,7 +98,8 @@ if (capabilities.TimestampQueries)
 ```
 
 `FrameStats.GpuTimeMs` comes from timestamp queries around the frame's command buffer. The result is read back
-without stalling, so it lags a frame or two behind and stays `0` on adapters without the feature.
+without stalling, so it lags a frame or two behind and stays `0` on adapters without the feature - Metal on
+Apple Silicon is one of them, so check `TimestampQueries` before showing the number as a measurement.
 `Renderer.Capabilities` also reports the backend and device type, the vendor and device ids, the largest
 texture and buffer, the highest MSAA count the HDR target supports, which compressed texture families upload
 natively, and whether float textures can be filtered - enough to offer only the settings that work on the

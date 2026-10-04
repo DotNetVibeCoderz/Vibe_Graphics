@@ -3,7 +3,7 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
-## 2026-10-04 - Live rendering on Android (0.8.0)
+## 2026-10-04 - Live rendering on Android, and macOS checked on an M1 (0.8.0)
 
 - **`Renderer.CreateForAndroid`** (`tn_renderer_create_android`): the renderer can draw straight into an
   Android surface. The host passes the `ANativeWindow*` it gets from a `Surface` with
@@ -18,6 +18,14 @@ Catatan pengembangan Three.Net. Terbaru di atas.
     adapter start-up;
   - live viewport: 1080x1951 with 4x MSAA, shadows and bloom at about 48 fps, 19 draws, 8,092 triangles.
   Touch was not exercised by automation: this phone blocks `adb shell input` event injection.
+- **macOS on an Apple M1** (13.4), using the dylib CI publishes and a small C harness against the C ABI, so no
+  .NET SDK or Rust toolchain was needed on that machine: `Apple M1 (IntegratedGpu, Metal)` renders the PBR,
+  shadow, SSAO and tone mapping path correctly at 3 draws / 4418 triangles / 3.3 ms CPU. Two platform
+  differences are now documented and come through `Renderer.Capabilities`: Metal here has **no timestamp
+  queries** (`GpuTimeMs` stays 0) and caps MSAA at **4x**.
+- **The macOS dylib was not relocatable**: rustc left the build path as its install name, so anything linking
+  the shipped binary looked for it under `/Users/runner`. CI now runs `install_name_tool -id @rpath/...` on
+  both macOS artifacts.
 
 ## 2026-09-30 - DemoGraphics, debug views and GPU timing (0.7.0)
 
