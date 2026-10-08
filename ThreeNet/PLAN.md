@@ -26,7 +26,9 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Depth of field, motion blur | ✅ | Golden angle bokeh DoF, depth reprojection camera motion blur (HDR, both paths) |
 | Deferred renderer | ✅ | `RenderPath.Deferred`: 5 target G-buffer + fullscreen lighting, up to 128 lights; transparents forward |
 | Shadow maps | ✅ | Directional cascades (up to 4), spot, and point lights with cube maps (six faces); PCF, up to 16 layers allocated on demand, per node cast/receive |
-| Modular shaders / custom shader injection (WGSL, GLSL/HLSL via naga) | ✅ | `user_vertex` / `user_surface` hooks in WGSL or GLSL (naga), CPU validation, hot reload. HLSL input is not offered by naga |
+| Modular shaders / custom shader injection (WGSL, GLSL/HLSL via naga) | ✅ | `user_vertex` / `user_surface` hooks in WGSL or GLSL (naga), 16 free parameters, a free texture slot, `sky_color` for reflections, CPU validation, hot reload. HLSL input is not offered by naga |
+| Sky | ✅ | `SkyMode.Procedural` / `Texture`: one triangle at the far plane, so it is never fogged and never pollutes the depth prepass. Gradient, haze, sun disc, cloud sheet, moon and stars; callable from material shaders as `sky_color` |
+| Additive blending | ✅ | `AlphaMode.Additive` for fire, sparks and glows |
 
 ## Phase 3 - Asset pipeline
 
@@ -37,6 +39,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | PNG / JPEG / BMP / TGA / HDR textures | ✅ | |
 | FBX loader | ✅ | Binary + ASCII, materials, textures, transform stack, skins, animation stacks |
 | Keyframe / skeletal animation playback | ✅ | Step / linear / cubic spline clips, players with speed/weight/loop, CPU skinning; glTF + FBX + code |
+| Morph targets / blend shapes | ✅ | glTF targets with their names and starting weights, `MorphTargetWeights` channels, targets built in code; deformed before skinning so the two stack, and skipped when the pose has not changed |
 | Texture streaming, compression (KTX2/Basis), asset cache manager | ✅ | KTX2 (raw, BC, ETC2, ASTC, zstd/zlib) + Basis ETC1S/UASTC transcoded per GPU; async loads with placeholders and a per-frame budget; texture + model cache |
 
 ## Phase 4 - Interactivity
@@ -68,13 +71,14 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Spatial audio | ✅ | cpal output + software mixer: panning, attenuation, Doppler, air absorption; WAV/OGG/MP3/FLAC via symphonia; offline rendering |
 | VR/AR via OpenXR | 🟡 | Runtime / headset probe, off-axis cameras, `StereoRig`; headset sessions and swapchain submission still open |
 | Networking / multiplayer sync | ✅ | `NetworkSession` (UDP): host relay, reliable ordered + unreliable messages, interpolated node replication, timeouts |
+| Water, fire and VFX (`ThreeNet.Effects`) | ✅ | `WaterSimulation` / `WaterSurface` (wave equation height field, caustics by differential area, sky reflection, depth absorption), `FireEffect` (ray marched volume with simplex turbulence), `ParticleEffect` (emitter shapes, curl noise, attractors, collision, colour over life) |
 
 ## Phase 7 - Ecosystem & tooling
 
 | Item | Status | Notes |
 |---|---|---|
 | ThreeGallery (Avalonia) | ✅ | 20 samples, live source, stats, screenshots |
-| DemoGraphics (Avalonia) | ✅ | `samples/DemoGraphics`: 11 scenes across gallery / laboratory / benchmark / inspect / sandbox, shared weather, A/B compare, debug views, JSON+CSV benchmark export, reproducible captures, `--check` smoke test |
+| DemoGraphics (Avalonia) | ✅ | `samples/DemoGraphics`: 15 scenes across gallery / laboratory / benchmark / inspect / sandbox, shared weather, A/B compare, debug views, JSON+CSV benchmark export, reproducible captures, `--check` smoke test |
 | ThreeAppGen - AI code editor (Jack - The Code Bender) | ✅ | Semantic Kernel, OpenAI/Azure, Claude, Gemini, Ollama, tools |
 | Three.js → Three.Net converter (desktop / web / mobile) | ✅ | Static inventory + LLM + build validation + auto-fix |
 | Scene editor / inspector | ✅ | `apps/ThreeEditor`: scene tree, viewport picking / dragging, live inspector (transform, geometry, material, light, camera, physics), undo/redo, play mode, JSON scenes (`SceneDocument`) |
@@ -95,5 +99,7 @@ Open work, with why it is still open:
    a GPU path would be a second code path (bounds and raycasts would still need the CPU pose), so it waits
    for a scene that actually needs the throughput.
 4. **Contact hardening shadows and light probes.**
-5. **GPU particles.** The particle laboratory rewrites geometry on the CPU each frame, which is honest but
-   caps out in the low thousands; a compute path would need compute pipelines in the core first.
+5. **GPU particles.** `ParticleEffect` rewrites geometry on the CPU each frame, which is honest but caps out
+   in the low thousands per system; a compute path would need compute pipelines in the core first.
+6. **Screen space refraction for water.** The surface absorbs light with depth and reflects the sky, but what
+   is underneath is not bent, because no pass exposes the scene colour or depth to a material shader yet.

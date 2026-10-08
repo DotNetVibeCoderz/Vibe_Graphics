@@ -34,7 +34,8 @@ lights face -Z.
 
 `Name`, `Position`, `Rotation` (Quaternion), `EulerAngles` (YXZ), `Scale`, `Visible` (set), `Layers` (set),
 `Tag`, `Light` (set), `Camera`, `Parent`, `Children`, `WorldMatrix`, `WorldPosition`,
-`CreateChild`, `AttachMesh`, `DetachMesh`, `SetTransform`, `LookAt(target, up?)`, `Translate`, `Rotate`, `Remove`.
+`CreateChild`, `AttachMesh`, `DetachMesh`, `SetTransform`, `LookAt(target, up?)`, `Translate`, `Rotate`, `Remove`,
+`Geometry`, `Material`, `MorphWeightCount`, `SetMorphWeight(i, w)`, `SetMorphWeights(weights)`, `GetMorphWeights()`.
 
 ## Instancing and lights
 
@@ -44,17 +45,20 @@ lights face -Z.
 
 ## Resources
 
-- `Geometry`: `Counts`, `Update(vertices, indices)`, `ComputeNormals()`, `ComputeTangents()`, `Destroy()`.
+- `Geometry`: `Counts`, `Update(vertices, indices)`, `ComputeNormals()`, `ComputeTangents()`,
+  `MorphTargetCount`, `MorphTargetNames`, `GetMorphTargetName(i)`, `AddMorphTarget(name, positionDeltas, normalDeltas?)`, `Destroy()`.
 - `Material`: `Options` (get/set), `Update(Func<MaterialOptions, MaterialOptions>)`, `BaseColor`, `Destroy()`.
-- `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `State` (`TextureState`), `LoadError`, `Destroy()`.
+- `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `Update(pixels)` (bytes or floats,
+  written into the existing GPU texture), `State` (`TextureState`), `LoadError`, `Destroy()`.
 - `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.
 - `AnimationClip`: `Name`, `Duration`, `AddTranslation`, `AddRotation`, `AddScale`, `AddChannel(node, path, interpolation, times, values)`, `Play(loop)`, `Destroy()`.
 - `AnimationPlayer`: `Time`, `Speed`, `Weight`, `Loop`, `IsPlaying`, `Stop()`.
 - `MaterialOptions` (struct): `Shading`, `AlphaMode`, `CullMode`, `BaseColor`, `Emissive`, `EmissiveIntensity`,
   `Metallic`, `Roughness`, `Specular`, `Shininess`, `Reflectance`, `NormalScale`, `OcclusionStrength`,
   `AlphaCutoff`, `UvScale`, `UvOffset`, `DepthWrite`, `DepthTest`, `Wireframe`, `RenderOrder`, `BaseColorMap`,
-  `NormalMap`, `MetallicRoughnessMap`, `EmissiveMap`, `OcclusionMap`, `Shader`, `Custom0`, `Custom1`;
-  factories `Pbr`, `Basic`, `Phong`, `Lambert`.
+  `NormalMap`, `MetallicRoughnessMap`, `EmissiveMap`, `OcclusionMap`, `CustomMap`, `Shader`,
+  `Custom0`..`Custom3`; factories `Pbr`, `Basic`, `Phong`, `Lambert`. `AlphaMode.Additive` adds the fragment
+  to the frame instead of blending over it.
 
 ## Lighting and cameras
 
@@ -63,7 +67,8 @@ lights face -Z.
   factories `Directional`, `Point`, `Spot`, `Ambient`.
 - `Camera` (struct): `Perspective(fov, near, far)`, `Orthographic(height, near, far)`, `AspectRatio` (0 = auto).
 - `SceneEnvironment` (struct): `Background`, `AmbientColor`, `AmbientIntensity`, `FogColor`, `FogDensity`,
-  `FogStart`, `FogEnd`, `EnvironmentMap`, `EnvironmentIntensity`.
+  `FogStart`, `FogEnd`, `EnvironmentMap`, `EnvironmentIntensity`, and the sky: `Sky` (`SkyMode.Color`,
+  `Texture`, `Procedural`), `SunDirection`, `SkyIntensity`, `SkyHaze`, `SkyClouds`, `SkyRotation`.
 
 ## Renderer : IDisposable
 
@@ -174,6 +179,21 @@ See [interactivity.md](interactivity.md).
 - XR: `XrRuntime.Probe()` → `XrRuntimeInfo`; `Camera.OffAxis`; `StereoRig` (`Apply`, `RenderSideBySide`).
 
 See [extensions.md](extensions.md).
+
+## ThreeNet.Effects
+
+- `WaterSimulation`: `AddDrop`, `AddDropUv`, `Step`, `Update(dt)`, `ComputeNormals`, `SampleHeight`,
+  `SampleNormal`, `CreateTexture`, `Upload`, `Cells`; `Speed`, `Damping`, `StepRate`, `RainRate`, `Center`.
+- `WaterSurface`: `Simulation`, `Node`, `Material`, `FloorShader`, `Style` (`WaterStyle.Pool/Lake/Ocean`),
+  `SunDirection`, `AddFloor(options)`, `Splash`, `HeightAt`, `NormalAt`, `Update(dt)`.
+- `FireEffect`: `Node`, `Material`, `Style` (`FireStyle.Campfire/Torch/Candle/Magic`), `Size`, `Flicker`,
+  `Update(dt)`.
+- `ParticleEffect`: `Shape` (`EmitterShape`), `Origin`, `Rate`, `Lifetime`, `Size`, `Growth`, `Rise`,
+  `Spread`, `Radial`, `Gravity`, `Drag`, `Wind`, `Turbulence`, `Attractors`, `FloorHeight`, `Bounce`,
+  `StretchBySpeed`, `Burst`, `Update`, `Upload`, `CreateGeometry`, `GlowMaterial`, `SmokeMaterial`.
+- `EffectShaders`: `Water`, `WaterFloor`, `HeightField`, `Fire`, `Sprite`, `Particle`, `Smoke`.
+
+See [effects.md](effects.md).
 
 ## Scenes and plugins
 

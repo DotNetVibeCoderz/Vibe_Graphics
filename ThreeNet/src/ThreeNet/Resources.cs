@@ -39,6 +39,68 @@ public sealed class Geometry : IEquatable<Geometry>
         }
     }
 
+    /// <summary>
+    /// Blend shapes on this geometry. Imported models bring their own; see
+    /// <see cref="AddMorphTarget"/> to build one in code.
+    /// </summary>
+    public int MorphTargetCount
+    {
+        get
+        {
+            int count = NativeMethods.tn_geometry_morph_target_count(Scene.Handle, Id);
+            NativeError.Check(count);
+            return count;
+        }
+    }
+
+    /// <summary>Name of one blend shape, as the asset named it.</summary>
+    public unsafe string GetMorphTargetName(int index) => NativeError.ReadString((buffer, capacity) =>
+        NativeMethods.tn_geometry_morph_target_name(Scene.Handle, Id, (uint)index, (byte*)buffer, capacity));
+
+    /// <summary>Every blend shape name, in weight order.</summary>
+    public IReadOnlyList<string> MorphTargetNames
+    {
+        get
+        {
+            int count = MorphTargetCount;
+            string[] names = new string[count];
+            for (int i = 0; i < count; i++)
+            {
+                names[i] = GetMorphTargetName(i);
+            }
+
+            return names;
+        }
+    }
+
+    /// <summary>
+    /// Adds a blend shape built in code: one position delta per vertex, and
+    /// optionally one normal delta. Returns the index of the new target, which
+    /// is the index its weight has on a node.
+    /// </summary>
+    /// <remarks>
+    /// The geometry's vertices at the time of the first call become the rest
+    /// pose every weight of zero returns to.
+    /// </remarks>
+    public unsafe int AddMorphTarget(string name, ReadOnlySpan<Vector3> positionDeltas, ReadOnlySpan<Vector3> normalDeltas = default)
+    {
+        if (!normalDeltas.IsEmpty && normalDeltas.Length != positionDeltas.Length)
+        {
+            throw new ArgumentException(
+                "a morph target needs as many normal deltas as position deltas, or none",
+                nameof(normalDeltas));
+        }
+
+        fixed (Vector3* positions = positionDeltas)
+        fixed (Vector3* normals = normalDeltas)
+        {
+            int index = NativeMethods.tn_geometry_add_morph_target(
+                Scene.Handle, Id, name, positions, normalDeltas.IsEmpty ? null : normals, (uint)positionDeltas.Length);
+            NativeError.Check(index);
+            return index;
+        }
+    }
+
     /// <summary>Recomputes smooth vertex normals by area weighted averaging.</summary>
     public void ComputeNormals() => NativeError.Check(NativeMethods.tn_geometry_compute_normals(Scene.Handle, Id));
 
@@ -152,6 +214,23 @@ public sealed class Texture : IEquatable<Texture>
         NativeError.Check(NativeMethods.tn_texture_set_sampler(Scene.Handle, Id, in desc));
     }
 
+    /// <summary>
+    /// Replaces the pixels, keeping the size and format. The GPU texture is
+    /// written in place, so a height field or a flow map can be refreshed every
+    /// frame without reallocating anything.
+    /// </summary>
+    public unsafe void Update(ReadOnlySpan<byte> pixels)
+    {
+        fixed (byte* data = pixels)
+        {
+            NativeError.Check(NativeMethods.tn_texture_update(Scene.Handle, Id, data, (uint)pixels.Length));
+        }
+    }
+
+    /// <summary>Replaces the pixels of a <see cref="TextureFormat.Rgba32Float"/> texture.</summary>
+    public unsafe void Update(ReadOnlySpan<float> pixels) =>
+        Update(System.Runtime.InteropServices.MemoryMarshal.AsBytes(pixels));
+
     /// <summary>Destroys the texture and frees its GPU memory.</summary>
     public void Destroy() => NativeMethods.tn_texture_destroy(Scene.Handle, Id);
 
@@ -218,6 +297,15 @@ public struct MaterialOptions
     public Vector4 Custom0;
     /// <summary>Free parameters readable by custom shaders as <c>custom1</c>.</summary>
     public Vector4 Custom1;
+    /// <summary>Free parameters readable by custom shaders as <c>custom2</c>.</summary>
+    public Vector4 Custom2;
+    /// <summary>Free parameters readable by custom shaders as <c>custom3</c>.</summary>
+    public Vector4 Custom3;
+    /// <summary>
+    /// A texture the built-in shading never reads, sampled by a custom shader as
+    /// <c>custom_texture</c>: a wave height field, a flow map, a gradient ramp.
+    /// </summary>
+    public Texture? CustomMap;
 
     /// <summary>Sensible physically based defaults.</summary>
     public static MaterialOptions Default => new();
@@ -289,9 +377,12 @@ public struct MaterialOptions
         MetallicRoughnessTexture = MetallicRoughnessMap?.Id ?? 0,
         EmissiveTexture = EmissiveMap?.Id ?? 0,
         OcclusionTexture = OcclusionMap?.Id ?? 0,
+        CustomTexture = CustomMap?.Id ?? 0,
         Shader = Shader?.Id ?? 0,
         Custom0 = Custom0,
         Custom1 = Custom1,
+        Custom2 = Custom2,
+        Custom3 = Custom3,
     };
 
     internal static MaterialOptions FromNative(Scene scene, in NativeMaterialDesc desc)
@@ -328,9 +419,12 @@ public struct MaterialOptions
         MetallicRoughnessMap = Slot(desc.MetallicRoughnessTexture),
         EmissiveMap = Slot(desc.EmissiveTexture),
         OcclusionMap = Slot(desc.OcclusionTexture),
+        CustomMap = Slot(desc.CustomTexture),
         Shader = desc.Shader == 0 ? null : new Shader(scene, desc.Shader),
         Custom0 = desc.Custom0,
         Custom1 = desc.Custom1,
+        Custom2 = desc.Custom2,
+        Custom3 = desc.Custom3,
         };
     }
 }

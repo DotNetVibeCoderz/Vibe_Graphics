@@ -32,6 +32,10 @@ pub struct FrameUniform {
     pub screen: [f32; 4],
     /// `x` = active debug view (`0` = off), `yzw` reserved.
     pub debug: [f32; 4],
+    /// `xyz` = direction towards the sun, `w` = sky mode.
+    pub sky_sun: [f32; 4],
+    /// `x` = intensity, `y` = haze, `z` = cloud cover, `w` = rotation in radians.
+    pub sky_params: [f32; 4],
 }
 
 impl FrameUniform {
@@ -49,6 +53,8 @@ impl FrameUniform {
         time: f32,
         screen: [f32; 4],
         debug_view: u32,
+        sky_sun: [f32; 4],
+        sky_params: [f32; 4],
     ) -> Self {
         let view_projection = projection * view;
         Self {
@@ -79,6 +85,8 @@ impl FrameUniform {
             ],
             screen,
             debug: [debug_view as f32, 0.0, 0.0, 0.0],
+            sky_sun,
+            sky_params,
         }
     }
 }
@@ -157,11 +165,13 @@ pub struct MaterialUniform {
     pub uv_transform: [f32; 4],
     /// Texture presence flags: base colour, normal, metallic-roughness, emissive.
     pub texture_flags: [f32; 4],
-    /// `x` = occlusion map flag, `yzw` reserved.
+    /// `x` = occlusion map flag, `y` = custom map flag, `zw` reserved.
     pub texture_flags2: [f32; 4],
     /// Free parameters for custom shaders.
     pub custom0: [f32; 4],
     pub custom1: [f32; 4],
+    pub custom2: [f32; 4],
+    pub custom3: [f32; 4],
 }
 
 impl Default for MaterialUniform {
@@ -207,9 +217,16 @@ impl From<&Material> for MaterialUniform {
                 flag(material.textures.metallic_roughness.is_some()),
                 flag(material.textures.emissive.is_some()),
             ],
-            texture_flags2: [flag(material.textures.occlusion.is_some()), 0.0, 0.0, 0.0],
+            texture_flags2: [
+                flag(material.textures.occlusion.is_some()),
+                flag(material.textures.custom.is_some()),
+                0.0,
+                0.0,
+            ],
             custom0: [material.custom[0], material.custom[1], material.custom[2], material.custom[3]],
             custom1: [material.custom[4], material.custom[5], material.custom[6], material.custom[7]],
+            custom2: [material.custom[8], material.custom[9], material.custom[10], material.custom[11]],
+            custom3: [material.custom[12], material.custom[13], material.custom[14], material.custom[15]],
         }
     }
 }

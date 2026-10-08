@@ -77,4 +77,77 @@ public class AnimationTests
         BoundingBox after = scene.GetBounds(import.Root);
         Assert.NotEqual(before, after);
     }
+
+    [Fact]
+    public void MorphTargetsArriveFromGltfAndDeformTheMesh()
+    {
+        using Scene scene = new();
+        ImportResult result = scene.LoadGltf(TestAsset("morph-cube.glb"));
+
+        Node node = result.Root.Children.Count > 0 ? result.Root.Children[0] : result.Root;
+        // The importer may place the mesh on a child, so find the node holding it.
+        Node? mesh = node.MorphWeightCount > 0 ? node : FindMorphed(result.Root);
+        Assert.NotNull(mesh);
+        Assert.Equal(2, mesh!.MorphWeightCount);
+
+        BoundingBox rest = scene.GetBounds(mesh);
+        mesh.SetMorphWeight(0, 1f);        // 'stretch' lifts the top by one unit
+        scene.UpdateAnimations(0f);
+        BoundingBox stretched = scene.GetBounds(mesh);
+        Assert.True(
+            stretched.Max.Y > rest.Max.Y + 0.9f,
+            $"the shape did not raise the cube: {rest.Max.Y} -> {stretched.Max.Y}");
+
+        // Back to zero returns to the rest pose rather than drifting.
+        mesh.SetMorphWeight(0, 0f);
+        scene.UpdateAnimations(0f);
+        Assert.Equal(rest.Max.Y, scene.GetBounds(mesh).Max.Y, 3);
+
+        static Node? FindMorphed(Node node)
+        {
+            if (node.MorphWeightCount > 0)
+            {
+                return node;
+            }
+
+            foreach (Node child in node.Children)
+            {
+                if (FindMorphed(child) is { } found)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    [Fact]
+    public void MorphTargetsCanBeBuiltInCode()
+    {
+        using Scene scene = new();
+        Geometry geometry = scene.CreateBoxGeometry(1f, 1f, 1f);
+        Material material = scene.CreateMaterial(MaterialOptions.Pbr(Colors.White));
+        Node node = scene.AddMesh(geometry, material, name: "box");
+
+        (int vertices, _) = geometry.Counts;
+        Vector3[] deltas = new Vector3[vertices];
+        for (int i = 0; i < vertices; i++)
+        {
+            deltas[i] = new Vector3(0f, 2f, 0f);
+        }
+
+        int index = geometry.AddMorphTarget("rise", deltas);
+        Assert.Equal(0, index);
+        Assert.Equal(1, geometry.MorphTargetCount);
+        Assert.Equal("rise", geometry.GetMorphTargetName(0));
+
+        BoundingBox rest = scene.GetBounds(node);
+        node.SetMorphWeight(0, 0.5f);
+        scene.UpdateAnimations(0f);
+        BoundingBox raised = scene.GetBounds(node);
+        Assert.Equal(rest.Max.Y + 1f, raised.Max.Y, 3);
+
+        Assert.Equal([0.5f], node.GetMorphWeights());
+    }
 }

@@ -39,6 +39,10 @@ struct Frame {
     screen: vec4<f32>,
     // x = debug view (0 = off), yzw reserved
     debug: vec4<f32>,
+    // xyz = direction towards the sun, w = sky mode
+    sky_sun: vec4<f32>,
+    // x = intensity, y = haze, z = cloud cover, w = rotation
+    sky_params: vec4<f32>,
 };
 
 struct Light {
@@ -139,6 +143,110 @@ fn sample_environment(direction: vec3<f32>, lod: f32) -> vec3<f32> {
         acos(clamp(direction.y, -1.0, 1.0)) / PI,
     );
     return textureSampleLevel(environment_texture, environment_sampler, uv, lod).rgb;
+}
+
+// ---------------------------------------------------------------------- sky
+
+fn sky_hash(p: vec2<f32>) -> f32 {
+    return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453);
+}
+
+fn sky_value(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let w = f * f * (3.0 - 2.0 * f);
+    let a = mix(sky_hash(i), sky_hash(i + vec2<f32>(1.0, 0.0)), w.x);
+    let b = mix(sky_hash(i + vec2<f32>(0.0, 1.0)), sky_hash(i + vec2<f32>(1.0, 1.0)), w.x);
+    return mix(a, b, w.y);
+}
+
+fn sky_fbm(p: vec2<f32>) -> f32 {
+    var sum = 0.0;
+    var amplitude = 0.5;
+    var point = p;
+    for (var i: i32 = 0; i < 5; i = i + 1) {
+        sum = sum + sky_value(point) * amplitude;
+        amplitude = amplitude * 0.5;
+        point = point * 2.02;
+    }
+    return sum;
+}
+
+/// A sky from the sun direction alone: height gradient, horizon haze, forward
+/// scattering around the sun, a sun disc bright enough for bloom, and an
+/// optional cloud sheet.
+fn procedural_sky(direction: vec3<f32>, sun: vec3<f32>, haze: f32, clouds: f32, time: f32) -> vec3<f32> {
+    let up = clamp(direction.y, -1.0, 1.0);
+    // Night is simply the sun being below the horizon.
+    let night = 1.0 - clamp((sun.y + 0.12) / 0.32, 0.0, 1.0);
+    let daylight = 1.0 - night;
+
+    let zenith = mix(vec3<f32>(0.035, 0.115, 0.40), vec3<f32>(0.004, 0.009, 0.035), night);
+    let horizon = mix(vec3<f32>(0.42, 0.56, 0.80), vec3<f32>(0.022, 0.035, 0.085), night);
+    let blend = pow(clamp(1.0 - max(up, 0.0), 0.0, 1.0), max(4.5 - haze * 3.0 - clouds * 2.5, 0.6));
+    var color = mix(zenith, horizon, blend);
+
+    // Below the horizon the sky carries on as haze, so whatever the scene puts
+    // there - ground, water, nothing - meets it without a seam.
+    let ground = mix(horizon * 0.72, vec3<f32>(0.012, 0.016, 0.03), night);
+    color = mix(ground, color, smoothstep(-0.12, 0.0, up));
+
+    let sun_dot = max(dot(direction, sun), 0.0);
+    let warm = mix(vec3<f32>(1.0, 0.42, 0.13), vec3<f32>(1.0, 0.88, 0.68), clamp(sun.y * 2.5, 0.0, 1.0));
+    color = color + warm * pow(sun_dot, 5.0) * 0.6 * daylight;
+    color = color + warm * pow(sun_dot, 64.0) * 1.4 * daylight;
+    color = color + vec3<f32>(1.0, 0.95, 0.86) * smoothstep(0.99955, 0.99975, sun_dot) * 26.0 * daylight;
+
+    let moon_dot = max(dot(direction, -sun), 0.0);
+    color = color + vec3<f32>(0.78, 0.84, 1.0) * smoothstep(0.9992, 0.9996, moon_dot) * 7.0 * night;
+
+    if (night > 0.02 && up > -0.02) {
+        let cell = floor(direction.xz * 260.0 / max(abs(direction.y) + 0.35, 0.35));
+        let twinkle = sky_hash(cell);
+        let spark = step(0.9975, twinkle) * (0.6 + 0.4 * sin(time * 2.0 + twinkle * 40.0));
+        color = color + vec3<f32>(0.9, 0.93, 1.0) * spark * night * 3.0;
+    }
+
+    if (clouds > 0.01 && up > 0.005) {
+        // A plane at altitude, projected onto the view ray and drifting.
+        let plane = direction.xz / max(direction.y, 0.06) * 0.35 + vec2<f32>(time * 0.004, time * 0.002);
+        let density = sky_fbm(plane);
+        let cover = smoothstep(1.0 - clouds * 1.45, 1.0 - clouds * 0.55, density);
+        let top = mix(vec3<f32>(0.30, 0.31, 0.35), vec3<f32>(1.10, 1.06, 1.00), clamp(sun.y * 1.6, 0.0, 1.0));
+        let base = mix(vec3<f32>(0.10, 0.11, 0.14), vec3<f32>(0.48, 0.47, 0.50), clamp(sun.y * 1.6, 0.0, 1.0));
+        let lit = mix(base, top, clamp(density * 1.6, 0.0, 1.0)) * mix(1.0, 0.18, night);
+        color = mix(color, lit, cover * smoothstep(0.005, 0.20, up));
+    }
+
+    return color;
+}
+
+/// The sky in a direction, as the sky pass draws it. Material shaders call this
+/// for reflections, so what a lake mirrors is the sky actually overhead.
+fn sky_color(direction: vec3<f32>) -> vec3<f32> {
+    let mode = u32(frame.sky_sun.w);
+    var color: vec3<f32>;
+    if (mode == 1u) {
+        // The environment map, spun around the vertical axis if asked.
+        let rotation = frame.sky_params.w;
+        let c = cos(rotation);
+        let s = sin(rotation);
+        let spun = vec3<f32>(
+            direction.x * c - direction.z * s,
+            direction.y,
+            direction.x * s + direction.z * c,
+        );
+        color = sample_environment(spun, 0.0) * frame.fog_params.w;
+    } else {
+        color = procedural_sky(
+            direction,
+            normalize(frame.sky_sun.xyz),
+            frame.sky_params.y,
+            frame.sky_params.z,
+            frame.fog_params.z,
+        );
+    }
+    return color * frame.sky_params.x;
 }
 
 // ------------------------------------------------------------------ shadows

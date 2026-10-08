@@ -23,9 +23,17 @@ fn user_surface(context: SurfaceContext, surface: Surface) -> Surface
 
 | Struct | Fields |
 |---|---|
-| `VertexContext` | `position`, `normal`, `uv`, `time`, `custom0`, `custom1` |
-| `SurfaceContext` | `world_position`, `world_normal`, `view_direction`, `uv`, `screen_uv`, `time`, `custom0`, `custom1` |
+| `VertexContext` | `position`, `normal`, `uv`, `time`, `custom0`..`custom3` |
+| `SurfaceContext` | `world_position`, `world_normal`, `view_direction`, `uv`, `screen_uv`, `time`, `custom0`..`custom3` |
 | `Surface` | `albedo`, `alpha`, `normal`, `metallic`, `emissive`, `roughness`, `specular`, `occlusion`, `shininess`, `reflectance`, `shading_model`, `receive_shadow` |
+
+A hook also has these in scope:
+
+| Name | What it is |
+|---|---|
+| `custom_texture` | A texture slot the built-in shading never reads (`MaterialOptions.CustomMap`). It takes any float format, filterable or not, so it can hold an `Rgba32Float` field - but nothing may `textureSample` it, only `textureLoad`. |
+| `sky_color(direction)` | The sky in a direction, exactly as the sky pass draws it, so a reflection shows the sky actually overhead. |
+| `sample_environment(direction, lod)` | The environment map. |
 
 Hooks can be written in **WGSL** or **GLSL** (GLSL is translated to WGSL with naga; the same struct and
 field names apply). Sources are validated on the CPU when created, so errors surface as a
@@ -61,6 +69,33 @@ scene.AddLight(Light.Point(Vector3.One, 30f, range: 14f) with { CastShadow = tru
 Layers are allocated on demand: eight by default (three cascades plus a few spot lights), growing to
 sixteen when a scene has point lights, so a cube map costs memory only where one is used. `FrameStats.ShadowLayers`
 reports what a frame planned - six per shadowed point light.
+
+## The sky
+
+The renderer draws the sky itself, as **one triangle at the far plane** with the depth test on and depth
+writes off, so it fills exactly the pixels no geometry claimed.
+
+```csharp
+scene.Environment = scene.Environment with
+{
+    Sky = SkyMode.Procedural,       // Color (the plain background), Texture, Procedural
+    SunDirection = sunDirection,    // the sky follows the sun, including below the horizon
+    SkyIntensity = 1f,
+    SkyHaze = 0.3f,                 // thickens the air near the horizon
+    SkyClouds = 0.35f,
+    SkyRotation = 0f,               // spins a Texture sky about the vertical axis
+};
+```
+
+`Procedural` gives a height gradient, horizon haze, forward scattering around the sun, a sun disc bright
+enough to bloom, a drifting cloud sheet, and - once the sun is below the horizon - a moon and stars.
+`Texture` uses `Environment.EnvironmentMap` instead.
+
+Why a pass and not a dome mesh: a dome is fogged like any other surface, and it lands in the depth prepass
+that SSAO and depth of field read. A pass at the far plane has neither problem and costs one triangle.
+
+The same function lives in the shading library as `sky_color(direction)`, so a custom shader can ask for the
+sky in a direction and get the sky actually overhead - which is how `EffectShaders.Water` reflects it.
 
 ## Debug views
 
@@ -152,6 +187,28 @@ scene.UpdateAnimations(deltaSeconds);
 
 `scene.Animations` lists imported clips (`Name`, `Duration`). Skinned meshes are deformed on the CPU when a
 pose changes, so they render (and cast shadows) through the normal pipelines.
+
+### Morph targets (blend shapes)
+
+A geometry can carry morph targets: dense per-vertex deltas that are mixed into the base mesh by weight.
+Facial expressions are the usual reason, and the usual way they arrive is a glTF file - the importer reads
+the targets, their names from `mesh.extras.targetNames`, the node's starting weights, and any
+`MorphTargetWeights` animation channel that drives them.
+
+```csharp
+Node head = model.Root.Find("Face")!;
+IReadOnlyList<string> shapes = head.Geometry!.MorphTargetNames;   // "smile", "jawOpen", ...
+
+head.SetMorphWeight(0, 0.8f);                 // one shape
+head.SetMorphWeights([0.8f, 0.2f, 0f, 1f]);   // or the whole pose at once
+
+// Or build them yourself, with one delta per vertex:
+geometry.AddMorphTarget("stretch", positionDeltas, normalDeltas);
+```
+
+Deformation happens on the CPU, before skinning, so **the two stack**: a face can be smiling while its head
+is animated by a skeleton. A pose whose weights have not changed is skipped, so holding an expression costs
+nothing. Bounds and raycasts see the deformed mesh, as they do with skinning.
 
 ## FBX
 

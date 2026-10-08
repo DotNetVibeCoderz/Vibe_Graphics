@@ -13,7 +13,6 @@ namespace DemoGraphics.Scenes;
 public sealed class TimeOfDayScene : DemoScene
 {
     private readonly List<Node> _trees = [];
-    private SkyDome _sky = null!;
     private Material _ground = null!;
     private Material _foliage = null!;
     private Node _sun = null!;
@@ -93,8 +92,6 @@ public sealed class TimeOfDayScene : DemoScene
 
     protected override void OnBuild()
     {
-        _sky = SkyDome.Add(Scene);
-
         float relief = P("relief");
         Geometry terrain = Procedural.Ground(Scene, 400f, 220, (x, z) => Height(x, z, relief), 8f);
         Shader terrainShader = Scene.CreateShader(ShaderHooks.Terrain, ShaderLanguage.Wgsl, "terrain");
@@ -114,8 +111,6 @@ public sealed class TimeOfDayScene : DemoScene
 
     protected override void OnApplyEnvironment()
     {
-        _sky.Apply(World);
-
         _sun.Position = World.SunPosition * 150f;
         _sun.LookAt(Vector3.Zero);
         Light sun = _sun.Light!.Value;
@@ -139,6 +134,13 @@ public sealed class TimeOfDayScene : DemoScene
         Vector3 horizon = Vector3.Lerp(new Vector3(0.42f, 0.56f, 0.80f), new Vector3(0.022f, 0.035f, 0.085f), World.NightFactor);
         Scene.Environment = Scene.Environment with
         {
+            // The engine draws the sky: a pass at the far plane, so it is never
+            // fogged and never lands in the depth prepass.
+            Sky = SkyMode.Procedural,
+            SunDirection = World.SunPosition,
+            SkyIntensity = 1f,
+            SkyHaze = Math.Clamp(World.FogDensity * 18f, 0.05f, 1f),
+            SkyClouds = World.CloudCover,
             Background = new Vector4(horizon * 0.35f, 1f),
             FogColor = horizon,
             FogDensity = World.FogDensity,
@@ -171,8 +173,6 @@ public sealed class TimeOfDayScene : DemoScene
 
     public override void Update(float deltaSeconds, double totalSeconds)
     {
-        _sky.Follow(Viewer);
-
         float minutesPerSecond = P("timelapse");
         if (minutesPerSecond > 0f)
         {

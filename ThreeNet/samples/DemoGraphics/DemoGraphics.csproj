@@ -30,6 +30,12 @@
     <None Include="..\ThreeNet.Samples.MotoCross\Assets\pine-tree.glb" Link="Assets\pine-tree.glb" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\ThreeNet.Samples.MotoCross\Assets\boulder.glb" Link="Assets\boulder.glb" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\apps\ThreeGallery\Assets\RiggedSimple.glb" Link="Assets\RiggedSimple.glb" CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      The expression model is generated from a character this repository does not
+      ship; tools/blender/face-expressions.py builds it. The face scene falls back
+      to a head built in code when it is absent.
+    -->
+    <None Include="Assets\grandma-expressions.glb" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\grandma-expressions.glb')" />
   </ItemGroup>
 
 </Project>

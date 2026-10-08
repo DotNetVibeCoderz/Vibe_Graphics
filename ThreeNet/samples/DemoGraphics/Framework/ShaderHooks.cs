@@ -3,108 +3,17 @@ namespace DemoGraphics.Framework;
 /// <summary>
 /// The WGSL the scenes plug into the renderer through the <c>user_vertex</c> and
 /// <c>user_surface</c> hooks. Everything here rides on the built-in shading, so
-/// a wave still casts shadows, a sky still blooms and a swaying tree is still
+/// a wave still casts shadows, a crest still blooms and a swaying tree is still
 /// picked up by SSAO.
 ///
 /// Each source documents which material slots carry its parameters, because
-/// <c>custom0</c> and <c>custom1</c> are all a hook gets.
+/// <c>custom0</c>..<c>custom3</c> are all a hook gets. The sky, the water
+/// simulation and the particle sprites moved into the library
+/// (<c>ThreeNet.Effects</c>); what is left here is what is specific to these
+/// scenes.
 /// </summary>
 public static class ShaderHooks
 {
-    /// <summary>
-    /// Sky dome, drawn unlit on the inside of a sphere that follows the camera.
-    /// <c>custom0</c> = sun direction xyz + cloud cover, <c>custom1</c> = night
-    /// factor, haze, star brightness, sun size.
-    /// </summary>
-    public const string Sky = """
-        fn dg_hash21(p: vec2<f32>) -> f32 {
-            return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453);
-        }
-
-        fn dg_value2(p: vec2<f32>) -> f32 {
-            let i = floor(p);
-            let f = fract(p);
-            let w = f * f * (3.0 - 2.0 * f);
-            let a = mix(dg_hash21(i), dg_hash21(i + vec2<f32>(1.0, 0.0)), w.x);
-            let b = mix(dg_hash21(i + vec2<f32>(0.0, 1.0)), dg_hash21(i + vec2<f32>(1.0, 1.0)), w.x);
-            return mix(a, b, w.y);
-        }
-
-        fn dg_fbm2(p: vec2<f32>) -> f32 {
-            var sum = 0.0;
-            var amplitude = 0.5;
-            var point = p;
-            for (var i: i32 = 0; i < 5; i = i + 1) {
-                sum = sum + dg_value2(point) * amplitude;
-                amplitude = amplitude * 0.5;
-                point = point * 2.02;
-            }
-            return sum;
-        }
-
-        fn user_surface(context: SurfaceContext, surface: Surface) -> Surface {
-            var out = surface;
-            let dir = -normalize(context.view_direction);
-            let sun = normalize(context.custom0.xyz);
-            let cover = context.custom0.w;
-            let night = context.custom1.x;
-            let haze = context.custom1.y;
-            let stars = context.custom1.z;
-            let up = clamp(dir.y, -1.0, 1.0);
-
-            // Height gradient: deep overhead, pale where the air is thickest.
-            let zenith = mix(vec3<f32>(0.035, 0.115, 0.40), vec3<f32>(0.004, 0.009, 0.035), night);
-            let horizon = mix(vec3<f32>(0.42, 0.56, 0.80), vec3<f32>(0.022, 0.035, 0.085), night);
-            // Overcast flattens the gradient, which is most of what overcast is.
-            let blend = pow(clamp(1.0 - max(up, 0.0), 0.0, 1.0), max(4.5 - haze - cover * 2.5, 0.6));
-            var color = mix(zenith, horizon, blend);
-
-            // Below the horizon the dome carries on as haze rather than as a
-            // brown ground: whatever the scene puts there - sea, terrain, nothing
-            // - meets the sky without a seam. The edges go low to high, because
-            // smoothstep is undefined the other way round.
-            let ground = mix(horizon * 0.72, vec3<f32>(0.012, 0.016, 0.03), night);
-            color = mix(ground, color, smoothstep(-0.12, 0.0, up));
-
-            // Forward scattering around the sun, strongest when it is low.
-            let sun_dot = max(dot(dir, sun), 0.0);
-            let warm = mix(vec3<f32>(1.0, 0.42, 0.13), vec3<f32>(1.0, 0.88, 0.68), clamp(sun.y * 2.5, 0.0, 1.0));
-            let daylight = clamp(1.0 - night, 0.0, 1.0);
-            color = color + warm * pow(sun_dot, 5.0) * 0.6 * daylight;
-            color = color + warm * pow(sun_dot, 64.0) * 1.4 * daylight;
-
-            // Discs. Both are far above 1.0 so bloom picks them up.
-            color = color + vec3<f32>(1.0, 0.95, 0.86) * smoothstep(0.99955, 0.99975, sun_dot) * 26.0 * daylight;
-            let moon_dot = max(dot(dir, -sun), 0.0);
-            color = color + vec3<f32>(0.78, 0.84, 1.0) * smoothstep(0.9992, 0.9996, moon_dot) * 7.0 * night;
-
-            // Stars, on a fixed grid so they stay put as the camera turns.
-            if (night > 0.02 && up > -0.02) {
-                let cell = floor(dir.xz * 260.0 / max(abs(dir.y) + 0.35, 0.35));
-                let twinkle = dg_hash21(cell);
-                let spark = step(0.9975, twinkle) * (0.6 + 0.4 * sin(context.time * 2.0 + twinkle * 40.0));
-                color = color + vec3<f32>(0.9, 0.93, 1.0) * spark * night * stars * 3.0;
-            }
-
-            // Cloud sheet: a plane at altitude, projected onto the dome, drifting
-            // with the wind the rest of the app uses.
-            if (cover > 0.01 && up > 0.005) {
-                let drift = vec2<f32>(context.custom1.w, 0.4) * context.time * 0.004;
-                let plane = dir.xz / max(dir.y, 0.06) * 0.35 + drift;
-                let density = dg_fbm2(plane);
-                let cloud = smoothstep(1.0 - cover * 1.45, 1.0 - cover * 0.55, density);
-                let top = mix(vec3<f32>(0.30, 0.31, 0.35), vec3<f32>(1.10, 1.06, 1.00), clamp(sun.y * 1.6, 0.0, 1.0));
-                let base = mix(vec3<f32>(0.10, 0.11, 0.14), vec3<f32>(0.48, 0.47, 0.50), clamp(sun.y * 1.6, 0.0, 1.0));
-                let lit = mix(base, top, clamp(density * 1.6, 0.0, 1.0)) * mix(1.0, 0.18, night);
-                color = mix(color, lit, cloud * smoothstep(0.005, 0.20, up));
-            }
-
-            out.albedo = vec3<f32>(0.0);
-            out.emissive = color;
-            return out;
-        }
-        """;
-
     /// <summary>
     /// Open water: the vertex hook lifts a sum of four wave trains and the
     /// surface hook rebuilds the matching normal, so the shading follows the
@@ -252,24 +161,6 @@ public static class ShaderHooks
             out.albedo = out.albedo * mix(1.0, 0.68, wetness);
             out.roughness = clamp(mix(0.95, 0.18, wetness) - 0.12 * grain + cover * 0.2, 0.04, 1.0);
             out.metallic = 0.0;
-            return out;
-        }
-        """;
-
-    /// <summary>
-    /// Soft round sprite for particles: the quad corner arrives as <c>uv</c> and
-    /// fades everything towards the edge, so a square never shows.
-    /// <c>custom0.x</c> = edge hardness.
-    /// </summary>
-    public const string Particle = """
-        fn user_surface(context: SurfaceContext, surface: Surface) -> Surface {
-            var out = surface;
-            let radius = clamp(length(context.uv - vec2<f32>(0.5)) * 2.0, 0.0, 1.0);
-            let hardness = max(context.custom0.x, 0.2);
-            let falloff = pow(clamp(1.0 - radius, 0.0, 1.0), hardness);
-            out.alpha = surface.alpha * falloff;
-            out.emissive = surface.emissive * falloff;
-            out.albedo = surface.albedo * falloff;
             return out;
         }
         """;

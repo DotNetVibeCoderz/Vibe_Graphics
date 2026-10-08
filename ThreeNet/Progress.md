@@ -3,6 +3,70 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-10-08 - Morph targets, a sky pass, and water, fire and VFX in the library (0.9.0)
+
+Four things that had been asked for, and the ABI moved 9 -> 12 to carry them.
+
+**Morph targets / blend shapes.** `Geometry` carries dense per-vertex deltas, `Node` carries the weights, and
+the glTF importer reads targets, the names in `mesh.extras.targetNames`, the starting weights and
+`MorphTargetWeights` animation channels. Deformation happens on the CPU **into the skin bind pose**, before
+skinning, so a face can be smiling while a skeleton moves its head; a pose whose weights have not changed is
+skipped entirely. `Geometry.AddMorphTarget` builds them in code.
+`grandma.glb` turned out to have **no blend shapes at all**, so eight were authored in Blender
+(`tools/blender/face-expressions.py`): loose-part detection finds the face island, a Dijkstra distance to its
+border feathers the deformation over 3 cm so the plate does not tear from the head, and the result exports as
+real glTF morph targets - which means the import path is genuinely exercised rather than faked.
+
+**The sky is now a renderer pass** (`renderer/sky.rs`, `shaders/sky.wgsl`): one triangle at the far plane with
+the depth test on and depth writes off, so it fills exactly what no geometry covered. `SkyMode.Procedural`
+gives a height gradient, horizon haze, forward scattering, a sun disc bright enough to bloom, a drifting cloud
+sheet, and a moon and stars once the sun is down; `SkyMode.Texture` uses the environment map, with
+`SkyRotation`. This replaced DemoGraphics' sky **dome**, and with it the two things a dome gets wrong: it was
+fogged like any other surface, and it landed in the depth prepass that SSAO and depth of field read.
+`procedural_sky` moved into `common.wgsl` as `sky_color(direction)`, so a material shader can ask for the sky
+and get the one actually overhead - which is how the new water reflects it.
+
+**`ThreeNet.Effects`: water, fire and particles**, from the references that were asked for.
+
+- **Water** (`WaterSimulation`, `WaterSurface`) is the wave equation on a height field - height and vertical
+  velocity per cell, a four neighbour Laplacian, damping - after Evan Wallace's WebGL Water by way of
+  [jeantimex/threejs-water](https://github.com/jeantimex/threejs-water). A ripple spreads, reflects off the
+  walls, interferes and dies away, which no sum of sine waves does. The field runs on the CPU at a fixed 60
+  steps a second and is published as an `Rgba32Float` texture in the reference's own layout, which is also
+  what makes `HeightAt` work, which is what makes the floating balls bob and lean. The surface shader adds
+  Fresnel, a sky reflection through `sky_color`, Beer-Lambert absorption with depth, and foam on the crests
+  and along the shore. **Caustics** are the reference's differential area method evaluated from the receiving
+  side: the floor shader walks a sunbeam back up to the surface, bends it with Snell's law, follows it down
+  and compares `dpdx`/`dpdy` of the landing point against the flat one.
+- **Fire** (`FireEffect`) is a ray marched volume after
+  [THREE.Fire](https://github.com/typeWolffo/THREE.Fire): 24 steps through a box, turbulent simplex noise
+  tearing a tapered envelope, and a temperature ramp from white through yellow and orange to nearly smoke.
+  The reference looks that ramp up in a texture; this builds it in code, so a fire ships with no asset at all.
+  `Flicker` wanders the way a flame does, for a point light to follow.
+- **Particles** (`ParticleEffect`) is DemoGraphics' old system promoted and given the vocabulary
+  [Three VFX](https://github.com/mustache-dev/Three-VFX) settled on: six emitter shapes, radial launch, curl
+  noise turbulence, up to four point or vortex attractors, a floor to bounce off, stretch by speed, bursts and
+  colour over life. A vertex has no colour channel, so the age and a per particle random ride **in the uv** -
+  the corner squeezed into the fraction 0.25..0.75, the two bytes added on as whole numbers.
+
+**Core work the three needed.** `AlphaMode.Additive` (fire is light, not paint); `custom2` and `custom3`, so a
+hook has sixteen free parameters rather than eight; a **free texture slot** (`MaterialOptions.CustomMap`,
+`custom_texture` in WGSL) declared non-filterable so it can hold an `Rgba32Float` field - nothing may
+`textureSample` it, the effect shaders `textureLoad` and interpolate themselves; and `tn_texture_update` /
+`Texture.Update`, which writes an existing GPU texture **in place** instead of recreating it, with a
+generation counter so a field that changes every frame no longer rebuilds a bind group every frame.
+
+**DemoGraphics gained four scenes** and is now fifteen: `SKY` (the sky pass on sliders, with a roughness sweep
+and still water to reflect it), `WAT` (the pool: click the water and a ripple goes out, with rain, caustics and
+five styles), `FIR` (campfire, bonfire, torch, candle and witchfire, with embers, smoke and a guttering light)
+and `FAC` (one slider per blend shape, read off the model, mixed into seven named expressions, with an idle
+blink). `VFX` was rebuilt on the library `ParticleEffect` and gained explosion and vortex presets; the local
+`ParticleSystem` and `SkyDome` helpers are gone, since the library does both now.
+
+**Tests.** 5 Rust morph tests, 3 Rust sky tests, 14 .NET effect tests (every effect shader compiles against
+both passes; a drop spreads, settles and never goes unstable; the capacity holds; water and fire render
+together offscreen), and `--check` builds and renders all sixteen scenes.
+
 ## 2026-10-04 - Live rendering on Android, and macOS checked on an M1 (0.8.0)
 
 - **`Renderer.CreateForAndroid`** (`tn_renderer_create_android`): the renderer can draw straight into an

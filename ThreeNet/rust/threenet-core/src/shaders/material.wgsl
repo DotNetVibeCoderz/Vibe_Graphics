@@ -21,6 +21,8 @@ struct MaterialData {
     // Free parameters for custom shaders.
     custom0: vec4<f32>,
     custom1: vec4<f32>,
+    custom2: vec4<f32>,
+    custom3: vec4<f32>,
 };
 
 struct ObjectData {
@@ -37,6 +39,9 @@ struct ObjectData {
 @group(1) @binding(4) var emissive_texture: texture_2d<f32>;
 @group(1) @binding(5) var occlusion_texture: texture_2d<f32>;
 @group(1) @binding(6) var material_sampler: sampler;
+// Never read by the built-in shading: a custom shader samples it for whatever
+// it needs - a wave height field, a flow map, a gradient ramp.
+@group(1) @binding(7) var custom_texture: texture_2d<f32>;
 
 @group(2) @binding(0) var<uniform> object: ObjectData;
 
@@ -48,6 +53,8 @@ struct VertexContext {
     time: f32,
     custom0: vec4<f32>,
     custom1: vec4<f32>,
+    custom2: vec4<f32>,
+    custom3: vec4<f32>,
 };
 
 /// Input of the `user_surface` hook, in world space.
@@ -60,6 +67,8 @@ struct SurfaceContext {
     time: f32,
     custom0: vec4<f32>,
     custom1: vec4<f32>,
+    custom2: vec4<f32>,
+    custom3: vec4<f32>,
 };
 
 struct VertexInput {
@@ -90,6 +99,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     context.time = frame.fog_params.z;
     context.custom0 = material.custom0;
     context.custom1 = material.custom1;
+    context.custom2 = material.custom2;
+    context.custom3 = material.custom3;
     let local_position = user_vertex(context);
 
     var out: VertexOutput;
@@ -179,6 +190,8 @@ fn material_surface(input: VertexOutput, front_facing: bool) -> Surface {
     context.time = frame.fog_params.z;
     context.custom0 = material.custom0;
     context.custom1 = material.custom1;
+    context.custom2 = material.custom2;
+    context.custom3 = material.custom3;
     surface = user_surface(context, surface);
     surface.roughness = clamp(surface.roughness, 0.015, 1.0);
     surface.metallic = clamp(surface.metallic, 0.0, 1.0);

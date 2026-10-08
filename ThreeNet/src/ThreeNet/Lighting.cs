@@ -214,6 +214,22 @@ public struct SceneEnvironment
     /// <summary>Equirectangular HDR map used for image based lighting.</summary>
     public Texture? EnvironmentMap;
     public float EnvironmentIntensity;
+    /// <summary>
+    /// What is drawn behind the scene. The sky is a fullscreen pass at the far
+    /// plane, so it is never fogged and never reaches the depth prepass that
+    /// SSAO and depth of field read.
+    /// </summary>
+    public SkyMode Sky;
+    /// <summary>Direction towards the sun, for <see cref="SkyMode.Procedural"/>.</summary>
+    public Vector3 SunDirection;
+    /// <summary>Multiplies whatever the sky produces.</summary>
+    public float SkyIntensity;
+    /// <summary>0 is a clear deep sky, 1 a thick hazy one.</summary>
+    public float SkyHaze;
+    /// <summary>Cloud sheet coverage, 0 to 1.</summary>
+    public float SkyClouds;
+    /// <summary>Spins an equirectangular sky around the vertical axis, in radians.</summary>
+    public float SkyRotation;
 
     /// <summary>Dark background, a touch of ambient light, no fog.</summary>
     public static SceneEnvironment Default => new();
@@ -229,6 +245,12 @@ public struct SceneEnvironment
         FogEnd = 100f;
         EnvironmentMap = null;
         EnvironmentIntensity = 1f;
+        Sky = SkyMode.Color;
+        SunDirection = new Vector3(0.3f, 0.7f, 0.55f);
+        SkyIntensity = 1f;
+        SkyHaze = 0.25f;
+        SkyClouds = 0f;
+        SkyRotation = 0f;
     }
 
     internal NativeEnvironmentDesc ToNative() => new()
@@ -242,5 +264,11 @@ public struct SceneEnvironment
         FogEnd = FogEnd,
         EnvironmentMap = EnvironmentMap?.Id ?? 0,
         EnvironmentIntensity = EnvironmentIntensity,
+        Sky = (uint)Sky,
+        SunDirection = SunDirection,
+        SkyIntensity = SkyIntensity,
+        SkyHaze = SkyHaze,
+        SkyClouds = SkyClouds,
+        SkyRotation = SkyRotation,
     };
 }

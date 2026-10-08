@@ -125,6 +125,12 @@ pub struct Node {
     pub mesh: Option<MeshBinding>,
     pub light: Option<Light>,
     pub camera: Option<Camera>,
+    /// Blend shape weights for the mesh on this node, one per morph target.
+    ///
+    /// Deformation happens on the CPU and writes into the geometry, so two nodes
+    /// sharing one morphed geometry cannot hold different expressions - the same
+    /// limitation skinning has.
+    pub morph_weights: Vec<f32>,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
     pub(crate) world: Mat4,
@@ -142,6 +148,7 @@ impl Default for Node {
             mesh: None,
             light: None,
             camera: None,
+            morph_weights: Vec::new(),
             parent: None,
             children: Vec::new(),
             world: Mat4::IDENTITY,
@@ -168,6 +175,30 @@ impl Node {
     }
 }
 
+/// What fills the pixels no geometry covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u32)]
+pub enum SkyMode {
+    /// The background colour, and nothing else.
+    #[default]
+    Color = 0,
+    /// The equirectangular environment map, which also lights the scene.
+    Texture = 1,
+    /// A sky built from the sun direction: gradient, horizon haze, sun disc and
+    /// a drifting cloud sheet. It costs no texture and lights nothing by itself.
+    Procedural = 2,
+}
+
+impl SkyMode {
+    pub fn from_u32(value: u32) -> Self {
+        match value {
+            1 => SkyMode::Texture,
+            2 => SkyMode::Procedural,
+            _ => SkyMode::Color,
+        }
+    }
+}
+
 /// Environment settings applied to the whole scene.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Environment {
@@ -184,6 +215,18 @@ pub struct Environment {
     /// Equirectangular HDR environment map used for image based lighting.
     pub environment_map: Option<TextureId>,
     pub environment_intensity: f32,
+    /// What the sky pass draws behind the scene.
+    pub sky: SkyMode,
+    /// Direction towards the sun, for the procedural sky.
+    pub sun_direction: Vec3,
+    /// Multiplies whatever the sky produces.
+    pub sky_intensity: f32,
+    /// 0 is a clear deep sky, 1 a thick hazy one.
+    pub sky_haze: f32,
+    /// Cloud sheet coverage, 0 to 1.
+    pub sky_clouds: f32,
+    /// Spins an equirectangular sky around the vertical axis, in radians.
+    pub sky_rotation: f32,
 }
 
 impl Default for Environment {
@@ -198,6 +241,12 @@ impl Default for Environment {
             fog_end: 100.0,
             environment_map: None,
             environment_intensity: 1.0,
+            sky: SkyMode::Color,
+            sun_direction: Vec3::new(0.3, 0.7, 0.55),
+            sky_intensity: 1.0,
+            sky_haze: 0.25,
+            sky_clouds: 0.0,
+            sky_rotation: 0.0,
         }
     }
 }
@@ -321,6 +370,8 @@ impl Scene {
                 mesh: node.mesh,
                 light: node.light,
                 camera: node.camera,
+                // A clone starts from the same expression as the original.
+                morph_weights: node.morph_weights.clone(),
                 parent: Some(new_parent),
                 children: Vec::new(),
                 world: Mat4::IDENTITY,

@@ -233,6 +233,80 @@ public sealed class Node : IEquatable<Node>
     /// <summary>Removes the mesh from this node, keeping the node itself.</summary>
     public void DetachMesh() => NativeError.Check(NativeMethods.tn_node_detach_mesh(Scene.Handle, Id));
 
+    /// <summary>The geometry this node draws, or null when it has no mesh.</summary>
+    public Geometry? Geometry
+    {
+        get
+        {
+            NativeError.Check(NativeMethods.tn_node_get_mesh(Scene.Handle, Id, out uint geometry, out _));
+            return geometry == 0 ? null : new Geometry(Scene, geometry);
+        }
+    }
+
+    /// <summary>The material this node draws with, or null when it has no mesh.</summary>
+    public Material? Material
+    {
+        get
+        {
+            NativeError.Check(NativeMethods.tn_node_get_mesh(Scene.Handle, Id, out _, out uint material));
+            return material == 0 ? null : new Material(Scene, material);
+        }
+    }
+
+    /// <summary>
+    /// How many blend shape weights this node carries, one per morph target on
+    /// its mesh. Zero when the mesh has no blend shapes.
+    /// </summary>
+    public int MorphWeightCount
+    {
+        get
+        {
+            int count = NativeMethods.tn_node_morph_weight_count(Scene.Handle, Id);
+            NativeError.Check(count);
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// Sets one blend shape weight. 0 is the rest pose and 1 the full shape;
+    /// values outside that range are allowed and are what over-driven
+    /// expressions are made of.
+    /// </summary>
+    /// <remarks>
+    /// The mesh is deformed on the CPU during <see cref="Scene.UpdateAnimations"/>,
+    /// so call that once a frame after changing weights. Two nodes sharing one
+    /// morphed geometry cannot hold different expressions.
+    /// </remarks>
+    public void SetMorphWeight(int index, float value) =>
+        NativeError.Check(NativeMethods.tn_node_set_morph_weight(Scene.Handle, Id, (uint)index, value));
+
+    /// <summary>Replaces every weight at once.</summary>
+    public unsafe void SetMorphWeights(ReadOnlySpan<float> weights)
+    {
+        fixed (float* values = weights)
+        {
+            NativeError.Check(NativeMethods.tn_node_set_morph_weights(Scene.Handle, Id, values, (uint)weights.Length));
+        }
+    }
+
+    /// <summary>Reads the current weights.</summary>
+    public unsafe float[] GetMorphWeights()
+    {
+        int count = MorphWeightCount;
+        if (count <= 0)
+        {
+            return [];
+        }
+
+        float[] weights = new float[count];
+        fixed (float* values = weights)
+        {
+            NativeError.Check(NativeMethods.tn_node_get_morph_weights(Scene.Handle, Id, values, (uint)count));
+        }
+
+        return weights;
+    }
+
     /// <summary>Sets the local transform in one call.</summary>
     public void SetTransform(Vector3 position, Quaternion rotation, Vector3 scale)
     {

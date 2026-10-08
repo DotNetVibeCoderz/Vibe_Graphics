@@ -281,10 +281,12 @@ pub struct TnMaterialDesc {
     pub metallic_roughness_texture: u32,
     pub emissive_texture: u32,
     pub occlusion_texture: u32,
+    /// A texture the built-in shading never reads, for custom shaders.
+    pub custom_texture: u32,
     /// Custom shader id, `0` for the built-in shading.
     pub shader: u32,
-    /// Free parameters exposed to custom shaders as `custom0` and `custom1`.
-    pub custom: [f32; 8],
+    /// Free parameters exposed to custom shaders as `custom0`..`custom3`.
+    pub custom: [f32; 16],
 }
 
 impl Default for TnMaterialDesc {
@@ -321,6 +323,7 @@ impl From<Material> for TnMaterialDesc {
             metallic_roughness_texture: value.textures.metallic_roughness.unwrap_or(0),
             emissive_texture: value.textures.emissive.unwrap_or(0),
             occlusion_texture: value.textures.occlusion.unwrap_or(0),
+            custom_texture: value.textures.custom.unwrap_or(0),
             shader: value.shader.unwrap_or(0),
             custom: value.custom,
         }
@@ -356,6 +359,7 @@ impl TnMaterialDesc {
             metallic_roughness: slot(self.metallic_roughness_texture),
             emissive: slot(self.emissive_texture),
             occlusion: slot(self.occlusion_texture),
+            custom: slot(self.custom_texture),
         };
         material.shader = slot(self.shader);
         material.custom = self.custom;
@@ -541,6 +545,15 @@ pub struct TnEnvironmentDesc {
     pub fog_end: f32,
     pub environment_map: u32,
     pub environment_intensity: f32,
+    /// 0 = background colour, 1 = environment map, 2 = procedural.
+    pub sky: u32,
+    /// Direction towards the sun, for the procedural sky.
+    pub sun_direction: TnVec3,
+    pub sky_intensity: f32,
+    pub sky_haze: f32,
+    pub sky_clouds: f32,
+    /// Spins an equirectangular sky around the vertical axis, in radians.
+    pub sky_rotation: f32,
 }
 
 #[repr(C)]
@@ -855,6 +868,12 @@ pub unsafe extern "C" fn tn_scene_set_environment(
     scene.environment.fog_end = desc.fog_end;
     scene.environment.environment_map = (desc.environment_map != 0).then_some(desc.environment_map);
     scene.environment.environment_intensity = desc.environment_intensity;
+    scene.environment.sky = crate::scene::SkyMode::from_u32(desc.sky);
+    scene.environment.sun_direction = desc.sun_direction.into();
+    scene.environment.sky_intensity = desc.sky_intensity;
+    scene.environment.sky_haze = desc.sky_haze;
+    scene.environment.sky_clouds = desc.sky_clouds;
+    scene.environment.sky_rotation = desc.sky_rotation;
     status::OK
 }
 
@@ -1112,6 +1131,32 @@ pub unsafe extern "C" fn tn_node_get_child(scene: *mut Scene, node: u32, index: 
         .node(node)
         .and_then(|n| n.children().get(index as usize).copied())
         .unwrap_or(0)
+}
+
+/// Reads the geometry and material a node draws, `0` for either when it has no
+/// mesh.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_get_mesh(
+    scene: *mut Scene,
+    node: u32,
+    out_geometry: *mut u32,
+    out_material: *mut u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(node) = scene.node(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+    let (geometry, material) = node.mesh.map_or((0, 0), |mesh| (mesh.geometry, mesh.material));
+    unsafe {
+        if !out_geometry.is_null() {
+            *out_geometry = geometry;
+        }
+        if !out_material.is_null() {
+            *out_material = material;
+        }
+    }
+    status::OK
 }
 
 #[unsafe(no_mangle)]
@@ -1380,6 +1425,164 @@ pub unsafe extern "C" fn tn_geometry_compute_tangents(scene: *mut Scene, geometr
     }
 }
 
+// ------------------------------------------------------------- morph targets
+
+/// Number of blend shapes on a geometry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_morph_target_count(scene: *mut Scene, geometry: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(geometry) = scene.geometry(geometry) else {
+        set_last_error("invalid geometry handle");
+        return status::INVALID_HANDLE;
+    };
+    geometry.morph.as_ref().map_or(0, |morph| morph.len()) as i32
+}
+
+/// Name of one blend shape, as the asset named it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_morph_target_name(
+    scene: *mut Scene,
+    geometry: u32,
+    index: u32,
+    buffer: *mut c_char,
+    capacity: i32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(geometry) = scene.geometry(geometry) else {
+        set_last_error("invalid geometry handle");
+        return status::INVALID_HANDLE;
+    };
+    let name = geometry
+        .morph
+        .as_ref()
+        .map_or("", |morph| morph.name(index as usize));
+    unsafe { copy_string(name, buffer, capacity) }
+}
+
+/// Adds a blend shape built in code. `positions` and `normals` hold one delta
+/// per vertex; `normals` may be null, and then shading follows the rest pose.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_add_morph_target(
+    scene: *mut Scene,
+    geometry: u32,
+    name: *const c_char,
+    positions: *const crate::math::Vec3,
+    normals: *const crate::math::Vec3,
+    count: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(geometry) = scene.geometry_mut(geometry) else {
+        set_last_error("invalid geometry handle");
+        return status::INVALID_HANDLE;
+    };
+    if positions.is_null() {
+        set_last_error("the position deltas are null");
+        return status::NULL_POINTER;
+    }
+    let vertices = geometry.vertices.len();
+    if count as usize != vertices {
+        set_last_error("a morph target needs one delta per vertex");
+        return status::INVALID_ARGUMENT;
+    }
+
+    let positions = unsafe { std::slice::from_raw_parts(positions, count as usize) }.to_vec();
+    let normals = if normals.is_null() {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(normals, count as usize) }.to_vec()
+    };
+
+    let target = crate::geometry::MorphTarget {
+        name: unsafe { str_from_ptr(name) }.unwrap_or_default().to_string(),
+        positions,
+        normals,
+    };
+    let base = geometry.vertices.clone();
+    let morph = geometry
+        .morph
+        .get_or_insert_with(|| crate::geometry::MorphTargets::new(base, Vec::new()));
+    morph.targets.push(target);
+    // The cached pose no longer matches the target list.
+    morph.applied.clear();
+    (morph.len() - 1) as i32
+}
+
+/// How many blend shape weights a node carries.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_morph_weight_count(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(node) = scene.node(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+    node.morph_weights.len() as i32
+}
+
+/// Sets one blend shape weight. Weights outside 0..1 are allowed: glTF permits
+/// them and they are what over-driven expressions are made of.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_set_morph_weight(
+    scene: *mut Scene,
+    node: u32,
+    index: u32,
+    value: f32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(node) = scene.node_mut(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+    let index = index as usize;
+    if index >= node.morph_weights.len() {
+        node.morph_weights.resize(index + 1, 0.0);
+    }
+    node.morph_weights[index] = value;
+    status::OK
+}
+
+/// Replaces every weight at once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_set_morph_weights(
+    scene: *mut Scene,
+    node: u32,
+    values: *const f32,
+    count: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(node) = scene.node_mut(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+    node.morph_weights.clear();
+    if !values.is_null() && count > 0 {
+        node.morph_weights
+            .extend_from_slice(unsafe { std::slice::from_raw_parts(values, count as usize) });
+    }
+    status::OK
+}
+
+/// Copies the weights out. Returns how many were written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_get_morph_weights(
+    scene: *mut Scene,
+    node: u32,
+    values: *mut f32,
+    capacity: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(node) = scene.node(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+    let count = node.morph_weights.len().min(capacity as usize);
+    if !values.is_null() && count > 0 {
+        unsafe {
+            std::ptr::copy_nonoverlapping(node.morph_weights.as_ptr(), values, count);
+        }
+    }
+    count as i32
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_geometry_get_counts(
     scene: *mut Scene,
@@ -1635,6 +1838,43 @@ pub unsafe extern "C" fn tn_texture_load_memory(
             0
         }
     }
+}
+
+/// Replaces the pixels of an existing texture, keeping its size and format.
+/// The GPU texture is written in place, so a height field or a flow map can be
+/// updated every frame without reallocating anything.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_update(
+    scene: *mut Scene,
+    texture: u32,
+    pixels: *const u8,
+    length: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if pixels.is_null() {
+        set_last_error("pixel buffer is null");
+        return status::NULL_POINTER;
+    }
+    let Some(target) = scene.texture_mut(texture) else {
+        set_last_error("invalid texture handle");
+        return status::INVALID_HANDLE;
+    };
+    let expected = (target.width as usize)
+        .saturating_mul(target.height as usize)
+        .saturating_mul(target.format.bytes_per_pixel() as usize);
+    if length as usize != expected {
+        set_last_error(&format!(
+            "texture {}x{} expects {expected} bytes, got {length}",
+            target.width, target.height
+        ));
+        return status::INVALID_ARGUMENT;
+    }
+    let data = unsafe { std::slice::from_raw_parts(pixels, length as usize) };
+    target.pixels.clear();
+    target.pixels.extend_from_slice(data);
+    target.compressed = None;
+    target.touch();
+    status::OK
 }
 
 #[unsafe(no_mangle)]

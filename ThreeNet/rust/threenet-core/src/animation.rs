@@ -41,6 +41,9 @@ pub enum TargetPath {
     /// Quaternion (x, y, z, w).
     Rotation = 1,
     Scale = 2,
+    /// Morph target weights: one value per blend shape, so the component count
+    /// comes from the channel rather than the path.
+    Weights = 3,
 }
 
 impl TargetPath {
@@ -48,6 +51,7 @@ impl TargetPath {
         match value {
             1 => TargetPath::Rotation,
             2 => TargetPath::Scale,
+            3 => TargetPath::Weights,
             _ => TargetPath::Translation,
         }
     }
@@ -71,6 +75,64 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// How many weights one key of a morph channel holds.
+    pub fn weight_count(&self) -> usize {
+        if self.times.is_empty() || self.path != TargetPath::Weights {
+            return 0;
+        }
+        let stride = self.values.len() / self.times.len();
+        if self.interpolation == Interpolation::CubicSpline {
+            stride / 3
+        } else {
+            stride
+        }
+    }
+
+    /// Samples a morph weight channel, which carries as many values per key as
+    /// the mesh has targets - too many for the fixed size [`Channel::sample`].
+    pub fn sample_weights(&self, time: f32, out: &mut Vec<f32>) {
+        let count = self.weight_count();
+        out.clear();
+        if count == 0 {
+            return;
+        }
+        let stride = if self.interpolation == Interpolation::CubicSpline { count * 3 } else { count };
+        let middle = if self.interpolation == Interpolation::CubicSpline { count } else { 0 };
+        let keys = self.times.len();
+
+        let value_at = |key: usize, out: &mut Vec<f32>| {
+            let start = key * stride + middle;
+            out.extend_from_slice(&self.values[start..start + count]);
+        };
+
+        if keys == 1 || time <= self.times[0] {
+            value_at(0, out);
+            return;
+        }
+        if time >= self.times[keys - 1] {
+            value_at(keys - 1, out);
+            return;
+        }
+
+        let next = self.times.partition_point(|t| *t <= time).min(keys - 1);
+        let key = next - 1;
+        let span = (self.times[next] - self.times[key]).max(1.0e-6);
+        let u = ((time - self.times[key]) / span).clamp(0.0, 1.0);
+
+        if self.interpolation == Interpolation::Step {
+            value_at(key, out);
+            return;
+        }
+
+        // Cubic splines fall back to a straight line between the key values,
+        // which is accurate enough for weights and keeps the maths in one place.
+        for component in 0..count {
+            let a = self.values[key * stride + middle + component];
+            let b = self.values[next * stride + middle + component];
+            out.push(a + (b - a) * u);
+        }
+    }
+
     /// Samples the channel at `time` (clamped to the key range).
     pub fn sample(&self, time: f32) -> [f32; 4] {
         let components = self.path.components();
@@ -205,6 +267,7 @@ impl Scene {
     pub fn update_animations(&mut self, delta: f32) {
         // ------------------------------------------------------------ players
         let mut poses: Vec<(NodeId, TargetPath, [f32; 4], f32)> = Vec::new();
+        let mut weight_poses: Vec<(NodeId, Vec<f32>, f32)> = Vec::new();
         let player_ids: Vec<PlayerId> = self.players.iter().map(|(id, _)| id).collect();
         for id in player_ids {
             let Some(player) = self.players.get(id).copied() else {
@@ -226,8 +289,17 @@ impl Scene {
                 }
             }
             if player.weight > 0.0 {
+                let blend = player.weight.min(1.0);
                 for channel in &clip.channels {
-                    poses.push((channel.target, channel.path, channel.sample(time), player.weight.min(1.0)));
+                    if channel.path == TargetPath::Weights {
+                        let mut sampled = Vec::new();
+                        channel.sample_weights(time, &mut sampled);
+                        if !sampled.is_empty() {
+                            weight_poses.push((channel.target, sampled, blend));
+                        }
+                    } else {
+                        poses.push((channel.target, channel.path, channel.sample(time), blend));
+                    }
                 }
             }
             if let Some(stored) = self.players.get_mut(id) {
@@ -253,8 +325,22 @@ impl Scene {
                     let target = Quat::from_array(value).normalize();
                     transform.rotation = if weight >= 1.0 { target } else { transform.rotation.slerp(target, weight) };
                 }
+                // Weights never reach here: they are collected separately.
+                TargetPath::Weights => {}
             }
             touched.push(node_id);
+        }
+
+        for (node_id, sampled, blend) in weight_poses {
+            let Some(node) = self.nodes.get_mut(node_id) else {
+                continue;
+            };
+            if node.morph_weights.len() < sampled.len() {
+                node.morph_weights.resize(sampled.len(), 0.0);
+            }
+            for (current, target) in node.morph_weights.iter_mut().zip(sampled) {
+                *current += (target - *current) * blend;
+            }
         }
         touched.sort_unstable();
         touched.dedup();
@@ -262,6 +348,35 @@ impl Scene {
             self.mark_dirty(node);
         }
         self.update_world_transforms();
+
+        // -------------------------------------------------------- blend shapes
+        let morphed: Vec<(NodeId, u32)> = self
+            .nodes
+            .iter()
+            .filter_map(|(id, node)| {
+                let mesh = node.mesh?;
+                (!node.morph_weights.is_empty()).then_some((id, mesh.geometry))
+            })
+            .collect();
+
+        for (node_id, geometry_id) in morphed {
+            let Some(weights) = self.nodes.get(node_id).map(|node| node.morph_weights.clone()) else {
+                continue;
+            };
+            let skinned_mesh = self
+                .nodes
+                .get(node_id)
+                .and_then(|node| node.mesh)
+                .is_some_and(|mesh| mesh.skin.is_some());
+            let Some(geometry) = self.geometries.get_mut(geometry_id) else {
+                continue;
+            };
+            if geometry.apply_morph(&weights) && !skinned_mesh {
+                // The skinning pass below does this for skinned meshes.
+                geometry.compute_bounds();
+                geometry.touch();
+            }
+        }
 
         // ----------------------------------------------------------- skinning
         let skinned: Vec<(NodeId, u32, SkinId)> = self

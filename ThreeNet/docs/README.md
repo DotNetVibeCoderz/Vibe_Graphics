@@ -5,7 +5,8 @@
 | [getting-started.md](getting-started.md) | Install, build, first scene, running the samples |
 | [architecture.md](architecture.md) | Rust core, C ABI, .NET binding, rendering pipeline, threading |
 | [api-reference.md](api-reference.md) | The public C# API |
-| [advanced-rendering.md](advanced-rendering.md) | Custom shaders, deferred, DoF / motion blur, animation, FBX, KTX2 / Basis, streaming and cache |
+| [advanced-rendering.md](advanced-rendering.md) | Custom shaders, the sky, deferred, DoF / motion blur, animation and morph targets, FBX, KTX2 / Basis, streaming and cache |
+| [effects.md](effects.md) | Simulated water with caustics, volumetric fire, and the particle system |
 | [interactivity.md](interactivity.md) | Node pointer events, native HUD overlay, gamepads |
 | [extensions.md](extensions.md) | Physics (Rapier), spatial audio, networking, OpenXR probe and stereo cameras |
 | [platforms.md](platforms.md) | Runtimes (Windows, Linux, macOS, Android, iOS, browser), build features, mobile and web builds |

@@ -12,6 +12,8 @@ struct Frame {
     misc: vec4<f32>,
     screen: vec4<f32>,
     debug: vec4<f32>,
+    sky_sun: vec4<f32>,
+    sky_params: vec4<f32>,
 };
 
 struct ObjectData {

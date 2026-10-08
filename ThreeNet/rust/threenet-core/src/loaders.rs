@@ -191,6 +191,62 @@ fn build_gltf(
                     bind_pose: geometry.vertices.clone(),
                 });
             }
+
+            // ------------------------------------------------- morph targets
+            // glTF stores blend shapes as deltas per primitive. Names live in
+            // the mesh `extras` as `targetNames`, which is where every exporter
+            // puts them even though the format does not require it.
+            let target_names: Vec<String> = mesh
+                .extras()
+                .as_ref()
+                .and_then(|extras| serde_json::from_str::<serde_json::Value>(extras.get()).ok())
+                .and_then(|value| {
+                    value.get("targetNames").and_then(|names| {
+                        names.as_array().map(|list| {
+                            list.iter()
+                                .map(|name| name.as_str().unwrap_or_default().to_string())
+                                .collect()
+                        })
+                    })
+                })
+                .unwrap_or_default();
+
+            let mut targets = Vec::new();
+            for (index, target) in reader.read_morph_targets().enumerate() {
+                let (positions, normals, _tangents) = target;
+                let positions: Vec<crate::math::Vec3> = positions
+                    .map(|p| p.map(crate::math::Vec3::from_array).collect())
+                    .unwrap_or_default();
+                let normals: Vec<crate::math::Vec3> = normals
+                    .map(|n| n.map(crate::math::Vec3::from_array).collect())
+                    .unwrap_or_default();
+                if positions.is_empty() && normals.is_empty() {
+                    continue;
+                }
+                targets.push(crate::geometry::MorphTarget {
+                    name: target_names
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_else(|| format!("target {index}")),
+                    positions,
+                    normals,
+                });
+            }
+
+            if !targets.is_empty() {
+                log::debug!(
+                    "glTF mesh '{}' has {} morph targets",
+                    geometry.name,
+                    targets.len()
+                );
+                let base = geometry
+                    .skin
+                    .as_ref()
+                    .map(|skin| skin.bind_pose.clone())
+                    .unwrap_or_else(|| geometry.vertices.clone());
+                geometry.morph = Some(crate::geometry::MorphTargets::new(base, targets));
+            }
+
             let geometry_id = scene.add_geometry(geometry);
             result.geometries.push(geometry_id);
 
@@ -278,7 +334,9 @@ fn build_gltf(
                 Some(gltf::animation::util::ReadOutputs::Scales(values)) => {
                     (crate::animation::TargetPath::Scale, values.flatten().collect())
                 }
-                // Morph target weights are not supported yet.
+                Some(gltf::animation::util::ReadOutputs::MorphTargetWeights(values)) => {
+                    (crate::animation::TargetPath::Weights, values.into_f32().collect())
+                }
                 _ => continue,
             };
             clip.channels.push(crate::animation::Channel {
@@ -326,11 +384,22 @@ fn import_gltf_node(
     if let Some(mesh) = node.mesh()
         && let Some(primitives) = meshes.get(mesh.index())
     {
+        // Starting weights come from the node first, then the mesh, as glTF says.
+        let starting_weights: Vec<f32> = node
+            .weights()
+            .or_else(|| mesh.weights())
+            .map(|weights| weights.to_vec())
+            .unwrap_or_default();
+
         match primitives.len() {
             0 => {}
             // A single primitive lives directly on the node.
             1 => {
                 let (geometry, material) = primitives[0];
+                let target_count = scene
+                    .geometry(geometry)
+                    .and_then(|g| g.morph.as_ref())
+                    .map_or(0, |morph| morph.len());
                 if let Some(target) = scene.node_mut(id) {
                     target.mesh = Some(crate::scene::MeshBinding {
                         geometry,
@@ -339,12 +408,26 @@ fn import_gltf_node(
                         receive_shadow: true,
                         skin: None,
                     });
+                    if target_count > 0 {
+                        target.morph_weights = starting_weights.clone();
+                        target.morph_weights.resize(target_count, 0.0);
+                    }
                 }
             }
             // Several primitives become child nodes so each keeps its material.
             _ => {
                 for (geometry, material) in primitives.iter().copied() {
                     let child = scene.add_mesh(Some(id), geometry, material)?;
+                    let target_count = scene
+                        .geometry(geometry)
+                        .and_then(|g| g.morph.as_ref())
+                        .map_or(0, |morph| morph.len());
+                    if target_count > 0
+                        && let Some(target) = scene.node_mut(child)
+                    {
+                        target.morph_weights = starting_weights.clone();
+                        target.morph_weights.resize(target_count, 0.0);
+                    }
                     result.nodes.push(child);
                 }
             }

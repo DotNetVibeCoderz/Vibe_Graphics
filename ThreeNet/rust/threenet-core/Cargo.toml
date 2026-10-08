@@ -28,7 +28,10 @@ xr = ["dep:openxr"]
 bytemuck = { version = "1.25.2", features = ["derive"] }
 env_logger = "0.11.11"
 glam = { version = "0.33.7", features = ["bytemuck"] }
-gltf = { version = "1.4.1", features = ["import", "utils", "names"] }
+# `extras` carries the blend shape names every exporter writes as
+# `mesh.extras.targetNames`; without it the targets arrive unnamed.
+gltf = { version = "1.4.1", features = ["import", "utils", "names", "extras"] }
+serde_json = "1"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "bmp", "tga"] }
 log = "0.4.34"
 # zlib for compressed FBX arrays and KTX2 supercompression.

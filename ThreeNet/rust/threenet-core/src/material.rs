@@ -38,6 +38,10 @@ pub enum AlphaMode {
     Mask = 1,
     /// Sorted back to front and alpha blended.
     Blend = 2,
+    /// Sorted back to front and added to what is already there. Fire, sparks
+    /// and glows read as light rather than as paint, so they never darken the
+    /// background and never need to be sorted among themselves.
+    Additive = 3,
 }
 
 impl AlphaMode {
@@ -45,8 +49,15 @@ impl AlphaMode {
         match value {
             1 => AlphaMode::Mask,
             2 => AlphaMode::Blend,
+            3 => AlphaMode::Additive,
             _ => AlphaMode::Opaque,
         }
+    }
+
+    /// Whether this mode has to be drawn in the sorted transparent pass.
+    #[inline]
+    pub fn is_blended(self) -> bool {
+        matches!(self, AlphaMode::Blend | AlphaMode::Additive)
     }
 }
 
@@ -86,6 +97,9 @@ pub struct MaterialTextures {
     pub metallic_roughness: Option<TextureId>,
     pub emissive: Option<TextureId>,
     pub occlusion: Option<TextureId>,
+    /// A slot the built-in shading never reads, for custom shaders to sample
+    /// however they like: a wave height field, a flow map, a gradient ramp.
+    pub custom: Option<TextureId>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,8 +131,8 @@ pub struct Material {
     pub textures: MaterialTextures,
     /// Custom shader hooks (`None` = built-in shading).
     pub shader: Option<ShaderId>,
-    /// Eight free parameters readable by custom shaders as `custom0` / `custom1`.
-    pub custom: [f32; 8],
+    /// Sixteen free parameters readable by custom shaders as `custom0`..`custom3`.
+    pub custom: [f32; 16],
     pub(crate) version: u32,
 }
 
@@ -148,7 +162,7 @@ impl Default for Material {
             render_order: 0,
             textures: MaterialTextures::default(),
             shader: None,
-            custom: [0.0; 8],
+            custom: [0.0; 16],
             version: 1,
         }
     }
@@ -175,7 +189,7 @@ impl Material {
 
     #[inline]
     pub fn is_transparent(&self) -> bool {
-        self.alpha_mode == AlphaMode::Blend || self.base_color.w < 1.0
+        self.alpha_mode.is_blended() || self.base_color.w < 1.0
     }
 
     /// Marks the material dirty so its GPU uniform and bind group are rebuilt.

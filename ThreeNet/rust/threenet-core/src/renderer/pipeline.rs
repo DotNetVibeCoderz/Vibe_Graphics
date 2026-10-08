@@ -45,6 +45,19 @@ impl Layouts {
             },
             count: None,
         };
+        // A slot that takes any float texture, filterable or not, and so can
+        // hold an Rgba32Float height field. Nothing may `textureSample` it; the
+        // effect shaders `textureLoad` it and interpolate themselves.
+        let raw_texture = |binding: u32| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
         let sampler = |binding: u32| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::FRAGMENT,
@@ -113,6 +126,10 @@ impl Layouts {
                 texture(4),
                 texture(5),
                 sampler(6),
+                // Free slot: the built-in shading never reads it, custom shaders
+                // read it as `custom_texture`. The vertex stage needs it too,
+                // because that is where a water surface is displaced.
+                raw_texture(7),
             ],
         });
 
@@ -134,6 +151,43 @@ impl Layouts {
     }
 }
 
+/// How a pipeline writes into the colour target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Blend {
+    /// Writes the fragment as it is.
+    Opaque,
+    /// `src * a + dst * (1 - a)`, the usual transparency.
+    Alpha,
+    /// `src * a + dst`: light added to the frame, never subtracted.
+    Additive,
+}
+
+impl Blend {
+    fn state(self) -> Option<wgpu::BlendState> {
+        match self {
+            Blend::Opaque => None,
+            Blend::Alpha => Some(wgpu::BlendState::ALPHA_BLENDING),
+            Blend::Additive => Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+            }),
+        }
+    }
+
+    #[inline]
+    fn is_blended(self) -> bool {
+        !matches!(self, Blend::Opaque)
+    }
+}
+
 /// Which pass a scene pipeline renders.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PipelinePass {
@@ -152,7 +206,7 @@ pub struct PipelineKey {
     pub pass: PipelinePass,
     pub topology: Topology,
     pub cull: CullMode,
-    pub blend: bool,
+    pub blend: Blend,
     pub depth_write: bool,
     pub depth_test: bool,
     pub wireframe: bool,
@@ -171,7 +225,11 @@ impl PipelineKey {
         format: wgpu::TextureFormat,
         shader: Option<&CustomShader>,
     ) -> Self {
-        let blend = material.is_transparent();
+        let blend = match material.alpha_mode {
+            crate::material::AlphaMode::Additive => Blend::Additive,
+            _ if material.is_transparent() => Blend::Alpha,
+            _ => Blend::Opaque,
+        };
         let shader_id = if shader.is_some() { material.shader.unwrap_or(0) } else { 0 };
         Self {
             pass: PipelinePass::Forward,
@@ -179,7 +237,7 @@ impl PipelineKey {
             cull: material.cull_mode,
             blend,
             // Transparent surfaces must not occlude each other.
-            depth_write: material.depth_write && !blend,
+            depth_write: material.depth_write && !blend.is_blended(),
             depth_test: material.depth_test,
             wireframe: material.wireframe,
             samples,
@@ -192,7 +250,7 @@ impl PipelineKey {
     /// The deferred G-buffer variant of this key (single sample, no blending).
     pub fn gbuffer(mut self) -> Self {
         self.pass = PipelinePass::GBuffer;
-        self.blend = false;
+        self.blend = Blend::Opaque;
         self.samples = 1;
         self.format = GBUFFER_FORMATS[0];
         self
@@ -266,7 +324,7 @@ impl PipelineCache {
         let pipeline_layout = &self.pipeline_layout;
         self.pipelines.entry(key).or_insert_with(|| {
             let wireframe = key.wireframe && polygon_mode_line;
-            let blend = key.blend.then_some(wgpu::BlendState::ALPHA_BLENDING);
+            let blend = key.blend.state();
             let forward_target = [Some(wgpu::ColorTargetState {
                 format: key.format,
                 blend,

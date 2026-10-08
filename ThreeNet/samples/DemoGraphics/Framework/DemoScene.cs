@@ -262,6 +262,20 @@ public abstract class DemoScene
 
     // ------------------------------------------------------ scene authoring
 
+    /// <summary>
+    /// Drops everything declared so far, for a scene whose knobs depend on what
+    /// it just loaded - blend shape names, for instance, are only known once the
+    /// model is open. Call it at the top of <c>OnBuild</c> before redeclaring.
+    /// </summary>
+    protected void ResetDeclarations()
+    {
+        _parameters.Clear();
+        _byId.Clear();
+        _presets.Clear();
+        _actions.Clear();
+        ActivePreset = null;
+    }
+
     /// <summary>Registers the parameters this scene exposes, in sheet order.</summary>
     protected void Declare(params DemoParameter[] parameters)
     {

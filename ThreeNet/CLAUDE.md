@@ -55,6 +55,10 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
   and `ThreeNetRuntime.ExpectedAbiVersion`, rebuild the Rust core (a stale DLL causes silent struct mismatches).
 - `src/ThreeNet.Native`: MSBuild packaging; copies `rust/target/release/threenet_core.*` to
   `runtimes/<rid>/native`. `NativeLibraryResolver` also probes the repo's `rust/target`.
+- `src/ThreeNet/Effects`: water, fire and particles on top of the public API - `WaterSimulation` (CPU wave
+  equation height field published as an `Rgba32Float` texture), `WaterSurface` (mesh + material + caustics
+  floor), `FireEffect` (ray marched volume), `ParticleEffect` (CPU sprites), and `EffectShaders` (the WGSL).
+  See `docs/effects.md`.
 - `src/ThreeNet.Avalonia`: `ThreeNetView` renders offscreen (BGRA) and blits to a `WriteableBitmap`;
   `OrbitController`.
 - `samples/ThreeNet.Samples.MotoCross` and `apps/HomeComplexCad`: larger showcase apps; Rodin generated GLBs live
@@ -62,13 +66,17 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 - `apps/ThreeGallery`: each `Samples/*.cs` is embedded and shown as live source; register new samples in `SampleCatalog`.
 - `samples/DemoGraphics`: the graphics bench. `Framework/DemoScene.cs` is the contract every scene follows
   (parameters declared as data, presets, camera path, metrics); `Framework/ShaderHooks.cs` holds the WGSL for
-  water, sky, foliage, terrain, particles and neon; `Diagnostics/` has the frame log, benchmark runner and
+  Gerstner water, foliage, terrain and neon (the sky and the particle sprites come from the library now);
+  `Diagnostics/` has the frame log, benchmark runner and
   capture. Register a scene in `SceneCatalog.All`, then verify with `--check`.
 - `apps/ThreeEditor`: scene editor on `ThreeNet.Scenes.SceneDocument` (JSON scenes). `EditorSession` owns the
   document, the live scene, selection, undo (JSON snapshots) and plugins; `MainWindow` builds the inspector in
   code. Plugins (`ThreeNet.Plugins`) load from `plugins/` next to the executable; the example is
   `samples/ThreePlugin.Sample`. Capture editor screenshots headlessly with Avalonia.Headless + Skia, never by
   grabbing the desktop.
+- `tools/blender`: headless Blender scripts for assets the repository cannot ship -
+  `face-expressions.py` authors the blend shapes the facial expression demo needs
+  (`blender --background --python tools/blender/face-expressions.py -- <in.glb> <out.glb>`).
 - `apps/ThreeAppGen`: Semantic Kernel (`Services/KernelFactory.cs` picks OpenAI / Azure OpenAI / Claude via
   Anthropic.SDK / Gemini / Ollama and builds provider-specific execution settings), `ChatService` (Jack, tools in
   `Plugins/`), `ProjectService` (templates, dotnet CLI), settings in `app.config` via `AppSettings`.
@@ -102,6 +110,10 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
   compressed test files with `cargo test --test compressed -- --ignored`.
 - Arena ids are reused after removal: anything keyed by a texture id (streaming, cache) must be forgotten in
   `Scene::remove_texture`.
+- `Rgba32Float` is not filterable on most adapters. The material's free texture slot (binding 7,
+  `custom_texture`) is declared non-filterable for that reason: `textureLoad` it, never `textureSample`.
+- The built-in plane geometry stands on XY facing +Z. Anything that wants a ground plane builds its own
+  (`WaterSurface.BuildGrid`, `Procedural.Ground`), because the vertex hook reads object space x and z.
 - The ThreeGallery `Assets/` folder (RiggedSimple.glb, KTX2/Basis checkers) is copied to the output dir.
 
 ## Conventions

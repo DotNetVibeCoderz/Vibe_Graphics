@@ -2820,7 +2820,7 @@ dependencies = [
 
 [[package]]
 name = "threenet-core"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "ab_glyph",
  "basis-universal",
@@ -2839,6 +2839,7 @@ dependencies = [
  "rapier3d",
  "raw-window-handle",
  "ruzstd",
+ "serde_json",
  "symphonia",
  "texture2ddecoder",
  "thiserror 2.0.20",

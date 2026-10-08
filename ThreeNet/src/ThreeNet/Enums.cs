@@ -21,6 +21,12 @@ public enum AlphaMode : uint
     Mask = 1,
     /// <summary>Sorted back to front and alpha blended.</summary>
     Blend = 2,
+    /// <summary>
+    /// Sorted back to front and added to what is already there. Fire, sparks and
+    /// glows read as light rather than as paint: they never darken what is
+    /// behind them, and they do not need to be sorted among themselves.
+    /// </summary>
+    Additive = 3,
 }
 
 /// <summary>Face culling mode.</summary>
@@ -101,6 +107,24 @@ public enum DebugView : uint
     /// G-buffer does not carry UVs.
     /// </summary>
     Uv = 10,
+}
+
+/// <summary>What fills the pixels no geometry covers.</summary>
+public enum SkyMode : uint
+{
+    /// <summary>The background colour, and nothing else.</summary>
+    Color = 0,
+    /// <summary>
+    /// The equirectangular <see cref="SceneEnvironment.EnvironmentMap"/>, which
+    /// also lights the scene through image based lighting.
+    /// </summary>
+    Texture = 1,
+    /// <summary>
+    /// A sky built from the sun direction: height gradient, horizon haze, a sun
+    /// disc bright enough to bloom, stars at night and an optional cloud sheet.
+    /// It needs no texture, and it lights nothing by itself.
+    /// </summary>
+    Procedural = 2,
 }
 
 /// <summary>Graphics API a renderer ended up on.</summary>

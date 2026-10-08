@@ -35,3 +35,6 @@ Thumbs.db
 # ---- Local tooling (Rodin MCP config and its generation history) ----
 rodin.mcp.json
 Rodin3D_History.json
+
+# Generated from a character the repository does not ship (see tools/blender).
+samples/DemoGraphics/Assets/grandma-expressions.glb

@@ -171,6 +171,31 @@ internal static unsafe partial class NativeMethods
     internal static partial int tn_geometry_compute_tangents(nint scene, uint geometry);
 
     [LibraryImport(Library)]
+    internal static partial int tn_geometry_morph_target_count(nint scene, uint geometry);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_geometry_morph_target_name(nint scene, uint geometry, uint index, byte* buffer, int capacity);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_geometry_add_morph_target(
+        nint scene, uint geometry, string? name, Vector3* positions, Vector3* normals, uint count);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_get_mesh(nint scene, uint node, out uint geometry, out uint material);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_morph_weight_count(nint scene, uint node);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_set_morph_weight(nint scene, uint node, uint index, float value);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_set_morph_weights(nint scene, uint node, float* values, uint count);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_get_morph_weights(nint scene, uint node, float* values, uint capacity);
+
+    [LibraryImport(Library)]
     internal static partial int tn_geometry_get_counts(nint scene, uint geometry, out uint vertexCount, out uint indexCount);
 
     [LibraryImport(Library)]
@@ -214,6 +239,9 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport(Library)]
     internal static partial uint tn_texture_create(nint scene, uint width, uint height, uint format, byte* pixels, uint length);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_texture_update(nint scene, uint texture, byte* pixels, uint length);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint tn_texture_load_file(nint scene, string path, int srgb);

@@ -8,10 +8,10 @@ dotnet run --project samples/DemoGraphics -- --check     # build and render ever
 ![DemoGraphics](images/demographics-coast.png)
 
 An instrument, not a slideshow. DemoGraphics shows what the renderer can do, lets you take each part apart
-while it runs, measures what that costs, and writes the result down. Eleven scenes, five benches, one shared
+while it runs, measures what that costs, and writes the result down. Fifteen scenes, five benches, one shared
 weather state, and a report you can reproduce.
 
-DemoGraphics adalah alat ukur, bukan presentasi: sebelas scene, lima mode kerja, satu keadaan cuaca bersama,
+DemoGraphics adalah alat ukur, bukan presentasi: lima belas scene, lima mode kerja, satu keadaan cuaca bersama,
 dan hasil pengukuran yang bisa diekspor dan diulang.
 
 Made by Gravicode Studios, led by Kang Fadhil.
@@ -41,17 +41,21 @@ only where an axis is meant.
 
 | Code | Scene | What it demonstrates |
 |---|---|---|
-| `COA` | Dawn coast | Gerstner-style water (vertex + surface shader sharing one wave function), procedural sky, terrain splatting, cascaded shadows, fog |
+| `COA` | Dawn coast | Gerstner-style water (vertex + surface shader sharing one wave function), the engine sky, terrain splatting, cascaded shadows, fog |
 | `TOD` | Time of day | A 24 hour clock driving sun arc, sky, exposure and night lighting; point light cube shadows; timelapse |
+| `SKY` | Sky and horizon | The sky pass on sliders - sun, haze, clouds, moon, stars - with a roughness sweep and still water showing what reflects it |
 | `VEG` | Forest and wind | Up to 12 000 trees from a handful of shared geometries, frustum culling, a distance cut-off, wind in a vertex shader |
 | `NEO` | Neon night city | Up to 128 small lights on wet asphalt: the deferred path, emissive signage, bloom, fog |
 | `MAT` | Material museum | A metallic / roughness sweep, named materials, and every channel of one sample on a slider; procedural textures and normal maps |
 | `LGT` | Lighting laboratory | Directional, point, spot, area and ambient light with colour temperature in kelvin; all three shadow paths in one frame |
 | `SHD` | Shadow laboratory | Cascades, spot maps and cube maps with bias, normal bias and softness - including the settings that make them fail |
 | `CAM` | Physical camera | Focal length, aperture, ISO and shutter converted to field of view, depth of field and exposure |
-| `VFX` | Particle laboratory | Fire, smoke and sparks as geometry rewritten every frame, additively blended and lighting the scene |
+| `WAT` | Water simulation | A wave equation on a height field: ripples that spread, reflect and die, caustics on the pool floor, things that float. Click the water |
+| `FIR` | Volumetric fire | A ray marched flame with embers and smoke, and a point light that gutters with it |
+| `VFX` | Particle laboratory | Emitter shapes, curl noise turbulence, attractors and colour over life, on geometry rewritten every frame |
 | `PHY` | Physics yard | Rapier rigid bodies: a brick wall, a ramp, barrels and a kinematic wrecking ball, with contacts counted |
 | `ANM` | Motion | Imported skinned glTF animation beside clips built in code, with the skinning cost on a dial |
+| `FAC` | Facial expressions | Morph targets: one slider per blend shape read off the model, mixed into named expressions, with an idle blink |
 
 Every scene follows the same contract (`Framework/DemoScene.cs`): build, apply parameters, apply the weather,
 update, measure, reset, plus a deterministic camera path for the benchmark. Parameters are declared as data
@@ -90,7 +94,7 @@ time, draw calls, triangles and a stutter count, and export to
 `Documents/ThreeNet/DemoGraphics/benchmark-<timestamp>.json` and `.csv` with the adapter, driver, backend,
 quality profile and internal resolution in the header.
 
-A full pass over the eleven scenes on an Intel UHD 620 at 782x721 internal, for scale: 32 fps on the coast,
+A full pass over the flagship scenes on an Intel UHD 620 at 782x721 internal, for scale: 32 fps on the coast,
 38 in the forest, 25 through the day cycle and 21 in the neon city, where the GPU time per frame is 33.7 ms.
 
 **Capture** writes a PNG beside a JSON sidecar holding the scene, the preset, every parameter, the weather, the
@@ -98,10 +102,13 @@ render settings, the adapter and the frame stats - enough to take the same shot 
 
 ## What the app needed from the library
 
-Three things were added to Three.Net 0.7.0 for this app, and they are part of the public API:
+Everything below was added to Three.Net for this app, and all of it is part of the public API:
 
 | Addition | Why |
 |---|---|
+| `SceneEnvironment.Sky` (0.9.0) | The sky was a dome mesh here, which fog ate into and which polluted the depth prepass. It is a renderer pass now - see [advanced-rendering.md](advanced-rendering.md#the-sky). |
+| `ThreeNet.Effects` (0.9.0) | `WAT`, `FIR` and `VFX` all used to carry their own copy of the water, the fire and the particles. They are library types now - see [effects.md](effects.md). |
+| Morph targets (0.9.0) | `FAC` needs blend shapes on an imported character - see [advanced-rendering.md](advanced-rendering.md#morph-targets-blend-shapes). |
 | `RendererOptions.DebugView` | Replaces the shaded image with one channel of the surface - base colour, world normal, roughness, metallic, occlusion, emissive, depth, lighting only, shadow mask, UV. See [advanced-rendering.md](advanced-rendering.md#debug-views). |
 | `RendererOptions.Wireframe` | Draws every surface as lines whatever its material says, so any scene can be inspected as a mesh. |
 | `FrameStats.GpuTimeMs` and `Renderer.Capabilities` | GPU frame timing from timestamp queries, and what the adapter actually supports, so the app can measure honestly and grey out what is not there. |

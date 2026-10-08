@@ -15,7 +15,6 @@ namespace DemoGraphics.Scenes;
 public sealed class CoastScene : DemoScene
 {
     private readonly List<Node> _palms = [];
-    private SkyDome _sky = null!;
     private Material _water = null!;
     private Material _island = null!;
     private Material _foliage = null!;
@@ -110,8 +109,6 @@ public sealed class CoastScene : DemoScene
 
     protected override void OnBuild()
     {
-        _sky = SkyDome.Add(Scene);
-
         // -------------------------------------------------------------- water
         int cells = (int)P("detail");
         _waterGeometry = Procedural.Ground(Scene, 400f, cells);
@@ -145,8 +142,6 @@ public sealed class CoastScene : DemoScene
 
     protected override void OnApplyEnvironment()
     {
-        _sky.Apply(World);
-
         _sun.Position = World.SunPosition * 90f;
         _sun.LookAt(Vector3.Zero);
         Light sun = _sun.Light!.Value;
@@ -164,6 +159,13 @@ public sealed class CoastScene : DemoScene
         Vector3 horizon = Vector3.Lerp(new Vector3(0.42f, 0.56f, 0.80f), new Vector3(0.022f, 0.035f, 0.085f), World.NightFactor);
         Scene.Environment = Scene.Environment with
         {
+            // The engine draws the sky: a pass at the far plane, so it is never
+            // fogged and never lands in the depth prepass.
+            Sky = SkyMode.Procedural,
+            SunDirection = World.SunPosition,
+            SkyIntensity = 1f,
+            SkyHaze = Math.Clamp(World.FogDensity * 18f, 0.05f, 1f),
+            SkyClouds = World.CloudCover,
             Background = new Vector4(horizon * 0.4f, 1f),
             FogColor = horizon,
             FogDensity = MathF.Max(World.FogDensity, 0.0075f),
@@ -199,8 +201,6 @@ public sealed class CoastScene : DemoScene
 
     public override void Update(float deltaSeconds, double totalSeconds)
     {
-        _sky.Follow(Viewer);
-
         if (B("beacon"))
         {
             // The beam sweeps once every eight seconds.

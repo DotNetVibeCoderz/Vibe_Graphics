@@ -78,7 +78,54 @@ pub struct Geometry {
     pub bounds: Aabb,
     /// Joint indices, weights and bind pose for skinned meshes.
     pub skin: Option<crate::animation::SkinWeights>,
+    /// Blend shapes and the rest pose they move away from.
+    pub morph: Option<MorphTargets>,
     pub(crate) version: u32,
+}
+
+/// One blend shape: what it adds to each vertex at full weight.
+///
+/// Deltas are sparse in practice but stored densely, one entry per vertex, which
+/// keeps the deformation a flat loop. Normals are optional; without them the
+/// shading follows the rest pose.
+#[derive(Debug, Clone, Default)]
+pub struct MorphTarget {
+    pub name: String,
+    pub positions: Vec<Vec3>,
+    pub normals: Vec<Vec3>,
+}
+
+/// The blend shapes of one geometry, plus the pose they deform from.
+#[derive(Debug, Clone, Default)]
+pub struct MorphTargets {
+    /// Vertices with every weight at zero. Skinning, when present, runs after
+    /// this and uses its own bind pose.
+    pub base: Vec<Vertex>,
+    pub targets: Vec<MorphTarget>,
+    /// Weights the vertices currently hold, so an unchanged pose costs nothing.
+    pub(crate) applied: Vec<f32>,
+}
+
+impl MorphTargets {
+    /// Blend shapes over a rest pose. The pose is what every weight of zero
+    /// returns to, so it must be the vertices as they were authored.
+    pub fn new(base: Vec<Vertex>, targets: Vec<MorphTarget>) -> Self {
+        Self { base, targets, applied: Vec::new() }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.targets.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.targets.is_empty()
+    }
+
+    pub fn name(&self, index: usize) -> &str {
+        self.targets.get(index).map_or("", |target| target.name.as_str())
+    }
 }
 
 impl Default for Geometry {
@@ -90,6 +137,7 @@ impl Default for Geometry {
             topology: Topology::TriangleList,
             bounds: Aabb::EMPTY,
             skin: None,
+            morph: None,
             version: 1,
         }
     }
@@ -124,6 +172,63 @@ impl Geometry {
         } else {
             self.indices.len() as u32
         }
+    }
+
+    /// Blends the morph targets into the vertices with the given weights.
+    ///
+    /// Returns false when there is nothing to do, including when the weights
+    /// have not changed since the last call - a 20k vertex face is not worth
+    /// rebuilding every frame for a pose that is standing still.
+    pub fn apply_morph(&mut self, weights: &[f32]) -> bool {
+        let Geometry { vertices, morph, skin, .. } = self;
+        let Some(morph) = morph.as_mut() else {
+            return false;
+        };
+        if morph.targets.is_empty() || morph.base.is_empty() {
+            return false;
+        }
+        if morph.applied.len() == weights.len()
+            && morph
+                .applied
+                .iter()
+                .zip(weights)
+                .all(|(a, b)| (a - b).abs() < 1.0e-4)
+        {
+            return false;
+        }
+
+        // A skinned mesh morphs its bind pose, and the skinning pass deforms
+        // that afterwards. The rest pose lives in `morph.base`, so overwriting
+        // the bind pose here is safe: the next call starts from the base again.
+        let destination: &mut [Vertex] = match skin.as_mut() {
+            Some(skin) => &mut skin.bind_pose,
+            None => vertices,
+        };
+
+        let count = morph.base.len().min(destination.len());
+        for index in 0..count {
+            let base = &morph.base[index];
+            let mut position = Vec3::from_array(base.position);
+            let mut normal = Vec3::from_array(base.normal);
+            for (target, weight) in morph.targets.iter().zip(weights.iter()) {
+                if weight.abs() < 1.0e-4 {
+                    continue;
+                }
+                if let Some(delta) = target.positions.get(index) {
+                    position += *delta * *weight;
+                }
+                if let Some(delta) = target.normals.get(index) {
+                    normal += *delta * *weight;
+                }
+            }
+            let vertex = &mut destination[index];
+            vertex.position = position.to_array();
+            vertex.normal = normal.normalize_or(Vec3::Y).to_array();
+        }
+
+        morph.applied.clear();
+        morph.applied.extend_from_slice(weights);
+        true
     }
 
     pub fn compute_bounds(&mut self) {

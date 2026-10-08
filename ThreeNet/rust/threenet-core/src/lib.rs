@@ -37,7 +37,7 @@ pub use light::{Light, LightKind};
 pub use material::{AlphaMode, Material, ShadingModel};
 pub use math::Transform;
 pub use renderer::{Capabilities, DebugView, RenderPath, Renderer, RendererConfig, ToneMapping};
-pub use scene::{NodeId, Scene};
+pub use scene::{NodeId, Scene, SkyMode};
 
 /// Semantic version of the native core, exposed to the managed layer so it can
 /// verify that the shipped native binary matches the binding surface.
@@ -45,4 +45,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 9;
+pub const ABI_VERSION: u32 = 12;

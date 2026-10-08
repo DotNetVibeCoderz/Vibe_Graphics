@@ -28,6 +28,10 @@ pub struct GpuTexture {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     version: u32,
+    /// Bumped only when the view is replaced, which is what a bind group cares
+    /// about: a texture written in place keeps its generation, so a height
+    /// field that changes every frame does not rebuild a bind group every frame.
+    generation: u32,
 }
 
 #[derive(Debug)]
@@ -373,6 +377,41 @@ impl ResourceCache {
         {
             return;
         }
+        let generation = self.textures.get(&id).map_or(0, |t| t.generation);
+
+        // A texture whose pixels change every frame - a wave height field, a
+        // flow map - keeps its GPU texture and is written in place. Only a
+        // different size, format or mip chain forces a new one.
+        if texture.compressed.is_none()
+            && texture.mip_level_count() == 1
+            && let Some(existing) = self.textures.get_mut(&id)
+            && existing.texture.width() == texture.width
+            && existing.texture.height() == texture.height
+            && existing.texture.format() == texture.format.to_wgpu()
+            && existing.texture.mip_level_count() == 1
+        {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &existing.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &texture.pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(texture.width * texture.format.bytes_per_pixel()),
+                    rows_per_image: Some(texture.height),
+                },
+                wgpu::Extent3d {
+                    width: texture.width,
+                    height: texture.height,
+                    depth_or_array_layers: 1,
+                },
+            );
+            existing.version = texture.version();
+            return;
+        }
 
         if let Some(compressed) = &texture.compressed {
             match crate::compressed::resolve(compressed, texture.width, texture.height, device.features()) {
@@ -454,6 +493,7 @@ impl ResourceCache {
                 view,
                 sampler,
                 version: texture.version(),
+                generation: generation.wrapping_add(1),
             },
         );
     }
@@ -468,6 +508,7 @@ impl ResourceCache {
         format: crate::compressed::CompressedFormat,
         levels: &[Vec<u8>],
     ) {
+        let generation = self.textures.get(&id).map_or(0, |t| t.generation);
         let srgb = texture.format == crate::texture::TextureFormat::Rgba8UnormSrgb;
         // Only the levels a full chain would have, and never more than supplied.
         let max_levels = 32 - texture.width.max(texture.height).leading_zeros();
@@ -526,6 +567,7 @@ impl ResourceCache {
                 view,
                 sampler,
                 version: texture.version(),
+                generation: generation.wrapping_add(1),
             },
         );
     }
@@ -538,11 +580,10 @@ impl ResourceCache {
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
         defaults: &DefaultTextures,
-        scene: &Scene,
         id: MaterialId,
         material: &Material,
     ) {
-        let signature = self.texture_signature(scene, material);
+        let signature = self.texture_signature(material);
         if let Some(existing) = self.materials.get(&id)
             && existing.version == material.version()
             && existing.texture_signature == signature
@@ -577,6 +618,7 @@ impl ResourceCache {
             material.textures.occlusion,
             &defaults.white_linear,
         );
+        let custom = view_or(textures, material.textures.custom, &defaults.white_linear);
         let sampler = material
             .textures
             .base_color
@@ -616,6 +658,10 @@ impl ResourceCache {
                     binding: 6,
                     resource: wgpu::BindingResource::Sampler(sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: wgpu::BindingResource::TextureView(custom),
+                },
             ],
         });
 
@@ -630,7 +676,9 @@ impl ResourceCache {
         );
     }
 
-    fn texture_signature(&self, scene: &Scene, material: &Material) -> u64 {
+    /// Identifies the views a material binds, so the bind group is rebuilt
+    /// when one of them is replaced - not when its pixels merely change.
+    fn texture_signature(&self, material: &Material) -> u64 {
         let mut signature = 0u64;
         for slot in [
             material.textures.base_color,
@@ -638,11 +686,12 @@ impl ResourceCache {
             material.textures.metallic_roughness,
             material.textures.emissive,
             material.textures.occlusion,
+            material.textures.custom,
         ] {
             let value = match slot {
                 Some(id) => {
-                    let version = scene.texture(id).map(|t| t.version()).unwrap_or(0);
-                    ((id as u64) << 32) | version as u64
+                    let generation = self.textures.get(&id).map(|t| t.generation).unwrap_or(0);
+                    ((id as u64) << 32) | generation as u64
                 }
                 None => 0,
             };

@@ -8,6 +8,7 @@ pub mod overlay;
 mod post;
 pub mod resources;
 pub mod shadows;
+pub mod sky;
 pub mod ssao;
 pub mod timing;
 pub mod uniforms;
@@ -25,6 +26,7 @@ use crate::renderer::pipeline::{DEPTH_FORMAT, HDR_FORMAT, Layouts, PipelineCache
 use crate::renderer::post::{PostProcess, PostSettings};
 use crate::renderer::resources::{DefaultTextures, MipmapGenerator, ResourceCache};
 use crate::renderer::shadows::{LightSource, ShadowCaster, ShadowMaps, ShadowSettings};
+use crate::renderer::sky::Sky;
 use crate::renderer::ssao::{GBufferItem, Ssao, SsaoSettings};
 use crate::renderer::timing::GpuTimer;
 use crate::renderer::uniforms::{
@@ -363,6 +365,7 @@ pub struct Renderer {
     shadow_maps: ShadowMaps,
     ssao: Ssao,
     deferred: Deferred,
+    sky: Sky,
     effects: Effects,
     /// View-projection of the previous frame, for motion blur.
     previous_view_projection: Option<Mat4>,
@@ -550,6 +553,7 @@ impl Renderer {
         let shadow_maps = ShadowMaps::new(&device, &layouts.object);
         let ssao = Ssao::new(&device, &queue, &layouts.object);
         let deferred = Deferred::new(&device, &layouts);
+        let sky = Sky::new(&device, &layouts);
         let effects = Effects::new(&device);
         let frame_bind_group = create_frame_bind_group(
             &device,
@@ -603,6 +607,7 @@ impl Renderer {
             shadow_maps,
             ssao,
             deferred,
+            sky,
             effects,
             previous_view_projection: None,
             draw_items: Vec::new(),
@@ -895,6 +900,10 @@ impl Renderer {
         self.stats.shadow_draw_calls = shadow_draw_calls;
 
         // ------------------------------------------------------- scene pass
+        // A debug view shows surface channels, so the sky would only be noise
+        // in the readings.
+        let draw_sky = scene.environment.sky != crate::scene::SkyMode::Color
+            && !self.config.debug_view.is_active();
         let background = scene.environment.background;
         let clear = wgpu::Color {
             r: background[0] as f64,
@@ -968,6 +977,19 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            if draw_sky {
+                // The G-buffer depth already holds the geometry, so the sky lands
+                // exactly where nothing was drawn.
+                self.sky.draw(
+                    &self.device,
+                    &mut encoder,
+                    &self.targets.hdr,
+                    None,
+                    &gbuffer.depth,
+                    &self.frame_bind_group,
+                    1,
+                );
+            }
             self.deferred.light(&mut encoder, &self.targets.hdr, &self.frame_bind_group);
 
             // 3. Transparent (and unlit line/point) geometry, forward shaded on top.
@@ -1015,6 +1037,45 @@ impl Renderer {
                 Some(msaa) => (msaa, Some(&self.targets.hdr)),
                 None => (&self.targets.hdr, None),
             };
+            if draw_sky {
+                // Clear, then fill the whole frame with sky; the geometry pass
+                // below loads that and draws over it.
+                encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("threenet.pass.sky_clear"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: color_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(clear),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.targets.depth,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                self.sky.draw(
+                    &self.device,
+                    &mut encoder,
+                    color_view,
+                    None,
+                    &self.targets.depth,
+                    &self.frame_bind_group,
+                    self.samples,
+                );
+            }
+
+            let load = if draw_sky { wgpu::LoadOp::Load } else { wgpu::LoadOp::Clear(clear) };
+            let depth_load = if draw_sky { wgpu::LoadOp::Load } else { wgpu::LoadOp::Clear(1.0) };
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("threenet.pass.forward"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1022,14 +1083,14 @@ impl Renderer {
                     depth_slice: None,
                     resolve_target,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(clear),
+                        load,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.targets.depth,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        load: depth_load,
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
@@ -1328,6 +1389,7 @@ impl Renderer {
                     material.textures.metallic_roughness,
                     material.textures.emissive,
                     material.textures.occlusion,
+                    material.textures.custom,
                 ]
                 .into_iter()
                 .flatten()
@@ -1377,7 +1439,6 @@ impl Renderer {
                     &self.queue,
                     &self.layouts.material,
                     &self.defaults,
-                    scene,
                     material_id,
                     material,
                 );
@@ -1453,6 +1514,16 @@ impl Renderer {
                 self.config.ssao_direct_strength.clamp(0.0, 1.0),
             ],
             self.config.debug_view as u32,
+            {
+                let sun = scene.environment.sun_direction.normalize_or(Vec3::Y);
+                [sun.x, sun.y, sun.z, scene.environment.sky as u32 as f32]
+            },
+            [
+                scene.environment.sky_intensity,
+                scene.environment.sky_haze,
+                scene.environment.sky_clouds,
+                scene.environment.sky_rotation,
+            ],
         );
         self.queue
             .write_buffer(&self.frame_buffer, 0, bytemuck::bytes_of(&frame));

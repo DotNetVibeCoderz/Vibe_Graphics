@@ -69,9 +69,12 @@ internal struct NativeMaterialDesc
     public uint MetallicRoughnessTexture;
     public uint EmissiveTexture;
     public uint OcclusionTexture;
+    public uint CustomTexture;
     public uint Shader;
     public Vector4 Custom0;
     public Vector4 Custom1;
+    public Vector4 Custom2;
+    public Vector4 Custom3;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -201,6 +204,12 @@ internal struct NativeEnvironmentDesc
     public float FogEnd;
     public uint EnvironmentMap;
     public float EnvironmentIntensity;
+    public uint Sky;
+    public Vector3 SunDirection;
+    public float SkyIntensity;
+    public float SkyHaze;
+    public float SkyClouds;
+    public float SkyRotation;
 }
 
 [StructLayout(LayoutKind.Sequential)]

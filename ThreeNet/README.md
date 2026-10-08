@@ -38,15 +38,15 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 
 | Part | Path | Status |
 |---|---|---|
-| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, depth of field + motion blur, bloom + tone mapping, keyframe/skeletal animation, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
-| .NET 10 binding (`ThreeNet`): scene, node events, HUD, gamepads, physics, audio, UDP networking, stereo | `src/ThreeNet` | working, tested |
+| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, depth of field + motion blur, bloom + tone mapping, procedural sky, keyframe/skeletal animation with morph targets, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
+| .NET 10 binding (`ThreeNet`): scene, node events, HUD, gamepads, physics, audio, UDP networking, stereo, water / fire / particle effects (`ThreeNet.Effects`) | `src/ThreeNet` | working, tested |
 | Native packaging (`ThreeNet.Native`) | `src/ThreeNet.Native` | builds the Rust core automatically |
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
 | **ThreeEditor** - scene editor with inspector, play mode and plugins | `apps/ThreeEditor` | working |
 | **ThreeGallery** - sample gallery with live source | `apps/ThreeGallery` | 20 samples |
 | **ThreeAppGen** - AI code editor (Jack - The Code Bender) + Three.js converter | `apps/ThreeAppGen` | working |
 | **Home Complex CAD Viewer** - housing estate explorer (interiors, day/night, land & building info) | `apps/HomeComplexCad` | working |
-| **DemoGraphics** - graphics bench: gallery, laboratory, benchmark, inspector and sandbox | `samples/DemoGraphics` | 11 scenes |
+| **DemoGraphics** - graphics bench: gallery, laboratory, benchmark, inspector and sandbox | `samples/DemoGraphics` | 15 scenes |
 | Samples | `samples/` | Hello Cube, **Motocross** game, Android smoke test, example plugin, Three.js demo project |
 | Tests | `tests/`, `rust/threenet-core/tests` | Rust, .NET and converter tests |
 
@@ -68,7 +68,7 @@ dotnet run --project samples/ThreeNet.Samples.HelloCube
 # run the sample gallery
 dotnet run --project apps/ThreeGallery
 
-# run the graphics bench (11 scenes, benchmark, debug views)
+# run the graphics bench (15 scenes, benchmark, debug views)
 dotnet run --project samples/DemoGraphics
 
 # run the scene editor
@@ -123,7 +123,7 @@ development log in [Progress.md](Progress.md).
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, depth of field + motion blur, bloom + tone mapping, animasi keyframe/skeletal, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
+| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, depth of field + motion blur, bloom + tone mapping, langit prosedural, animasi keyframe/skeletal dengan morph target, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
 | Binding .NET 10 (`ThreeNet`): scene, event node, HUD, gamepad, fisika, audio, jaringan UDP, stereo | `src/ThreeNet` | berjalan, teruji |
 | Paket native (`ThreeNet.Native`) | `src/ThreeNet.Native` | otomatis mem-build inti Rust |
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |
@@ -131,7 +131,7 @@ development log in [Progress.md](Progress.md).
 | **ThreeGallery** - galeri contoh beserta kode sumbernya | `apps/ThreeGallery` | 20 contoh |
 | **ThreeAppGen** - editor kode AI (Jack - The Code Bender) + konverter Three.js | `apps/ThreeAppGen` | berjalan |
 | **Home Complex CAD Viewer** - penjelajah kompleks perumahan (interior, siang/malam, info tanah & bangunan) | `apps/HomeComplexCad` | berjalan |
-| **DemoGraphics** - bengkel grafis: galeri, laboratorium, benchmark, inspektur dan sandbox | `samples/DemoGraphics` | 11 scene |
+| **DemoGraphics** - bengkel grafis: galeri, laboratorium, benchmark, inspektur dan sandbox | `samples/DemoGraphics` | 15 scene |
 | Contoh | `samples/` | Hello Cube, game **Motocross**, uji Android, contoh plugin, project demo Three.js |
 | Test | `tests/`, `rust/threenet-core/tests` | test Rust, .NET dan konverter |
 
@@ -147,7 +147,7 @@ development log in [Progress.md](Progress.md).
 dotnet build ThreeNet.slnx                                  # build semua (inti Rust ikut di-build)
 dotnet run --project samples/ThreeNet.Samples.HelloCube     # contoh jendela native
 dotnet run --project apps/ThreeGallery                      # galeri contoh
-dotnet run --project samples/DemoGraphics                   # bengkel grafis (11 scene, benchmark, debug view)
+dotnet run --project samples/DemoGraphics                   # bengkel grafis (15 scene, benchmark, debug view)
 dotnet run --project apps/ThreeAppGen                       # app generator
 ```
 
