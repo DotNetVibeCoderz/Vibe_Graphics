@@ -374,6 +374,16 @@ public static class EffectShaders
                 return vec4<f32>(0.0);
             }
 
+            // Turbulence only ever pushes the sample *up* the flame, and the
+            // envelope only narrows with height, so a sample already outside the
+            // envelope at this height can never be inside it afterwards. Testing
+            // that first is exact, and it is what keeps the cost off the empty
+            // corners of the box - the flame is a thin cone inside it.
+            var taper = pow(1.0 - st.y, 0.55);
+            if (st.x >= taper) {
+                return vec4<f32>(0.0);
+            }
+
             // The noise field falls as the fire rises, so the flame climbs.
             var sample_point = point;
             sample_point.y = sample_point.y - (seed + time) * rise;
@@ -384,7 +394,7 @@ public static class EffectShaders
             }
 
             // Envelope: broad at the base, drawn to a point at the top.
-            let taper = pow(1.0 - st.y, 0.55);
+            taper = pow(1.0 - st.y, 0.55);
             let body = 1.0 - smoothstep(taper * 0.25, taper, st.x);
             if (body <= 0.001) {
                 return vec4<f32>(0.0);
@@ -404,7 +414,7 @@ public static class EffectShaders
             var out = surface;
             let center = context.custom0.xyz;
             let size = max(context.custom1.xyz, vec3<f32>(0.001));
-            let steps = 24;
+            let steps = 20;
             // Two fires in different places burn out of step on their own.
             let seed = fract(sin(dot(center.xz, vec2<f32>(12.9898, 78.233))) * 43758.5453) * 20.0;
             let noise_scale = vec3<f32>(context.custom3.x, context.custom3.y, context.custom3.x);
@@ -434,6 +444,11 @@ public static class EffectShaders
                     seed,
                     context.time,
                 );
+                // The core of a flame is already opaque; marching past it only
+                // adds light that will be clamped away.
+                if (accumulated.a >= 1.0) {
+                    break;
+                }
             }
 
             out.albedo = vec3<f32>(0.0);

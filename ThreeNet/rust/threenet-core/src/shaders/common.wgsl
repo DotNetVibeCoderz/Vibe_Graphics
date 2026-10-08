@@ -175,7 +175,16 @@ fn sky_fbm(p: vec2<f32>) -> f32 {
 /// A sky from the sun direction alone: height gradient, horizon haze, forward
 /// scattering around the sun, a sun disc bright enough for bloom, and an
 /// optional cloud sheet.
-fn procedural_sky(direction: vec3<f32>, sun: vec3<f32>, haze: f32, clouds: f32, time: f32) -> vec3<f32> {
+fn procedural_sky(
+    direction: vec3<f32>,
+    sun: vec3<f32>,
+    haze: f32,
+    clouds: f32,
+    time: f32,
+    // 1 draws the sky as it is; towards 0 the small bright things - the discs,
+    // the stars - fade out, which is what a rough reflection of it looks like.
+    sharp: f32,
+) -> vec3<f32> {
     let up = clamp(direction.y, -1.0, 1.0);
     // Night is simply the sun being below the horizon.
     let night = 1.0 - clamp((sun.y + 0.12) / 0.32, 0.0, 1.0);
@@ -195,16 +204,16 @@ fn procedural_sky(direction: vec3<f32>, sun: vec3<f32>, haze: f32, clouds: f32, 
     let warm = mix(vec3<f32>(1.0, 0.42, 0.13), vec3<f32>(1.0, 0.88, 0.68), clamp(sun.y * 2.5, 0.0, 1.0));
     color = color + warm * pow(sun_dot, 5.0) * 0.6 * daylight;
     color = color + warm * pow(sun_dot, 64.0) * 1.4 * daylight;
-    color = color + vec3<f32>(1.0, 0.95, 0.86) * smoothstep(0.99955, 0.99975, sun_dot) * 26.0 * daylight;
+    color = color + vec3<f32>(1.0, 0.95, 0.86) * smoothstep(0.99955, 0.99975, sun_dot) * 26.0 * daylight * sharp;
 
     let moon_dot = max(dot(direction, -sun), 0.0);
-    color = color + vec3<f32>(0.78, 0.84, 1.0) * smoothstep(0.9992, 0.9996, moon_dot) * 7.0 * night;
+    color = color + vec3<f32>(0.78, 0.84, 1.0) * smoothstep(0.9992, 0.9996, moon_dot) * 7.0 * night * sharp;
 
-    if (night > 0.02 && up > -0.02) {
+    if (night > 0.02 && up > -0.02 && sharp > 0.01) {
         let cell = floor(direction.xz * 260.0 / max(abs(direction.y) + 0.35, 0.35));
         let twinkle = sky_hash(cell);
         let spark = step(0.9975, twinkle) * (0.6 + 0.4 * sin(time * 2.0 + twinkle * 40.0));
-        color = color + vec3<f32>(0.9, 0.93, 1.0) * spark * night * 3.0;
+        color = color + vec3<f32>(0.9, 0.93, 1.0) * spark * night * 3.0 * sharp;
     }
 
     if (clouds > 0.01 && up > 0.005) {
@@ -244,9 +253,25 @@ fn sky_color(direction: vec3<f32>) -> vec3<f32> {
             frame.sky_params.y,
             frame.sky_params.z,
             frame.fog_params.z,
+            1.0,
         );
     }
     return color * frame.sky_params.x;
+}
+
+/// The procedural sky as a surface of the given roughness sees it. There is no
+/// mip chain to blur a generated sky with, so the parts that would disappear
+/// into a blur - the sun and moon discs, the stars - are faded out instead.
+fn sky_radiance(direction: vec3<f32>, roughness: f32) -> vec3<f32> {
+    let sky = procedural_sky(
+        direction,
+        normalize(frame.sky_sun.xyz),
+        frame.sky_params.y,
+        frame.sky_params.z,
+        frame.fog_params.z,
+        clamp(1.0 - roughness, 0.0, 1.0),
+    );
+    return sky * frame.sky_params.x;
 }
 
 // ------------------------------------------------------------------ shadows
@@ -432,16 +457,27 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
 
     var ambient = ambient_light * surface.albedo * surface.occlusion;
 
-    // Image based lighting from the equirectangular environment map.
-    if (frame.misc.y > 0.5 && surface.shading_model == SHADING_PBR) {
+    // Image based lighting: from the equirectangular environment map when there
+    // is one, and otherwise from the procedural sky, so a mirror standing under
+    // a generated sky reflects that sky rather than nothing at all.
+    let has_environment = frame.misc.y > 0.5;
+    let has_procedural_sky = frame.sky_sun.w > 1.5;
+    if ((has_environment || has_procedural_sky) && surface.shading_model == SHADING_PBR) {
         let f0 = surface_f0(surface);
         let n_dot_v = max(dot(surface.normal, view), 1e-4);
         let reflected = reflect(-view, surface.normal);
-        let irradiance = sample_environment(surface.normal, 6.0);
-        let prefiltered = sample_environment(reflected, surface.roughness * 6.0);
+        var irradiance: vec3<f32>;
+        var prefiltered: vec3<f32>;
+        if (has_environment) {
+            irradiance = sample_environment(surface.normal, 6.0) * frame.fog_params.w;
+            prefiltered = sample_environment(reflected, surface.roughness * 6.0) * frame.fog_params.w;
+        } else {
+            irradiance = sky_radiance(surface.normal, 1.0);
+            prefiltered = sky_radiance(reflected, surface.roughness);
+        }
         let f = fresnel_schlick_roughness(n_dot_v, f0, surface.roughness);
         let kd = (vec3<f32>(1.0) - f) * (1.0 - surface.metallic);
-        ambient = ambient + (kd * irradiance * surface.albedo + prefiltered * f) * surface.occlusion * frame.fog_params.w;
+        ambient = ambient + (kd * irradiance * surface.albedo + prefiltered * f) * surface.occlusion;
     }
 
     return lit * mix(1.0, ao, frame.screen.w) + ambient + surface.emissive;

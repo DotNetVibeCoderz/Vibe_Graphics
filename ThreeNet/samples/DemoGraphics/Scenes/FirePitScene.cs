@@ -110,6 +110,9 @@ public sealed class FirePitScene : DemoScene
     protected override void OnBuild()
     {
         _torches.Clear();
+        // A fire is worth looking at after dark, and the sky has to agree with
+        // the lighting: the shared clock drives both.
+        World.Hour = 21.5f;
 
         Scene.Environment = SceneEnvironment.Default with
         {

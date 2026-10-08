@@ -126,7 +126,9 @@ public sealed class WaterPoolScene : DemoScene
 
         BuildPool();
 
-        _water = new WaterSurface(Scene, Vector3.Zero, PoolSize, -1.6f, resolution: 160, segments: 160)
+        // 128 cells over 12 m is a ripple every 9 cm, which is finer than the
+        // waves the eye follows; 160 cost a third more for nothing visible.
+        _water = new WaterSurface(Scene, Vector3.Zero, PoolSize, -1.6f, resolution: 128, segments: 128)
         {
             SunDirection = World.SunPosition,
         };
