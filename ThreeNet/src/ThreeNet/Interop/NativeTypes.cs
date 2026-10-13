@@ -249,6 +249,11 @@ internal struct NativeRendererDesc
     public uint MotionBlurSamples;
     public uint DebugView;
     public int Wireframe;
+    public Vector4 ClipPlane0;
+    public Vector4 ClipPlane1;
+    public Vector4 ClipPlane2;
+    public Vector4 ClipPlane3;
+    public uint ClipPlaneCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]

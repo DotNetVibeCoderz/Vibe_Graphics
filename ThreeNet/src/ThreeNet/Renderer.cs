@@ -1,3 +1,4 @@
+using System.Numerics;
 using ThreeNet.Interop;
 
 namespace ThreeNet;
@@ -71,6 +72,18 @@ public struct RendererOptions
     /// (<see cref="GpuCapabilities.WireframeRendering"/>).
     /// </summary>
     public bool Wireframe;
+
+    /// <summary>
+    /// Up to four world space planes that cut the scene away where a fragment
+    /// falls behind them - a section through a model without opening the model.
+    /// Each is <c>(normal.X, normal.Y, normal.Z, distance)</c> with a unit
+    /// normal; a point is kept where <c>dot(normal, point) + distance >= 0</c>.
+    /// </summary>
+    /// <remarks>
+    /// The prepass clips with the colour pass, so SSAO and depth of field never
+    /// occlude against a surface nothing draws.
+    /// </remarks>
+    public Vector4[]? ClipPlanes;
 
     /// <summary>Balanced defaults: 720p, vsync on, 4x MSAA, ACES tone mapping.</summary>
     public static RendererOptions Default => new();
@@ -147,7 +160,15 @@ public struct RendererOptions
         MotionBlurSamples = (uint)Math.Clamp(MotionBlurSamples, 4, 32),
         DebugView = (uint)DebugView,
         Wireframe = Wireframe ? 1 : 0,
+        ClipPlane0 = Plane(0),
+        ClipPlane1 = Plane(1),
+        ClipPlane2 = Plane(2),
+        ClipPlane3 = Plane(3),
+        ClipPlaneCount = (uint)Math.Clamp(ClipPlanes?.Length ?? 0, 0, 4),
     };
+
+    private readonly Vector4 Plane(int index) =>
+        ClipPlanes is not null && index < ClipPlanes.Length ? ClipPlanes[index] : Vector4.Zero;
 }
 
 /// <summary>Counters collected while rendering the last frame.</summary>

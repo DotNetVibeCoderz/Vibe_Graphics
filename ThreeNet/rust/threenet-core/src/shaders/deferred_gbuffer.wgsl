@@ -16,6 +16,9 @@ struct GBufferOutput {
 
 @fragment
 fn fs_gbuffer(input: VertexOutput, @builtin(front_facing) front_facing: bool) -> GBufferOutput {
+    if (is_clipped(input.world_position)) {
+        discard;
+    }
     let surface = material_surface(input, front_facing);
     var out: GBufferOutput;
     out.albedo = vec4<f32>(surface.albedo, surface.metallic);

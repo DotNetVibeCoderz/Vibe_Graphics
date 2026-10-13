@@ -120,7 +120,7 @@ Done in 0.10.0.
 |---|---|---|
 | Instanced rendering (`InstancedMesh`) | ⬜ | Every draw is `draw_indexed(.., 0..1)` today, so a thousand clones are a thousand draws. Needs a per-instance buffer, instance-aware bounds and a decision on how picking reports a hit |
 | LOD | ⬜ | Swap geometry by view distance. Cheap once there is somewhere to hang the levels on a node |
-| Clipping planes | ⬜ | Per material or per renderer; a plane set in the frame uniform and a discard in the surface stage |
+| Clipping planes | ✅ | `RendererOptions.ClipPlanes`, up to four world space planes. Clipped in the forward pass, the deferred G-buffer and the SSAO prepass - the prepass matters, or ambient occlusion and depth of field keep occluding against surfaces nothing draws |
 | Render targets as a public API | ⬜ | The renderer can already draw offscreen, but a scene cannot render into a texture another material samples. This is what `CubeCamera`, planar reflections and portals all need |
 | Cube map textures and `CubeCamera` | ⬜ | The environment map is equirectangular only. Needs a cube texture type, six-face capture, and a cube path in `sample_environment` |
 | PBR extensions: clearcoat, transmission, sheen, iridescence, anisotropy | ⬜ | `MeshPhysicalMaterial` territory. Each is a lobe added to the BRDF plus material slots; transmission also needs the scene colour available to the surface stage |

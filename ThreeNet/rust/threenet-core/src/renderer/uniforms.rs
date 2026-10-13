@@ -36,6 +36,11 @@ pub struct FrameUniform {
     pub sky_sun: [f32; 4],
     /// `x` = intensity, `y` = haze, `z` = cloud cover, `w` = rotation in radians.
     pub sky_params: [f32; 4],
+    /// Up to four world space planes; a fragment is cut away where it falls
+    /// behind any of them. `xyz` = unit normal, `w` = distance from the origin.
+    pub clip_planes: [[f32; 4]; 4],
+    /// `x` = how many of `clip_planes` are live, `yzw` reserved.
+    pub clip_count: [f32; 4],
 }
 
 impl FrameUniform {
@@ -55,6 +60,7 @@ impl FrameUniform {
         debug_view: u32,
         sky_sun: [f32; 4],
         sky_params: [f32; 4],
+        clip_planes: &[[f32; 4]],
     ) -> Self {
         let view_projection = projection * view;
         Self {
@@ -87,6 +93,14 @@ impl FrameUniform {
             debug: [debug_view as f32, 0.0, 0.0, 0.0],
             sky_sun,
             sky_params,
+            clip_planes: {
+                let mut planes = [[0.0f32; 4]; 4];
+                for (slot, plane) in planes.iter_mut().zip(clip_planes) {
+                    *slot = *plane;
+                }
+                planes
+            },
+            clip_count: [clip_planes.len().min(4) as f32, 0.0, 0.0, 0.0],
         }
     }
 }

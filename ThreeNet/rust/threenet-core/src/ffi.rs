@@ -599,6 +599,11 @@ pub struct TnRendererDesc {
     pub debug_view: u32,
     /// Draws every surface as lines regardless of its material.
     pub wireframe: i32,
+    /// Up to four world space planes: `xyz` a unit normal, `w` the distance
+    /// from the origin. A fragment behind any live plane is cut away.
+    pub clip_planes: [TnVec4; 4],
+    /// How many of `clip_planes` are live, 0 to 4.
+    pub clip_plane_count: u32,
 }
 
 impl From<TnRendererDesc> for RendererConfig {
@@ -637,6 +642,8 @@ impl From<TnRendererDesc> for RendererConfig {
             motion_blur_samples: value.motion_blur_samples,
             debug_view: DebugView::from_u32(value.debug_view),
             wireframe: value.wireframe != 0,
+            clip_planes: value.clip_planes.map(|p| [p.x, p.y, p.z, p.w]),
+            clip_plane_count: (value.clip_plane_count as usize).min(4),
         }
     }
 }

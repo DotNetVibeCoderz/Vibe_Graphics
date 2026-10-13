@@ -2,6 +2,9 @@
 
 @fragment
 fn fs_main(input: VertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    if (is_clipped(input.world_position)) {
+        discard;
+    }
     let surface = material_surface(input, front_facing);
     let mode = debug_view();
     if (mode != DEBUG_OFF) {

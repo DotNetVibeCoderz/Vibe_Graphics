@@ -143,7 +143,8 @@ impl Ssao {
                 label: Some("threenet.layout.gbuffer_frame"),
                 entries: &[uniform_entry(
                     0,
-                    wgpu::ShaderStages::VERTEX,
+                    // The fragment stage reads it too, for the clipping planes.
+                    wgpu::ShaderStages::VERTEX_FRAGMENT,
                     size_of::<FrameUniform>(),
                 )],
             });

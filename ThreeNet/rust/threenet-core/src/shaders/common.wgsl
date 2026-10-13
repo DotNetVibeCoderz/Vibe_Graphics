@@ -47,7 +47,26 @@ struct Frame {
     sky_sun: vec4<f32>,
     // x = intensity, y = haze, z = cloud cover, w = rotation
     sky_params: vec4<f32>,
+    // Up to four world space planes: xyz = unit normal, w = distance from the
+    // origin. A fragment behind any live plane is cut away.
+    clip_planes: array<vec4<f32>, 4>,
+    // x = how many planes are live, yzw reserved
+    clip_count: vec4<f32>,
 };
+
+/// True where a fragment falls behind one of the clipping planes. Called at the
+/// top of every fragment stage, before anything is shaded that would be thrown
+/// away - a section through a model without opening the model.
+fn is_clipped(world_position: vec3<f32>) -> bool {
+    let count = i32(frame.clip_count.x);
+    for (var i: i32 = 0; i < count; i = i + 1) {
+        let plane = frame.clip_planes[i];
+        if (dot(plane.xyz, world_position) + plane.w < 0.0) {
+            return true;
+        }
+    }
+    return false;
+}
 
 struct Light {
     // xyz = position, w = kind

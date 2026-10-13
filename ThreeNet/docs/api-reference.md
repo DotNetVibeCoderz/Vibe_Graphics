@@ -89,7 +89,8 @@ lights face -Z.
 `Shadows`, `ShadowMapSize`, `ShadowDistance`, `ShadowCascades`, `ShadowSoftness`,
 `Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`,
 `RenderPath` (`Forward` / `Deferred`), `DepthOfField`, `DofFocusDistance`, `DofFocusRange`, `DofMaxBlur`,
-`MotionBlur`, `MotionBlurStrength`, `MotionBlurSamples`.
+`MotionBlur`, `MotionBlurStrength`, `MotionBlurSamples`, `DebugView`, `Wireframe`,
+`ClipPlanes` (up to four world space planes; see [advanced-rendering.md](advanced-rendering.md#clipping-planes)).
 
 Custom shaders, deferred rendering, DoF / motion blur, animation, FBX, KTX2 / Basis and streaming are
 explained with examples in [advanced-rendering.md](advanced-rendering.md).

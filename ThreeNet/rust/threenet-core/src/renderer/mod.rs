@@ -216,6 +216,12 @@ pub struct RendererConfig {
     /// Draws every surface as lines, whatever its material says. Ignored on
     /// adapters without `POLYGON_MODE_LINE`.
     pub wireframe: bool,
+    /// Up to four world space planes that cut the scene away where a fragment
+    /// falls behind them: `xyz` is a unit normal, `w` the distance from the
+    /// origin. A section through a model without opening the model.
+    pub clip_planes: [[f32; 4]; 4],
+    /// How many of [RendererConfig::clip_planes] are live.
+    pub clip_plane_count: usize,
 }
 
 impl RendererConfig {
@@ -277,6 +283,8 @@ impl Default for RendererConfig {
             motion_blur_samples: 12,
             debug_view: DebugView::Off,
             wireframe: false,
+            clip_planes: [[0.0; 4]; 4],
+            clip_plane_count: 0,
         }
     }
 }
@@ -1524,6 +1532,7 @@ impl Renderer {
                 scene.environment.sky_clouds,
                 scene.environment.sky_rotation,
             ],
+            &self.config.clip_planes[..self.config.clip_plane_count.min(4)],
         );
         self.queue
             .write_buffer(&self.frame_buffer, 0, bytemuck::bytes_of(&frame));

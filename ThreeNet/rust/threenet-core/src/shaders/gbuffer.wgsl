@@ -14,6 +14,9 @@ struct Frame {
     debug: vec4<f32>,
     sky_sun: vec4<f32>,
     sky_params: vec4<f32>,
+    // Kept in step with common.wgsl: this prepass binds the same buffer.
+    clip_planes: array<vec4<f32>, 4>,
+    clip_count: vec4<f32>,
 };
 
 struct ObjectData {
@@ -29,6 +32,7 @@ struct GBufferVertex {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) view_normal: vec3<f32>,
     @location(1) view_depth: f32,
+    @location(2) world_position: vec3<f32>,
 };
 
 @vertex
@@ -44,11 +48,21 @@ fn vs_gbuffer(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>) 
     );
     out.view_normal = (frame.view * vec4<f32>(normal_matrix * normal, 0.0)).xyz;
     out.view_depth = -view_position.z;
+    out.world_position = world.xyz;
     return out;
 }
 
 @fragment
 fn fs_gbuffer(input: GBufferVertex, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    // The prepass has to cut the same geometry away as the colour pass, or SSAO
+    // and depth of field occlude against surfaces nothing draws.
+    let count = i32(frame.clip_count.x);
+    for (var i: i32 = 0; i < count; i = i + 1) {
+        let plane = frame.clip_planes[i];
+        if (dot(plane.xyz, input.world_position) + plane.w < 0.0) {
+            discard;
+        }
+    }
     var normal = normalize(input.view_normal);
     if (!front_facing) {
         normal = -normal;

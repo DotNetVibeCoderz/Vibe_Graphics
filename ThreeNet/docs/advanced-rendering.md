@@ -97,6 +97,24 @@ that SSAO and depth of field read. A pass at the far plane has neither problem a
 The same function lives in the shading library as `sky_color(direction)`, so a custom shader can ask for the
 sky in a direction and get the sky actually overhead - which is how `EffectShaders.Water` reflects it.
 
+## Clipping planes
+
+Up to four world space planes cut the scene away where a fragment falls behind them - a section through a
+model without opening the model.
+
+```csharp
+renderer.Options = renderer.Options with
+{
+    // Keep the half of the scene where x >= 0. A point survives where
+    // dot(normal, point) + distance >= 0.
+    ClipPlanes = [new Vector4(1f, 0f, 0f, 0f)],
+};
+```
+
+The cut is applied in the forward pass, in the deferred G-buffer **and** in the SSAO prepass. That last one
+matters: without it, ambient occlusion and depth of field go on occluding against surfaces nothing draws, and
+the cut face picks up a shadow from the half that is no longer there.
+
 ## Debug views
 
 `RendererOptions.DebugView` replaces the shaded image with one channel of the surface, in both render paths.
