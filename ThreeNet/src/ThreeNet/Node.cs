@@ -189,9 +189,57 @@ public sealed class Node : IEquatable<Node>
         NativeError.Check(NativeMethods.tn_node_attach_mesh(Scene.Handle, Id, geometry.Id, material.Id));
 
     /// <summary>
+    /// Replaces the mesh with a different geometry as the camera gets further
+    /// away. Each level is the geometry to draw and the distance it is used out
+    /// to, nearest first; past the last distance the node is not drawn at all,
+    /// so pass <see cref="float.PositiveInfinity"/> last to keep it forever.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The level is chosen before the bounds are taken, so culling and the
+    /// shadow caster agree with whatever is being drawn. Distance is measured
+    /// from the camera to the node origin, not to the nearest point of the mesh.
+    /// </para>
+    /// <para>
+    /// A null geometry draws nothing, which is how a node is allowed to
+    /// disappear in the distance:
+    /// </para>
+    /// <code>
+    /// node.SetLevelsOfDetail(
+    ///     (detailed, 20f),                  // close up
+    ///     (cheap, 120f),                    // further out
+    ///     (null, float.PositiveInfinity));  // gone past that
+    /// </code>
+    /// </remarks>
+    public unsafe void SetLevelsOfDetail(params (Geometry? Geometry, float Distance)[] levels)
+    {
+        Span<uint> ids = levels.Length <= 16 ? stackalloc uint[levels.Length] : new uint[levels.Length];
+        Span<float> distances = levels.Length <= 16 ? stackalloc float[levels.Length] : new float[levels.Length];
+        for (int i = 0; i < levels.Length; i++)
+        {
+            ids[i] = levels[i].Geometry?.Id ?? 0;
+            distances[i] = levels[i].Distance;
+        }
+
+        fixed (uint* geometries = ids)
+        fixed (float* ranges = distances)
+        {
+            NativeError.Check(NativeMethods.tn_node_set_lod(Scene.Handle, Id, geometries, ranges, (uint)levels.Length));
+        }
+    }
+
+    /// <summary>Drops every level, so the mesh is drawn as it is again.</summary>
+    public unsafe void ClearLevelsOfDetail() =>
+        NativeError.Check(NativeMethods.tn_node_set_lod(Scene.Handle, Id, null, null, 0));
+
+    /// <summary>How many levels of detail this node carries.</summary>
+    public int LevelOfDetailCount => Math.Max(0, NativeMethods.tn_node_lod_count(Scene.Handle, Id));
+
+    /// <summary>
     /// Whether the mesh on this node renders into shadow maps. Defaults to true;
     /// has no effect on nodes without a mesh.
     /// </summary>
+
     public bool CastShadow
     {
         get => (GetShadowFlags() & 1) != 0;

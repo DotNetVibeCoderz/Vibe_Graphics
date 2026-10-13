@@ -222,6 +222,12 @@ internal static unsafe partial class NativeMethods
     internal static partial uint tn_geometry_grid(nint scene, float size, uint divisions);
 
     [LibraryImport(Library)]
+    internal static partial int tn_node_set_lod(nint scene, uint node, uint* geometries, float* distances, uint count);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_lod_count(nint scene, uint node);
+
+    [LibraryImport(Library)]
     internal static partial uint tn_geometry_circle(
         nint scene, float radius, uint segments, float thetaStart, float thetaLength);
 

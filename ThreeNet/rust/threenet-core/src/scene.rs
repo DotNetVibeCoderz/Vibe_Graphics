@@ -131,10 +131,27 @@ pub struct Node {
     /// sharing one morphed geometry cannot hold different expressions - the same
     /// limitation skinning has.
     pub morph_weights: Vec<f32>,
+    /// Levels of detail: the geometry to draw, and the distance it is used out
+    /// to. Sorted near to far; an id of 0 draws nothing, which is how a level
+    /// becomes a disappearance. Empty means the mesh binding is used as it is.
+    pub lod: Vec<(GeometryId, f32)>,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
     pub(crate) world: Mat4,
     pub(crate) world_dirty: bool,
+}
+
+impl Node {
+    /// The geometry for a camera this far away, or None past the last level -
+    /// which is how a node is allowed to disappear entirely in the distance.
+    pub fn lod_geometry(&self, distance: f32) -> Option<GeometryId> {
+        for (geometry, until) in &self.lod {
+            if distance <= *until {
+                return (*geometry != 0).then_some(*geometry);
+            }
+        }
+        None
+    }
 }
 
 impl Default for Node {
@@ -145,6 +162,7 @@ impl Default for Node {
             visible: true,
             layers: 1,
             user_data: 0,
+            lod: Vec::new(),
             mesh: None,
             light: None,
             camera: None,
@@ -372,6 +390,7 @@ impl Scene {
                 camera: node.camera,
                 // A clone starts from the same expression as the original.
                 morph_weights: node.morph_weights.clone(),
+                lod: node.lod.clone(),
                 parent: Some(new_parent),
                 children: Vec::new(),
                 world: Mat4::IDENTITY,

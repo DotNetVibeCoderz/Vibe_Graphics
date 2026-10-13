@@ -1300,9 +1300,19 @@ impl Renderer {
         let mut culled = 0u32;
 
         for (id, node) in scene.nodes() {
-            let Some(binding) = node.mesh else { continue };
+            let Some(mut binding) = node.mesh else { continue };
             if node.layers & camera_layers == 0 || !scene.is_visible_in_hierarchy(id) {
                 continue;
+            }
+            // Level of detail is picked before anything reads the geometry, so
+            // the bounds, the culling and the shadow caster all agree on which
+            // level this frame is drawing.
+            if !node.lod.is_empty() {
+                let distance = (node.world_matrix().w_axis.truncate() - camera_position).length();
+                match node.lod_geometry(distance) {
+                    Some(geometry) => binding.geometry = geometry,
+                    None => continue,
+                }
             }
             let Some(geometry) = scene.geometry(binding.geometry) else {
                 continue;

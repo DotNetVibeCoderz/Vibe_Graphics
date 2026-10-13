@@ -41,6 +41,8 @@ lights face -Z.
 
 - `Node.Clone(parent)` copies a node and its subtree; the copy shares geometry, materials and textures, so
   import a glTF once and clone it for every placement.
+- `Node.SetLevelsOfDetail((geometry, distance), ...)`, `ClearLevelsOfDetail()`, `LevelOfDetailCount` swap the
+  mesh by camera distance; a null geometry draws nothing, so a node can disappear in the distance.
 - `Node.Light` has a getter: `node.Light = node.Light is { } l ? l with { Enabled = false } : null;`
 
 ## Resources

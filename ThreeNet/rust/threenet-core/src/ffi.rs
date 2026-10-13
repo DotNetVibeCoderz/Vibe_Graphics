@@ -1333,7 +1333,57 @@ pub unsafe extern "C" fn tn_node_clear_camera(scene: *mut Scene, node: u32) -> i
     status::OK
 }
 
+/// Sets the levels of detail on a node: `geometries[i]` is drawn out to
+/// `distances[i]` metres from the camera, nearest first. A geometry of 0 draws
+/// nothing, and past the last distance the node disappears - pass
+/// `f32::INFINITY` as the last distance to keep it forever.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_set_lod(
+    scene: *mut Scene,
+    node: u32,
+    geometries: *const u32,
+    distances: *const f32,
+    count: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if count > 0 && (geometries.is_null() || distances.is_null()) {
+        set_last_error("level arrays are null");
+        return status::NULL_POINTER;
+    }
+    let Some(node) = scene.node_mut(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+
+    node.lod.clear();
+    if count > 0 {
+        let geometries = unsafe { std::slice::from_raw_parts(geometries, count as usize) };
+        let distances = unsafe { std::slice::from_raw_parts(distances, count as usize) };
+        node.lod
+            .extend(geometries.iter().copied().zip(distances.iter().copied()));
+        // Near to far whatever order the caller gave, because the lookup takes
+        // the first level whose range the distance falls in.
+        node.lod
+            .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    }
+    status::OK
+}
+
+/// How many levels of detail a node carries.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_lod_count(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.node(node) {
+        Some(node) => node.lod.len() as i32,
+        None => {
+            set_last_error("invalid node handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
 // ------------------------------------------------------------------ geometry
+
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_geometry_create(
