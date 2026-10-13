@@ -2741,6 +2741,10 @@ pub struct TnPlayerDesc {
     pub weight: f32,
     pub looping: i32,
     pub playing: i32,
+    /// Adds the clip on top of the pose instead of replacing it.
+    pub additive: i32,
+    /// The time whose pose counts as neutral for an additive clip.
+    pub reference_time: f32,
 }
 
 impl From<AnimationPlayer> for TnPlayerDesc {
@@ -2751,6 +2755,8 @@ impl From<AnimationPlayer> for TnPlayerDesc {
             weight: value.weight,
             looping: i32::from(value.looping),
             playing: i32::from(value.playing),
+            additive: i32::from(value.additive),
+            reference_time: value.reference_time,
         }
     }
 }
@@ -2762,6 +2768,8 @@ impl TnPlayerDesc {
         player.weight = self.weight.clamp(0.0, 1.0);
         player.looping = self.looping != 0;
         player.playing = self.playing != 0;
+        player.additive = self.additive != 0;
+        player.reference_time = self.reference_time;
     }
 }
 
@@ -4003,8 +4011,78 @@ pub unsafe extern "C" fn tn_audio_remove_clip(engine: *mut crate::audio::AudioEn
     engine.with_mixer(|m| m.remove_clip(clip)) as i32
 }
 
+/// Starts (or resizes) the analysis tap; `size` 0 switches it off. The size is
+/// rounded up to a power of two, and the spectrum has half that many bins.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_set_analysis(engine: *mut crate::audio::AudioEngine, size: u32) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| m.set_analysis(size as usize));
+    status::OK
+}
+
+/// Number of samples the tap keeps, or 0 when analysis is off.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_analysis_size(engine: *mut crate::audio::AudioEngine) -> i32 {
+    let engine = audio_ref!(engine);
+    engine.with_mixer(|m| m.analyser().map_or(0, |a| a.size() as i32))
+}
+
+/// Root mean square of the window: loudness, as a meter would show it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_get_level(engine: *mut crate::audio::AudioEngine) -> f32 {
+    let engine = audio_ref!(engine, 0.0);
+    engine.with_mixer(|m| m.analyser().map_or(0.0, |a| a.level()))
+}
+
+/// Copies the most recent samples, oldest first. Returns the count written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_get_waveform(
+    engine: *mut crate::audio::AudioEngine,
+    out: *mut f32,
+    capacity: u32,
+) -> i32 {
+    let engine = audio_ref!(engine);
+    if out.is_null() {
+        set_last_error("output buffer is null");
+        return status::NULL_POINTER;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, capacity as usize) };
+    engine.with_mixer(|m| match m.analyser() {
+        Some(analyser) => {
+            analyser.waveform(slice);
+            slice.len().min(analyser.size()) as i32
+        }
+        None => 0,
+    })
+}
+
+/// Copies the magnitude of each frequency bin, lowest first. Bin `i` is centred
+/// on `i * sample_rate / size` hertz. Returns the count written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_audio_get_spectrum(
+    engine: *mut crate::audio::AudioEngine,
+    out: *mut f32,
+    capacity: u32,
+) -> i32 {
+    let engine = audio_ref!(engine);
+    if out.is_null() {
+        set_last_error("output buffer is null");
+        return status::NULL_POINTER;
+    }
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, capacity as usize) };
+    engine.with_mixer(|m| match m.analyser_mut() {
+        Some(analyser) => {
+            let bins = slice.len().min(analyser.size() / 2) as i32;
+            analyser.spectrum(slice);
+            bins
+        }
+        None => 0,
+    })
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_audio_play(engine: *mut crate::audio::AudioEngine, desc: *const TnSoundDesc) -> u32 {
+
     let engine = audio_ref!(engine, 0);
     let Some(desc) = (unsafe { desc.as_ref() }) else {
         set_last_error("sound descriptor is null");

@@ -366,6 +366,8 @@ internal record struct NativePlayerDesc
     public float Weight;
     public int Looping;
     public int Playing;
+    public int Additive;
+    public float ReferenceTime;
 }
 
 [StructLayout(LayoutKind.Sequential)]

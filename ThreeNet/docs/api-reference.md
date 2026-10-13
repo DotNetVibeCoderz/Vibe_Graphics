@@ -52,7 +52,11 @@ lights face -Z.
   written into the existing GPU texture), `State` (`TextureState`), `LoadError`, `Destroy()`.
 - `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.
 - `AnimationClip`: `Name`, `Duration`, `AddTranslation`, `AddRotation`, `AddScale`, `AddChannel(node, path, interpolation, times, values)`, `Play(loop)`, `Destroy()`.
-- `AnimationPlayer`: `Time`, `Speed`, `Weight`, `Loop`, `IsPlaying`, `Stop()`.
+- `AnimationPlayer`: `Time`, `Speed`, `Weight`, `Loop`, `IsPlaying`, `Additive`, `ReferenceTime`, `Stop()`.
+- `AnimationMixer`: `FadeTo`, `FadeIn`, `FadeOut`, `CrossFade`, `Update(dt)`, `Active`, `Clear` - eases blend
+  weights on a clock, which is all a cross fade is.
+- `Helpers`: `AddAxes`, `AddBox`, `AddArrow`, `AddCameraFrustum`, `AddSkeleton`, `AddGrid` - line meshes that
+  show what a scene is doing rather than what it looks like.
 - `MaterialOptions` (struct): `Shading`, `AlphaMode`, `CullMode`, `BaseColor`, `Emissive`, `EmissiveIntensity`,
   `Metallic`, `Roughness`, `Specular`, `Shininess`, `Reflectance`, `NormalScale`, `OcclusionStrength`,
   `AlphaCutoff`, `UvScale`, `UvOffset`, `DepthWrite`, `DepthTest`, `Wireframe`, `RenderOrder`, `BaseColorMap`,
@@ -172,13 +176,20 @@ See [interactivity.md](interactivity.md).
   `TriangleMesh`, `ConvexHull`).
 - `AudioEngine`: `Open()`, `CreateOffline(rate)`, `LoadClip`, `CreateClip`, `Play(clip, SoundOptions)`,
   `SetListener`, `Update(scene, listener, dt)`, `Render`, `MasterGain`, `DopplerFactor`, `SpeedOfSound`,
-  `DeviceName`, `SampleRate`. `SoundOptions.Flat/At/On`; `SoundInstance`: `IsPlaying`, `Time`, `Options`,
+  `DeviceName`, `SampleRate`, and the analysis tap: `EnableAnalysis(size)`, `AnalysisSize`, `Level`,
+  `GetWaveform`, `GetSpectrum`. `SoundOptions.Flat/At/On`; `SoundInstance`: `IsPlaying`, `Time`, `Options`,
   `Update`, `Stop`.
 - `ThreeNet.Networking`: `NetworkSession.Host/Connect`, `Update`, `Send`, `Replicate`, `StopReplicating`, `Peers`,
   `LocalPeerId`, events; `NetworkOptions`; `ReplicatedNode`.
 - XR: `XrRuntime.Probe()` → `XrRuntimeInfo`; `Camera.OffAxis`; `StereoRig` (`Apply`, `RenderSideBySide`).
 
 See [extensions.md](extensions.md).
+
+## Geometry generators
+
+Beyond `CreatePlane/Box/Sphere/Cylinder/Cone/Torus/GridGeometry`:
+`CreateCircleGeometry`, `CreateCapsuleGeometry`, `CreateTorusKnotGeometry`, `CreateTubeGeometry`,
+`CreateLatheGeometry`, `CreateExtrudeGeometry`, `CreatePolyhedronGeometry(Polyhedron, radius, detail)`.
 
 ## ThreeNet.Effects
 
@@ -192,6 +203,9 @@ See [extensions.md](extensions.md).
   `Spread`, `Radial`, `Gravity`, `Drag`, `Wind`, `Turbulence`, `Attractors`, `FloorHeight`, `Bounce`,
   `StretchBySpeed`, `Burst`, `Update`, `Upload`, `CreateGeometry`, `GlowMaterial`, `SmokeMaterial`.
 - `EffectShaders`: `Water`, `WaterFloor`, `HeightField`, `Fire`, `Sprite`, `Particle`, `Smoke`.
+- `PointsAndLines`: `BuildPoints`, `BuildLine`, `PointsMaterial`, `LineMaterial`, and the `Points` / `Lines`
+  WGSL. WebGPU draws points and lines one pixel wide, so anything thicker is quads expanded in the vertex
+  shader.
 
 See [effects.md](effects.md).
 

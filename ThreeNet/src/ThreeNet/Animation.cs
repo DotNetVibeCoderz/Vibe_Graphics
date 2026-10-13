@@ -80,7 +80,16 @@ public sealed class AnimationClip : IEquatable<AnimationClip>
     }
 
     /// <summary>Starts playing the clip and returns its player.</summary>
-    public AnimationPlayer Play(bool loop = true, float speed = 1f, float weight = 1f)
+    /// <param name="additive">
+    /// Adds the clip on top of the pose already there instead of replacing it,
+    /// measured against the pose at <paramref name="referenceTime"/>.
+    /// </param>
+    public AnimationPlayer Play(
+        bool loop = true,
+        float speed = 1f,
+        float weight = 1f,
+        bool additive = false,
+        float referenceTime = 0f)
     {
         NativePlayerDesc desc = new()
         {
@@ -89,6 +98,8 @@ public sealed class AnimationClip : IEquatable<AnimationClip>
             Weight = weight,
             Looping = loop ? 1 : 0,
             Playing = 1,
+            Additive = additive ? 1 : 0,
+            ReferenceTime = referenceTime,
         };
         uint id = NativeMethods.tn_animation_play(Scene.Handle, Id, in desc);
         return new AnimationPlayer(Scene, NativeError.CheckHandle(id));
@@ -158,6 +169,24 @@ public sealed class AnimationPlayer
     {
         get => Read().Playing != 0;
         set => Write(Read() with { Playing = value ? 1 : 0 });
+    }
+
+    /// <summary>
+    /// Adds this clip on top of the pose already there instead of replacing it.
+    /// What is added is the clip measured against <see cref="ReferenceTime"/>, so
+    /// a lean, a breath or a recoil can ride on a walk without cancelling it.
+    /// </summary>
+    public bool Additive
+    {
+        get => Read().Additive != 0;
+        set => Write(Read() with { Additive = value ? 1 : 0 });
+    }
+
+    /// <summary>The time whose pose counts as neutral for an additive clip.</summary>
+    public float ReferenceTime
+    {
+        get => Read().ReferenceTime;
+        set => Write(Read() with { ReferenceTime = value });
     }
 
     /// <summary>Removes the player; the pose it applied stays.</summary>

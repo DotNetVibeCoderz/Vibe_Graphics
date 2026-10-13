@@ -193,8 +193,142 @@ pub struct SpatialParams {
     pub lowpass: f32,
 }
 
+/// A tap on the mixer output: the most recent samples, and the spectrum they
+/// make. This is what drives a level meter, a waveform, or anything in a scene
+/// that should move with the music.
 #[derive(Debug)]
+pub struct Analyser {
+    /// Mono sum of the output, newest last.
+    history: Vec<f32>,
+    /// Where the next sample goes; the buffer is a ring.
+    cursor: usize,
+    /// Scratch for the transform, kept so analysis allocates nothing per call.
+    real: Vec<f32>,
+    imaginary: Vec<f32>,
+}
+
+impl Analyser {
+    /// `size` is rounded up to a power of two, which the transform needs.
+    pub fn new(size: usize) -> Self {
+        let size = size.max(64).next_power_of_two();
+        Self {
+            history: vec![0.0; size],
+            cursor: 0,
+            real: vec![0.0; size],
+            imaginary: vec![0.0; size],
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.history.len()
+    }
+
+    /// Takes one frame of interleaved output, summed to mono.
+    fn push(&mut self, frame: &[f32]) {
+        let sum: f32 = frame.iter().sum();
+        let mono = if frame.is_empty() { 0.0 } else { sum / frame.len() as f32 };
+        self.history[self.cursor] = mono;
+        self.cursor = (self.cursor + 1) % self.history.len();
+    }
+
+    /// Copies the most recent samples, oldest first, into `out`.
+    pub fn waveform(&self, out: &mut [f32]) {
+        let size = self.history.len();
+        let count = out.len().min(size);
+        for (i, slot) in out.iter_mut().take(count).enumerate() {
+            // Walk back from the write cursor so the newest sample lands last.
+            let index = (self.cursor + size - count + i) % size;
+            *slot = self.history[index];
+        }
+        for slot in out.iter_mut().skip(count) {
+            *slot = 0.0;
+        }
+    }
+
+    /// Root mean square of the window: loudness, as a meter would show it.
+    pub fn level(&self) -> f32 {
+        if self.history.is_empty() {
+            return 0.0;
+        }
+        let sum: f32 = self.history.iter().map(|s| s * s).sum();
+        (sum / self.history.len() as f32).sqrt()
+    }
+
+    /// Magnitude of each frequency bin, lowest first. `out` takes at most
+    /// `size / 2` bins; bin `i` is centred on `i * sample_rate / size` hertz.
+    pub fn spectrum(&mut self, out: &mut [f32]) {
+        let size = self.history.len();
+        let cursor = self.cursor;
+        for i in 0..size {
+            let sample = self.history[(cursor + i) % size];
+            // A Hann window, or the ends of the buffer ring as a broadband click.
+            let window = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / size as f32).cos();
+            self.real[i] = sample * window;
+            self.imaginary[i] = 0.0;
+        }
+
+        fft(&mut self.real, &mut self.imaginary);
+
+        let bins = out.len().min(size / 2);
+        let scale = 2.0 / size as f32;
+        for (i, slot) in out.iter_mut().take(bins).enumerate() {
+            *slot = (self.real[i] * self.real[i] + self.imaginary[i] * self.imaginary[i]).sqrt() * scale;
+        }
+        for slot in out.iter_mut().skip(bins) {
+            *slot = 0.0;
+        }
+    }
+}
+
+/// In place iterative radix-2 Cooley-Tukey transform. `real` and `imaginary`
+/// must be the same power of two length.
+fn fft(real: &mut [f32], imaginary: &mut [f32]) {
+    let n = real.len();
+    if n < 2 || !n.is_power_of_two() {
+        return;
+    }
+
+    // Bit reversal permutation: the iterative form needs its input shuffled.
+    let mut target = 0usize;
+    for i in 0..n {
+        if target > i {
+            real.swap(i, target);
+            imaginary.swap(i, target);
+        }
+        let mut mask = n >> 1;
+        while target & mask != 0 {
+            target &= !mask;
+            mask >>= 1;
+        }
+        target |= mask;
+    }
+
+    let mut span = 2;
+    while span <= n {
+        let angle = -std::f32::consts::TAU / span as f32;
+        let (step_sin, step_cos) = angle.sin_cos();
+        for start in (0..n).step_by(span) {
+            let (mut factor_real, mut factor_imaginary) = (1.0f32, 0.0f32);
+            for offset in 0..span / 2 {
+                let a = start + offset;
+                let b = a + span / 2;
+                let product_real = real[b] * factor_real - imaginary[b] * factor_imaginary;
+                let product_imaginary = real[b] * factor_imaginary + imaginary[b] * factor_real;
+                real[b] = real[a] - product_real;
+                imaginary[b] = imaginary[a] - product_imaginary;
+                real[a] += product_real;
+                imaginary[a] += product_imaginary;
+                let next_real = factor_real * step_cos - factor_imaginary * step_sin;
+                factor_imaginary = factor_real * step_sin + factor_imaginary * step_cos;
+                factor_real = next_real;
+            }
+        }
+        span <<= 1;
+    }
+}
+
 pub struct Mixer {
+
     pub sample_rate: u32,
     clips: Arena<AudioClip>,
     sources: Arena<Source>,
@@ -203,6 +337,8 @@ pub struct Mixer {
     /// 0 disables the Doppler effect.
     pub doppler_factor: f32,
     pub speed_of_sound: f32,
+    /// Tap on the output; None until analysis is switched on.
+    analyser: Option<Analyser>,
 }
 
 impl Mixer {
@@ -215,7 +351,22 @@ impl Mixer {
             master_gain: 1.0,
             doppler_factor: 1.0,
             speed_of_sound: 343.0,
+            analyser: None,
         }
+    }
+
+    /// Starts (or resizes) the analysis tap. `size` is rounded up to a power of
+    /// two; zero switches it off.
+    pub fn set_analysis(&mut self, size: usize) {
+        self.analyser = (size > 0).then(|| Analyser::new(size));
+    }
+
+    pub fn analyser(&self) -> Option<&Analyser> {
+        self.analyser.as_ref()
+    }
+
+    pub fn analyser_mut(&mut self) -> Option<&mut Analyser> {
+        self.analyser.as_mut()
     }
 
     pub fn add_clip(&mut self, clip: AudioClip) -> ClipId {
@@ -428,6 +579,15 @@ impl Mixer {
                 *sample = sample.signum() * (1.0 - (-(sample.abs() - 1.0) * 2.0).exp() * 0.5).min(1.0);
             }
         }
+
+        // The tap sits at the very end, so what it reports is what a listener
+        // would actually hear - every source, after the master gain.
+        if let Some(analyser) = self.analyser.as_mut() {
+            for frame in output.chunks(channels) {
+                analyser.push(frame);
+            }
+        }
+
         frames
     }
 }

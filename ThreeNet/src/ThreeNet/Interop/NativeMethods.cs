@@ -499,6 +499,21 @@ internal static unsafe partial class NativeMethods
     internal static partial float tn_audio_clip_duration(nint engine, uint clip);
 
     [LibraryImport(Library)]
+    internal static partial int tn_audio_set_analysis(nint engine, uint size);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_analysis_size(nint engine);
+
+    [LibraryImport(Library)]
+    internal static partial float tn_audio_get_level(nint engine);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_get_waveform(nint engine, float* buffer, uint capacity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_audio_get_spectrum(nint engine, float* buffer, uint capacity);
+
+    [LibraryImport(Library)]
     internal static partial int tn_audio_remove_clip(nint engine, uint clip);
 
     [LibraryImport(Library)]

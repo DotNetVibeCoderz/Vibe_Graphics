@@ -246,6 +246,17 @@ pub struct AnimationPlayer {
     pub weight: f32,
     pub looping: bool,
     pub playing: bool,
+    /// Adds the clip on top of the pose already there instead of replacing it.
+    /// What is added is the clip measured against its own [reference_time], so a
+    /// lean or a breath can ride on a walk without cancelling it.
+    pub additive: bool,
+    /// The time whose pose counts as neutral for an additive clip.
+    pub reference_time: f32,
+}
+
+/// Scale is a ratio, and a neutral scale of zero has no meaningful ratio.
+fn safe_ratio(value: f32, base: f32) -> f32 {
+    if base.abs() < 1.0e-6 { 1.0 } else { value / base }
 }
 
 impl AnimationPlayer {
@@ -255,6 +266,8 @@ impl AnimationPlayer {
             time: 0.0,
             speed: 1.0,
             weight: 1.0,
+            additive: false,
+            reference_time: 0.0,
             looping: true,
             playing: true,
         }
@@ -266,7 +279,9 @@ impl Scene {
     /// and deforms skinned meshes. Call once per frame before rendering.
     pub fn update_animations(&mut self, delta: f32) {
         // ------------------------------------------------------------ players
-        let mut poses: Vec<(NodeId, TargetPath, [f32; 4], f32)> = Vec::new();
+        // The reference is Some only for an additive player: what it adds is
+        // the clip measured against its own neutral pose.
+        let mut poses: Vec<(NodeId, TargetPath, [f32; 4], f32, Option<[f32; 4]>)> = Vec::new();
         let mut weight_poses: Vec<(NodeId, Vec<f32>, f32)> = Vec::new();
         let player_ids: Vec<PlayerId> = self.players.iter().map(|(id, _)| id).collect();
         for id in player_ids {
@@ -298,7 +313,16 @@ impl Scene {
                             weight_poses.push((channel.target, sampled, blend));
                         }
                     } else {
-                        poses.push((channel.target, channel.path, channel.sample(time), blend));
+                        let reference = player
+                            .additive
+                            .then(|| channel.sample(player.reference_time));
+                        poses.push((
+                            channel.target,
+                            channel.path,
+                            channel.sample(time),
+                            blend,
+                            reference,
+                        ));
                     }
                 }
             }
@@ -309,24 +333,54 @@ impl Scene {
         }
 
         let mut touched: Vec<NodeId> = Vec::new();
-        for (node_id, path, value, weight) in poses {
+        for (node_id, path, value, weight, reference) in poses {
             let Some(node) = self.nodes.get_mut(node_id) else {
                 continue;
             };
             let transform = &mut node.transform;
-            match path {
-                TargetPath::Translation => {
-                    transform.translation = transform.translation.lerp(Vec3::new(value[0], value[1], value[2]), weight);
+            match (path, reference) {
+                (TargetPath::Translation, None) => {
+                    transform.translation = transform
+                        .translation
+                        .lerp(Vec3::new(value[0], value[1], value[2]), weight);
                 }
-                TargetPath::Scale => {
-                    transform.scale = transform.scale.lerp(Vec3::new(value[0], value[1], value[2]), weight);
+                (TargetPath::Scale, None) => {
+                    transform.scale = transform
+                        .scale
+                        .lerp(Vec3::new(value[0], value[1], value[2]), weight);
                 }
-                TargetPath::Rotation => {
+                (TargetPath::Rotation, None) => {
                     let target = Quat::from_array(value).normalize();
-                    transform.rotation = if weight >= 1.0 { target } else { transform.rotation.slerp(target, weight) };
+                    transform.rotation = if weight >= 1.0 {
+                        target
+                    } else {
+                        transform.rotation.slerp(target, weight)
+                    };
+                }
+                (TargetPath::Translation, Some(base)) => {
+                    let delta = Vec3::new(value[0] - base[0], value[1] - base[1], value[2] - base[2]);
+                    transform.translation += delta * weight;
+                }
+                (TargetPath::Scale, Some(base)) => {
+                    // Scale composes by multiplying, so the additive part is the
+                    // ratio to neutral rather than the difference.
+                    let ratio = Vec3::new(
+                        safe_ratio(value[0], base[0]),
+                        safe_ratio(value[1], base[1]),
+                        safe_ratio(value[2], base[2]),
+                    );
+                    transform.scale *= Vec3::ONE.lerp(ratio, weight);
+                }
+                (TargetPath::Rotation, Some(base)) => {
+                    let target = Quat::from_array(value).normalize();
+                    let neutral = Quat::from_array(base).normalize();
+                    // The turn from neutral to the sampled pose, eased in by
+                    // weight and applied on top of whatever is already there.
+                    let delta = target * neutral.inverse();
+                    transform.rotation = (transform.rotation * Quat::IDENTITY.slerp(delta, weight)).normalize();
                 }
                 // Weights never reach here: they are collected separately.
-                TargetPath::Weights => {}
+                (TargetPath::Weights, _) => {}
             }
             touched.push(node_id);
         }

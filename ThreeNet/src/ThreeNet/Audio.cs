@@ -186,6 +186,44 @@ public sealed class AudioEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// Starts the analysis tap at <paramref name="size"/> samples, rounded up to
+    /// a power of two; 0 switches it off. The spectrum has half that many bins.
+    /// </summary>
+    /// <remarks>
+    /// The tap sits at the very end of the mixer, so what it reports is what a
+    /// listener actually hears - every source, after the master gain.
+    /// </remarks>
+    public void EnableAnalysis(int size = 1024) =>
+        NativeError.Check(NativeMethods.tn_audio_set_analysis(Handle, (uint)Math.Max(0, size)));
+
+    /// <summary>Samples the tap keeps, or 0 when analysis is off.</summary>
+    public int AnalysisSize => Math.Max(0, NativeMethods.tn_audio_analysis_size(Handle));
+
+    /// <summary>Loudness right now, as the root mean square of the window.</summary>
+    public float Level => NativeMethods.tn_audio_get_level(Handle);
+
+    /// <summary>Copies the most recent samples, oldest first. Returns how many landed.</summary>
+    public unsafe int GetWaveform(Span<float> destination)
+    {
+        fixed (float* buffer = destination)
+        {
+            return Math.Max(0, NativeMethods.tn_audio_get_waveform(Handle, buffer, (uint)destination.Length));
+        }
+    }
+
+    /// <summary>
+    /// Copies the magnitude of each frequency bin, lowest first. Bin
+    /// <c>i</c> is centred on <c>i * SampleRate / AnalysisSize</c> hertz.
+    /// </summary>
+    public unsafe int GetSpectrum(Span<float> destination)
+    {
+        fixed (float* buffer = destination)
+        {
+            return Math.Max(0, NativeMethods.tn_audio_get_spectrum(Handle, buffer, (uint)destination.Length));
+        }
+    }
+
     public float MasterGain
     {
         get => _masterGain;

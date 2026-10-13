@@ -97,19 +97,24 @@ tersedia di fase 1-7.
 
 ### A. Small additions - existing code, more of it
 
+Done in 0.10.0.
+
 | Item | Status | Notes |
 |---|---|---|
-| Geometry: circle, capsule, torus knot, tube, lathe, extrude, polyhedra | ⬜ | `geometry.rs` has plane, cuboid, sphere, cylinder, cone, torus, grid. The rest are the same kind of generator; extrude and lathe need a 2D path type first |
-| Hemisphere light | ⬜ | Sky colour above, ground colour below, blended by the normal. A fourth branch in the ambient term |
-| Toon, depth and normal materials | ⬜ | `ShadingModel` already selects per draw; toon is a banded diffuse ramp, the other two are what the debug views already compute |
-| Point and line materials | ⬜ | `PrimitiveTopology.PointList` / `LineList` render, but there is no material for point size, line width or dashes |
-| Texture formats: WebP, EXR, DDS, TIFF | ⬜ | One `image` crate feature each; EXR also needs the float path HDR already uses |
-| Animation crossfading and additive blending | ⬜ | Players already carry a weight, so crossfade is a helper over two of them; additive needs a reference pose to subtract |
-| Audio analysis (FFT / spectrum / waveform) | ⬜ | The mixer owns the samples; this is a tap on the output buffer |
-| Helper objects: axes, box, arrow, camera, skeleton | ⬜ | Grid geometry exists; the rest are line meshes built from a node's own data |
-| Camera controls: fly, first person, pointer lock, trackball, drag | ⬜ | Only `OrbitController`. All of them are input-to-transform, no core work |
+| Geometry: circle, capsule, torus knot, tube, lathe, extrude, polyhedra | ✅ | `primitives` in `geometry.rs`, plus `Scene.Create*Geometry`. The tube is framed by parallel transport, not Frenet, so a straight run does not twist it; extrude triangulates by ear clipping, so concave outlines work; the polyhedron generator subdivides onto a sphere, so a detail 2 icosahedron is a geodesic sphere |
+| Hemisphere light | ✅ | `LightType.Hemisphere`. The axis is the node local `+Y` and the ground colour rides in the cone and size slots a hemisphere light never reads |
+| Toon, depth and normal materials | ✅ | `ShadingModel.Toon` / `.Depth` / `.Normal`, with `MaterialOptions.Toon`, `.DepthPreview`, `.NormalPreview`. The toon band count rides in shininess |
+| Point and line materials | ✅ | `Effects.PointsAndLines`. WebGPU has no `gl_PointSize` and no line width, so both expand to quads - in the vertex shader, so a turning camera costs nothing. Lines dash by distance travelled |
+| Texture formats: WebP, EXR, DDS, TIFF | ✅ | EXR takes the float path HDR already uses |
+| Animation crossfading and additive blending | ✅ | `AnimationMixer` eases weights on a clock for cross fades; `AnimationPlayer.Additive` adds a clip measured against its own `ReferenceTime`, so a lean rides on a walk. Rotation composes by quaternion, scale by ratio |
+| Audio analysis (FFT / spectrum / waveform) | ✅ | `AudioEngine.EnableAnalysis`, `Level`, `GetWaveform`, `GetSpectrum`. A Hann window and a radix-2 transform over a ring buffer, tapped after the master gain so it reports what a listener hears |
+| Helper objects: axes, box, arrow, camera frustum, skeleton, grid | ✅ | `Helpers`, as line meshes through the normal pipeline |
+| Camera controls: fly, first person, trackball | ✅ | `FlyController`, `FirstPersonController`, `TrackballController` beside `OrbitController`. The trackball keeps a full quaternion, so it rolls past the poles where a yaw and pitch pair gimbals |
+| Pointer lock | ⬜ | Avalonia exposes no pointer lock, so the look controllers offer `LookWithoutDragging` and otherwise rely on dragging. A real lock needs platform code per backend |
+| Drag controls (moving objects with the pointer) | 🟡 | ThreeEditor drags nodes in its viewport, but the gesture is not packaged as a controller anything else can use |
 
 ### B. Core renderer work
+
 
 | Item | Status | Notes |
 |---|---|---|
