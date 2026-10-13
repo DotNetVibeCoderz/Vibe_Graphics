@@ -11,6 +11,15 @@ public enum ShadingModel : uint
     Phong = 2,
     /// <summary>Metallic-roughness physically based shading.</summary>
     Pbr = 3,
+    /// <summary>
+    /// Diffuse quantised into bands - the cel look. The band count is
+    /// <see cref="MaterialOptions.Shininess"/>, which nothing else reads here.
+    /// </summary>
+    Toon = 4,
+    /// <summary>Unlit view depth over the camera range, white near to black far.</summary>
+    Depth = 5,
+    /// <summary>Unlit world normal as colour.</summary>
+    Normal = 6,
 }
 
 /// <summary>How fragment alpha is resolved.</summary>
@@ -47,6 +56,8 @@ public enum LightType : uint
     Area = 3,
     /// <summary>Constant term added to every fragment.</summary>
     Ambient = 4,
+    /// <summary>Sky colour above, ground colour below, mixed by the normal.</summary>
+    Hemisphere = 5,
 }
 
 /// <summary>Tone mapping operator applied to the HDR buffer.</summary>
@@ -174,6 +185,19 @@ public enum PrimitiveTopology : uint
     TriangleList = 0,
     LineList = 1,
     PointList = 2,
+}
+
+/// <summary>The platonic solids <see cref="Scene.CreatePolyhedronGeometry"/> can build.</summary>
+public enum Polyhedron : uint
+{
+    /// <summary>Four triangular faces.</summary>
+    Tetrahedron = 0,
+    /// <summary>Eight triangular faces.</summary>
+    Octahedron = 1,
+    /// <summary>Twenty triangular faces; subdivided, the usual geodesic sphere.</summary>
+    Icosahedron = 2,
+    /// <summary>Twelve pentagonal faces, split into triangles.</summary>
+    Dodecahedron = 3,
 }
 
 /// <summary>Verbosity of the native logger.</summary>

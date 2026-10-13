@@ -174,7 +174,9 @@ impl Texture {
         let image = reader
             .decode()
             .map_err(|e| Error::Asset(format!("cannot decode image: {e}")))?;
-        let hdr = matches!(format, Some(image::ImageFormat::Hdr));
+        // Radiance and OpenEXR both carry more range than 8 bits, so they
+        // keep the float path the environment maps already use.
+        let hdr = matches!(format, Some(image::ImageFormat::Hdr) | Some(image::ImageFormat::OpenExr));
         let (width, height) = (image.width(), image.height());
         if hdr {
             let rgba = image.to_rgba32f();

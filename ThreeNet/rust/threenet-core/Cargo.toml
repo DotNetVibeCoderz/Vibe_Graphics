@@ -32,7 +32,7 @@ glam = { version = "0.33.7", features = ["bytemuck"] }
 # `mesh.extras.targetNames`; without it the targets arrive unnamed.
 gltf = { version = "1.4.1", features = ["import", "utils", "names", "extras"] }
 serde_json = "1"
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "bmp", "tga"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "bmp", "tga", "webp", "tiff", "dds", "exr"] }
 log = "0.4.34"
 # zlib for compressed FBX arrays and KTX2 supercompression.
 miniz_oxide = "0.8.9"

@@ -86,9 +86,64 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Documentation | ✅ | `docs/` |
 | NuGet release (`ThreeNet`, `ThreeNet.Native`, `ThreeNet.Avalonia`) | ✅ | Published by CI when `VersionPrefix` changes |
 
+## Phase 8 - Three.js parity / Kesetaraan fitur Three.js
+
+Checked against the Three.js feature list in `threejs_fitur_lengkap.md` on 2026-10-14. Everything not listed
+here is already covered by phases 1-7. The gaps are grouped by what they cost to close, not by how the list
+orders them, because that is the useful question.
+
+Diperiksa terhadap daftar fitur Three.js di `threejs_fitur_lengkap.md`. Yang tidak tercantum di sini sudah
+tersedia di fase 1-7.
+
+### A. Small additions - existing code, more of it
+
+| Item | Status | Notes |
+|---|---|---|
+| Geometry: circle, capsule, torus knot, tube, lathe, extrude, polyhedra | ⬜ | `geometry.rs` has plane, cuboid, sphere, cylinder, cone, torus, grid. The rest are the same kind of generator; extrude and lathe need a 2D path type first |
+| Hemisphere light | ⬜ | Sky colour above, ground colour below, blended by the normal. A fourth branch in the ambient term |
+| Toon, depth and normal materials | ⬜ | `ShadingModel` already selects per draw; toon is a banded diffuse ramp, the other two are what the debug views already compute |
+| Point and line materials | ⬜ | `PrimitiveTopology.PointList` / `LineList` render, but there is no material for point size, line width or dashes |
+| Texture formats: WebP, EXR, DDS, TIFF | ⬜ | One `image` crate feature each; EXR also needs the float path HDR already uses |
+| Animation crossfading and additive blending | ⬜ | Players already carry a weight, so crossfade is a helper over two of them; additive needs a reference pose to subtract |
+| Audio analysis (FFT / spectrum / waveform) | ⬜ | The mixer owns the samples; this is a tap on the output buffer |
+| Helper objects: axes, box, arrow, camera, skeleton | ⬜ | Grid geometry exists; the rest are line meshes built from a node's own data |
+| Camera controls: fly, first person, pointer lock, trackball, drag | ⬜ | Only `OrbitController`. All of them are input-to-transform, no core work |
+
+### B. Core renderer work
+
+| Item | Status | Notes |
+|---|---|---|
+| Instanced rendering (`InstancedMesh`) | ⬜ | Every draw is `draw_indexed(.., 0..1)` today, so a thousand clones are a thousand draws. Needs a per-instance buffer, instance-aware bounds and a decision on how picking reports a hit |
+| LOD | ⬜ | Swap geometry by view distance. Cheap once there is somewhere to hang the levels on a node |
+| Clipping planes | ⬜ | Per material or per renderer; a plane set in the frame uniform and a discard in the surface stage |
+| Render targets as a public API | ⬜ | The renderer can already draw offscreen, but a scene cannot render into a texture another material samples. This is what `CubeCamera`, planar reflections and portals all need |
+| Cube map textures and `CubeCamera` | ⬜ | The environment map is equirectangular only. Needs a cube texture type, six-face capture, and a cube path in `sample_environment` |
+| PBR extensions: clearcoat, transmission, sheen, iridescence, anisotropy | ⬜ | `MeshPhysicalMaterial` territory. Each is a lobe added to the BRDF plus material slots; transmission also needs the scene colour available to the surface stage |
+| Post: SSR, FXAA / SMAA, film grain, vignette, colour grading (LUT) | ⬜ | The post chain has bloom, SSAO, DoF, motion blur and tone mapping. Antialiasing is MSAA only, so there is no post AA for the deferred path |
+| Light probes | ⬜ | Already open in "Next up" |
+| GPU particles, GPU skinning | ⬜ | Already open in "Next up"; both need compute pipelines in the core |
+| Screen space refraction | ⬜ | Already open in "Next up"; the same missing piece as transmission - no pass hands the scene colour or depth to a material shader |
+
+### C. Asset formats
+
+| Item | Status | Notes |
+|---|---|---|
+| STL, PLY | ⬜ | Small, self-contained, no material model to map. The obvious next two loaders |
+| Collada (DAE), 3DS, VRML, KMZ, 3MF | ⬜ | Older interchange formats; worth it only where a user actually has the files |
+| USDZ, VOX, IFC | ⬜ | USDZ matters for iOS AR, IFC for BIM, VOX is small. All three are substantial on their own |
+| SVG | ⬜ | Needs the 2D path and extrude work from group A to be useful |
+| Draco, Meshopt | ⬜ | Mesh compression. Draco is a C++ dependency like `basis-universal`; Meshopt is smaller and decodes fast |
+
+### What is deliberately not planned
+
+`WebGLRenderer`, `OffscreenCanvas`, node materials and TSL are Three.js's own web plumbing: the equivalents
+here are wgpu, offscreen rendering and the WGSL / GLSL hooks. `ArrayCamera` is a WebXR multiview detail that
+`StereoRig` already covers for the stereo case.
+
 ## Next up / Berikutnya
 
-Open work, with why it is still open:
+Open work, with why it is still open. Phase 8 above is the wider gap list against Three.js; these are the
+items that were already in flight before it was written.
 
 1. **OpenXR sessions and swapchain submission.** Needs Vulkan / D3D12 interop out of wgpu and a headset to
    verify against; the runtime probe and off-axis stereo cameras are in.

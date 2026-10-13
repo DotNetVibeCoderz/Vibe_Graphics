@@ -211,6 +211,100 @@ public sealed class Scene : IDisposable
     public Geometry CreateGridGeometry(float size = 10f, int divisions = 10) =>
         new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_grid(Handle, size, (uint)divisions)));
 
+    /// <summary>Filled disc on the XY plane facing +Z. A partial arc makes a pie slice.</summary>
+    public Geometry CreateCircleGeometry(
+        float radius = 1f,
+        int segments = 32,
+        float thetaStart = 0f,
+        float thetaLength = MathF.Tau) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_circle(
+            Handle, radius, (uint)segments, thetaStart, thetaLength)));
+
+    /// <summary>
+    /// A cylinder closed by a hemisphere at each end, standing on Y.
+    /// <paramref name="height"/> is the straight part only, so the capsule is
+    /// <c>height + 2 * radius</c> tall - the same convention the physics capsule uses.
+    /// </summary>
+    public Geometry CreateCapsuleGeometry(
+        float radius = 0.5f,
+        float height = 1f,
+        int radialSegments = 24,
+        int capRings = 8) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_capsule(
+            Handle, radius, height, (uint)radialSegments, (uint)capRings)));
+
+    /// <summary>
+    /// A (p, q) torus knot: a curve winding <paramref name="q"/> times around the
+    /// torus while passing <paramref name="p"/> times through its hole. The
+    /// default (2, 3) is the trefoil.
+    /// </summary>
+    public Geometry CreateTorusKnotGeometry(
+        float radius = 1f,
+        float tube = 0.4f,
+        int tubularSegments = 128,
+        int radialSegments = 16,
+        int p = 2,
+        int q = 3) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_torus_knot(
+            Handle, radius, tube, (uint)tubularSegments, (uint)radialSegments, (uint)p, (uint)q)));
+
+    /// <summary>
+    /// A tube of constant radius swept along a path. The frame is carried by
+    /// parallel transport, so a straight run in the middle does not twist it.
+    /// </summary>
+    public unsafe Geometry CreateTubeGeometry(
+        ReadOnlySpan<Vector3> path,
+        float radius = 0.2f,
+        int radialSegments = 16,
+        bool closed = false)
+    {
+        fixed (Vector3* points = path)
+        {
+            return new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_tube(
+                Handle, points, (uint)path.Length, radius, (uint)radialSegments, closed ? 1 : 0)));
+        }
+    }
+
+    /// <summary>
+    /// A profile revolved around the Y axis - a vase, a bowl, a wine glass. The
+    /// X of each profile point is its distance from the axis.
+    /// </summary>
+    public unsafe Geometry CreateLatheGeometry(
+        ReadOnlySpan<Vector2> profile,
+        int segments = 32,
+        float phiStart = 0f,
+        float phiLength = MathF.Tau)
+    {
+        fixed (Vector2* points = profile)
+        {
+            return new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_lathe(
+                Handle, points, (uint)profile.Length, (uint)segments, phiStart, phiLength)));
+        }
+    }
+
+    /// <summary>
+    /// A closed 2D outline given depth along Z, with both caps filled. The
+    /// outline may wind either way; it is triangulated by ear clipping, so it
+    /// must be simple (no self intersections).
+    /// </summary>
+    public unsafe Geometry CreateExtrudeGeometry(ReadOnlySpan<Vector2> shape, float depth = 1f)
+    {
+        fixed (Vector2* points = shape)
+        {
+            return new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_extrude(
+                Handle, points, (uint)shape.Length, depth)));
+        }
+    }
+
+    /// <summary>
+    /// A platonic solid projected onto a sphere. <paramref name="detail"/>
+    /// subdivides every face that many times, so a high detail icosahedron is a
+    /// geodesic sphere with far more even triangles than a UV sphere.
+    /// </summary>
+    public Geometry CreatePolyhedronGeometry(Polyhedron kind, float radius = 1f, int detail = 0) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_polyhedron(
+            Handle, (uint)kind, radius, (uint)detail)));
+
     // ------------------------------------------------------------ materials
 
     /// <summary>Registers a material and returns its handle.</summary>

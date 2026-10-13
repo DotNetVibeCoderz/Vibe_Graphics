@@ -34,6 +34,8 @@ public class EffectsTests
     [InlineData(nameof(EffectShaders.Fire))]
     [InlineData(nameof(EffectShaders.Particle))]
     [InlineData(nameof(EffectShaders.Smoke))]
+    [InlineData(nameof(PointsAndLines.Points))]
+    [InlineData(nameof(PointsAndLines.Lines))]
     public void EveryEffectShaderCompiles(string name)
     {
         string source = name switch
@@ -42,7 +44,9 @@ public class EffectsTests
             nameof(EffectShaders.WaterFloor) => EffectShaders.WaterFloor,
             nameof(EffectShaders.Fire) => EffectShaders.Fire,
             nameof(EffectShaders.Particle) => EffectShaders.Particle,
-            _ => EffectShaders.Smoke,
+            nameof(EffectShaders.Smoke) => EffectShaders.Smoke,
+            nameof(PointsAndLines.Points) => PointsAndLines.Points,
+            _ => PointsAndLines.Lines,
         };
 
         using Scene scene = new();

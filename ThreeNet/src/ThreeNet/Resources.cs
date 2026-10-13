@@ -350,6 +350,16 @@ public struct MaterialOptions
     public static MaterialOptions Lambert(Vector4 baseColor) =>
         Default with { Shading = ShadingModel.Lambert, BaseColor = baseColor };
 
+    /// <summary>Cel shaded material: diffuse quantised into <paramref name="bands"/> steps.</summary>
+    public static MaterialOptions Toon(Vector4 baseColor, int bands = 4) =>
+        Default with { Shading = ShadingModel.Toon, BaseColor = baseColor, Shininess = Math.Max(2, bands) };
+
+    /// <summary>Unlit view depth, white near the camera and black at the far plane.</summary>
+    public static MaterialOptions DepthPreview() => Default with { Shading = ShadingModel.Depth };
+
+    /// <summary>Unlit world normal as colour.</summary>
+    public static MaterialOptions NormalPreview() => Default with { Shading = ShadingModel.Normal };
+
     internal NativeMaterialDesc ToNative() => new()
     {
         Shading = (uint)Shading,

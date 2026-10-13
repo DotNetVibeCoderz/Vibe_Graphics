@@ -118,19 +118,36 @@ impl LightUniform {
     pub fn new(light: &Light, world: &Mat4) -> Self {
         let position = world.w_axis.truncate();
         // Node local `-Z` is the emission direction, matching glTF and Three.js.
-        let direction = Mat3::from_mat4(*world)
-            .mul_vec3(Vec3::NEG_Z)
-            .normalize_or(Vec3::NEG_Z);
-        Self {
-            position: position.extend(light.kind as u32 as f32).to_array(),
-            direction: direction.extend(light.range).to_array(),
-            color: light.color.extend(light.intensity).to_array(),
-            params: [
+        let basis = Mat3::from_mat4(*world);
+        // A hemisphere light has no beam: what it needs is which way is up, so
+        // it carries the node local `+Y` where the others carry `-Z`.
+        let direction = if light.kind == crate::light::LightKind::Hemisphere {
+            basis.mul_vec3(Vec3::Y).normalize_or(Vec3::Y)
+        } else {
+            basis.mul_vec3(Vec3::NEG_Z).normalize_or(Vec3::NEG_Z)
+        };
+        // The cone and size slots are free for a hemisphere light, so the
+        // ground colour rides in them.
+        let params = if light.kind == crate::light::LightKind::Hemisphere {
+            [
+                light.ground_color.x,
+                light.ground_color.y,
+                light.ground_color.z,
+                0.0,
+            ]
+        } else {
+            [
                 light.inner_cone_angle.cos(),
                 light.outer_cone_angle.cos(),
                 light.size.0,
                 light.size.1,
-            ],
+            ]
+        };
+        Self {
+            position: position.extend(light.kind as u32 as f32).to_array(),
+            direction: direction.extend(light.range).to_array(),
+            color: light.color.extend(light.intensity).to_array(),
+            params,
             shadow: [-1.0, 0.0, light.shadow_bias, light.shadow_normal_bias],
             shadow_extra: [light.shadow_strength, 0.0, 0.0, 0.0],
         }

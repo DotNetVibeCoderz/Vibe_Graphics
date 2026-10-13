@@ -386,6 +386,8 @@ pub struct TnLightDesc {
     pub shadow_normal_bias: f32,
     /// 0 = no darkening, 1 = fully dark shadows.
     pub shadow_strength: f32,
+    /// Colour from below for a hemisphere light; ignored by every other kind.
+    pub ground_color: TnVec3,
 }
 
 impl From<TnLightDesc> for Light {
@@ -403,6 +405,7 @@ impl From<TnLightDesc> for Light {
             shadow_bias: value.shadow_bias,
             shadow_normal_bias: value.shadow_normal_bias,
             shadow_strength: value.shadow_strength.clamp(0.0, 1.0),
+            ground_color: value.ground_color.into(),
         }
     }
 }
@@ -423,6 +426,7 @@ impl From<Light> for TnLightDesc {
             shadow_bias: value.shadow_bias,
             shadow_normal_bias: value.shadow_normal_bias,
             shadow_strength: value.shadow_strength,
+            ground_color: value.ground_color.into(),
         }
     }
 }
@@ -1703,7 +1707,132 @@ pub unsafe extern "C" fn tn_geometry_grid(scene: *mut Scene, size: f32, division
     scene.add_geometry(primitives::grid(size, divisions))
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_circle(
+    scene: *mut Scene,
+    radius: f32,
+    segments: u32,
+    theta_start: f32,
+    theta_length: f32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    scene.add_geometry(primitives::circle(radius, segments, theta_start, theta_length))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_capsule(
+    scene: *mut Scene,
+    radius: f32,
+    height: f32,
+    radial_segments: u32,
+    cap_rings: u32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    scene.add_geometry(primitives::capsule(radius, height, radial_segments, cap_rings))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_torus_knot(
+    scene: *mut Scene,
+    radius: f32,
+    tube: f32,
+    tubular_segments: u32,
+    radial_segments: u32,
+    p: u32,
+    q: u32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    scene.add_geometry(primitives::torus_knot(
+        radius,
+        tube,
+        tubular_segments,
+        radial_segments,
+        p,
+        q,
+    ))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_tube(
+    scene: *mut Scene,
+    path: *const TnVec3,
+    point_count: u32,
+    radius: f32,
+    radial_segments: u32,
+    closed: i32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    if path.is_null() || point_count < 2 {
+        set_last_error("a tube needs at least two path points");
+        return 0;
+    }
+    let points: Vec<Vec3> = unsafe { std::slice::from_raw_parts(path, point_count as usize) }
+        .iter()
+        .map(|p| (*p).into())
+        .collect();
+    scene.add_geometry(primitives::tube(&points, radius, radial_segments, closed != 0))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_lathe(
+    scene: *mut Scene,
+    profile: *const TnVec2,
+    point_count: u32,
+    segments: u32,
+    phi_start: f32,
+    phi_length: f32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    if profile.is_null() || point_count < 2 {
+        set_last_error("a lathe needs at least two profile points");
+        return 0;
+    }
+    let points: Vec<Vec2> = unsafe { std::slice::from_raw_parts(profile, point_count as usize) }
+        .iter()
+        .map(|p| (*p).into())
+        .collect();
+    scene.add_geometry(primitives::lathe(&points, segments, phi_start, phi_length))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_extrude(
+    scene: *mut Scene,
+    shape: *const TnVec2,
+    point_count: u32,
+    depth: f32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    if shape.is_null() || point_count < 3 {
+        set_last_error("an extruded shape needs at least three points");
+        return 0;
+    }
+    let points: Vec<Vec2> = unsafe { std::slice::from_raw_parts(shape, point_count as usize) }
+        .iter()
+        .map(|p| (*p).into())
+        .collect();
+    scene.add_geometry(primitives::extrude(&points, depth))
+}
+
+/// `kind`: 0 tetrahedron, 1 octahedron, 2 icosahedron, 3 dodecahedron.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_polyhedron(
+    scene: *mut Scene,
+    kind: u32,
+    radius: f32,
+    detail: u32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let geometry = match kind {
+        1 => primitives::octahedron(radius, detail),
+        2 => primitives::icosahedron(radius, detail),
+        3 => primitives::dodecahedron(radius, detail),
+        _ => primitives::tetrahedron(radius, detail),
+    };
+    scene.add_geometry(geometry)
+}
+
 // ------------------------------------------------------------------ material
+
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_material_create(scene: *mut Scene, desc: *const TnMaterialDesc) -> u32 {

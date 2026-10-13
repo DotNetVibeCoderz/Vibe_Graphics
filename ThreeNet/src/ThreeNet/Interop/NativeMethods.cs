@@ -221,6 +221,33 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library)]
     internal static partial uint tn_geometry_grid(nint scene, float size, uint divisions);
 
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_circle(
+        nint scene, float radius, uint segments, float thetaStart, float thetaLength);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_capsule(
+        nint scene, float radius, float height, uint radialSegments, uint capRings);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_torus_knot(
+        nint scene, float radius, float tube, uint tubularSegments, uint radialSegments, uint p, uint q);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_tube(
+        nint scene, Vector3* path, uint pointCount, float radius, uint radialSegments, int closed);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_lathe(
+        nint scene, Vector2* profile, uint pointCount, uint segments, float phiStart, float phiLength);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_extrude(
+        nint scene, Vector2* shape, uint pointCount, float depth);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_polyhedron(nint scene, uint kind, float radius, uint detail);
+
     // ------------------------------------------------------------ material
 
     [LibraryImport(Library)]

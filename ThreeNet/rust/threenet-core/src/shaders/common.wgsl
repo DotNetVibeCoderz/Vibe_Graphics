@@ -11,12 +11,16 @@ const SHADING_BASIC: f32 = 0.0;
 const SHADING_LAMBERT: f32 = 1.0;
 const SHADING_PHONG: f32 = 2.0;
 const SHADING_PBR: f32 = 3.0;
+const SHADING_TOON: f32 = 4.0;
+const SHADING_DEPTH: f32 = 5.0;
+const SHADING_NORMAL: f32 = 6.0;
 
 const LIGHT_DIRECTIONAL: f32 = 0.0;
 const LIGHT_POINT: f32 = 1.0;
 const LIGHT_SPOT: f32 = 2.0;
 const LIGHT_AREA: f32 = 3.0;
 const LIGHT_AMBIENT: f32 = 4.0;
+const LIGHT_HEMISPHERE: f32 = 5.0;
 
 const ALPHA_MASK: f32 = 1.0;
 
@@ -402,6 +406,15 @@ fn evaluate_light(light: Light, surface: Surface, view: vec3<f32>, world_positio
         return surface.albedo * radiance * n_dot_l;
     }
 
+    if (surface.shading_model == SHADING_TOON) {
+        // Diffuse quantised into bands, which is the whole of the cel look.
+        // The band count rides in shininess, free here because only the Phong
+        // model reads it and a material is one model at a time.
+        let bands = max(floor(surface.shininess), 2.0);
+        let stepped = floor(n_dot_l * bands) / (bands - 1.0);
+        return surface.albedo * radiance * clamp(stepped, 0.0, 1.0);
+    }
+
     if (surface.shading_model == SHADING_PHONG) {
         let half_vector = normalize(to_light + view);
         let specular_term = pow(max(dot(surface.normal, half_vector), 0.0), surface.shininess);
@@ -433,6 +446,19 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
         return surface.albedo + surface.emissive;
     }
 
+    // Two models that show a channel rather than light it, the way Three.js
+    // depth and normal materials do: useful for debugging a single mesh when a
+    // whole-frame debug view would be too blunt.
+    if (surface.shading_model == SHADING_DEPTH) {
+        let near = frame.misc.z;
+        let far = max(frame.misc.w, near + 1e-4);
+        let depth = clamp((view_depth - near) / (far - near), 0.0, 1.0);
+        return vec3<f32>(1.0 - depth);
+    }
+    if (surface.shading_model == SHADING_NORMAL) {
+        return surface.normal * 0.5 + vec3<f32>(0.5);
+    }
+
     let view = normalize(frame.camera_position.xyz - world_position);
     var lit = vec3<f32>(0.0);
     var ambient_light = frame.ambient.rgb * frame.ambient.w;
@@ -442,6 +468,12 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
         let light = light_buffer.lights[i];
         if (light.position.w == LIGHT_AMBIENT) {
             ambient_light = ambient_light + light.color.rgb * light.color.w;
+        } else if (light.position.w == LIGHT_HEMISPHERE) {
+            // Sky overhead, ground underfoot, mixed by where the surface looks.
+            // The axis arrives in direction, the ground colour in params.
+            let up = clamp(dot(surface.normal, normalize(light.direction.xyz)), -1.0, 1.0);
+            let sky = mix(light.params.rgb, light.color.rgb, up * 0.5 + 0.5);
+            ambient_light = ambient_light + sky * light.color.w;
         } else {
             let visibility = shadow_visibility(light, world_position, surface.normal, view_depth, surface.receive_shadow);
             lit = lit + evaluate_light(light, surface, view, world_position, visibility);
@@ -510,7 +542,7 @@ fn shadow_mask(surface: Surface, world_position: vec3<f32>, view_depth: f32) -> 
     let count = u32(frame.misc.x);
     for (var i: u32 = 0u; i < count; i = i + 1u) {
         let light = light_buffer.lights[i];
-        if (light.shadow.x < 0.0 || light.position.w == LIGHT_AMBIENT) {
+        if (light.shadow.x < 0.0 || light.position.w == LIGHT_AMBIENT || light.position.w == LIGHT_HEMISPHERE) {
             continue;
         }
         let visibility = shadow_visibility(

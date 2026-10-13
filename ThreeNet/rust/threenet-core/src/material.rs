@@ -16,6 +16,13 @@ pub enum ShadingModel {
     Phong = 2,
     /// Metallic-roughness physically based shading (`MeshStandardMaterial`).
     Pbr = 3,
+    /// Diffuse quantised into bands (`MeshToonMaterial`). The band count is
+    /// [Material::shininess], which no other toon parameter needs.
+    Toon = 4,
+    /// Unlit view depth over the camera range (`MeshDepthMaterial`).
+    Depth = 5,
+    /// Unlit world normal as colour (`MeshNormalMaterial`).
+    Normal = 6,
 }
 
 impl ShadingModel {
@@ -24,6 +31,9 @@ impl ShadingModel {
             1 => ShadingModel::Lambert,
             2 => ShadingModel::Phong,
             3 => ShadingModel::Pbr,
+            4 => ShadingModel::Toon,
+            5 => ShadingModel::Depth,
+            6 => ShadingModel::Normal,
             _ => ShadingModel::Basic,
         }
     }

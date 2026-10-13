@@ -35,6 +35,11 @@ public struct Light
     public float ShadowNormalBias;
     /// <summary>0 = shadows have no effect, 1 = shadowed areas get no direct light.</summary>
     public float ShadowStrength;
+    /// <summary>
+    /// Colour reaching a surface from below, for a hemisphere light. Every
+    /// other kind ignores it; the sky side uses <see cref="Color"/>.
+    /// </summary>
+    public Vector3 GroundColor;
 
     /// <summary>A white directional light of unit intensity.</summary>
     public static Light Default => new();
@@ -53,6 +58,7 @@ public struct Light
         ShadowBias = 0.0005f;
         ShadowNormalBias = 1.5f;
         ShadowStrength = 1f;
+        GroundColor = Vector3.Zero;
     }
 
     /// <summary>Sun style light; aim it by rotating the node it sits on.</summary>
@@ -79,6 +85,21 @@ public struct Light
     public static Light Ambient(Vector3 color, float intensity = 0.1f) =>
         Default with { Type = LightType.Ambient, Color = color, Intensity = intensity };
 
+    /// <summary>
+    /// Sky colour from above and ground colour from below, mixed by where the
+    /// surface looks - the cheapest way to make an outdoor scene read as
+    /// outdoors. The axis is the node local +Y, so an unrotated node puts the
+    /// sky overhead.
+    /// </summary>
+    public static Light Hemisphere(Vector3 sky, Vector3 ground, float intensity = 1f) =>
+        Default with
+        {
+            Type = LightType.Hemisphere,
+            Color = sky,
+            GroundColor = ground,
+            Intensity = intensity,
+        };
+
     internal NativeLightDesc ToNative() => new()
     {
         Kind = (uint)Type,
@@ -94,6 +115,7 @@ public struct Light
         ShadowBias = ShadowBias,
         ShadowNormalBias = ShadowNormalBias,
         ShadowStrength = ShadowStrength,
+        GroundColor = GroundColor,
     };
 
     internal static Light FromNative(in NativeLightDesc desc) => new()
@@ -110,6 +132,7 @@ public struct Light
         ShadowBias = desc.ShadowBias,
         ShadowNormalBias = desc.ShadowNormalBias,
         ShadowStrength = desc.ShadowStrength,
+        GroundColor = desc.GroundColor,
     };
 }
 

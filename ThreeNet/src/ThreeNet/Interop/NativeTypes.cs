@@ -93,6 +93,7 @@ internal struct NativeLightDesc
     public float ShadowBias;
     public float ShadowNormalBias;
     public float ShadowStrength;
+    public Vector3 GroundColor;
 }
 
 [StructLayout(LayoutKind.Sequential)]

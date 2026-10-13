@@ -16,6 +16,8 @@ pub enum LightKind {
     Area = 3,
     /// Constant term added to every fragment.
     Ambient = 4,
+    /// Sky colour from above, ground colour from below, mixed by the normal.
+    Hemisphere = 5,
 }
 
 impl LightKind {
@@ -25,6 +27,7 @@ impl LightKind {
             2 => LightKind::Spot,
             3 => LightKind::Area,
             4 => LightKind::Ambient,
+            5 => LightKind::Hemisphere,
             _ => LightKind::Directional,
         }
     }
@@ -45,6 +48,9 @@ pub struct Light {
     pub outer_cone_angle: f32,
     /// Width and height of an area light.
     pub size: (f32, f32),
+    /// Colour reaching a surface from below, for a hemisphere light. The sky
+    /// side uses [Light::color].
+    pub ground_color: Vec3,
     /// Renders this light into a shadow map (directional and spot lights).
     pub cast_shadow: bool,
     /// Constant depth offset in normalised shadow map depth, against acne.
@@ -65,6 +71,7 @@ impl Default for Light {
             range: 0.0,
             inner_cone_angle: std::f32::consts::FRAC_PI_8,
             outer_cone_angle: std::f32::consts::FRAC_PI_4,
+            ground_color: Vec3::ZERO,
             size: (1.0, 1.0),
             cast_shadow: false,
             shadow_bias: 0.0005,
@@ -111,6 +118,18 @@ impl Light {
         Self {
             kind: LightKind::Ambient,
             color,
+            intensity,
+            ..Default::default()
+        }
+    }
+
+    /// Sky above, ground below. The axis is the node local `+Y`, so an
+    /// unrotated node puts the sky overhead.
+    pub fn hemisphere(sky: Vec3, ground: Vec3, intensity: f32) -> Self {
+        Self {
+            kind: LightKind::Hemisphere,
+            color: sky,
+            ground_color: ground,
             intensity,
             ..Default::default()
         }
