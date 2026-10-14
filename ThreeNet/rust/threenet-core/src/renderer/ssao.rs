@@ -345,6 +345,13 @@ impl Ssao {
         self.targets.as_ref().map(|t| &t.depth)
     }
 
+    /// View space normals and linear depth, which is what a screen space
+    /// reflection has to march through.
+    #[inline]
+    pub fn gbuffer_view(&self) -> Option<&wgpu::TextureView> {
+        self.targets.as_ref().map(|t| &t.gbuffer)
+    }
+
     #[inline]
     pub fn linear_sampler(&self) -> &wgpu::Sampler {
         &self.linear_sampler

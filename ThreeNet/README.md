@@ -38,7 +38,7 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 
 | Part | Path | Status |
 |---|---|---|
-| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, depth of field + motion blur, bloom + tone mapping, procedural sky, keyframe/skeletal animation with morph targets, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
+| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, screen space reflections, depth of field + motion blur, bloom + tone mapping, procedural sky, keyframe/skeletal animation with morph targets, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
 | .NET 10 binding (`ThreeNet`): scene, node events, HUD, gamepads, physics, audio, UDP networking, stereo, water / fire / particle effects (`ThreeNet.Effects`) | `src/ThreeNet` | working, tested |
 | Native packaging (`ThreeNet.Native`) | `src/ThreeNet.Native` | builds the Rust core automatically |
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
@@ -123,7 +123,7 @@ development log in [Progress.md](Progress.md).
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, depth of field + motion blur, bloom + tone mapping, langit prosedural, animasi keyframe/skeletal dengan morph target, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
+| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, refleksi screen space, depth of field + motion blur, bloom + tone mapping, langit prosedural, animasi keyframe/skeletal dengan morph target, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
 | Binding .NET 10 (`ThreeNet`): scene, event node, HUD, gamepad, fisika, audio, jaringan UDP, stereo | `src/ThreeNet` | berjalan, teruji |
 | Paket native (`ThreeNet.Native`) | `src/ThreeNet.Native` | otomatis mem-build inti Rust |
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |

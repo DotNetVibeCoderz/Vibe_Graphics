@@ -10,6 +10,7 @@ pub mod resources;
 pub mod shadows;
 pub mod sky;
 pub mod ssao;
+pub mod ssr;
 pub mod timing;
 pub mod uniforms;
 
@@ -28,6 +29,7 @@ use crate::renderer::resources::{DefaultTextures, MipmapGenerator, ResourceCache
 use crate::renderer::shadows::{LightSource, ShadowCaster, ShadowMaps, ShadowSettings};
 use crate::renderer::sky::Sky;
 use crate::renderer::ssao::{GBufferItem, Ssao, SsaoSettings};
+use crate::renderer::ssr::{Ssr, SsrSettings};
 use crate::renderer::timing::GpuTimer;
 use crate::renderer::uniforms::{
     FrameUniform, LightUniform, LightsUniform, MAX_LIGHTS, ObjectUniform,
@@ -195,6 +197,17 @@ pub struct RendererConfig {
     pub ssao_samples: u32,
     /// How much AO also darkens direct light (0-1).
     pub ssao_direct_strength: f32,
+    /// Screen space reflections. Needs the same normal and depth prepass SSAO
+    /// uses, so turning this on turns that prepass on too.
+    pub ssr: bool,
+    /// How much of the reflection to keep before the Fresnel weighting (0-1).
+    pub ssr_intensity: f32,
+    /// How far a reflection ray may travel, in world units.
+    pub ssr_max_distance: f32,
+    /// How far behind a surface a ray may pass and still count as hitting it.
+    pub ssr_thickness: f32,
+    /// Coarse steps along the ray before the binary refinement (8-128).
+    pub ssr_steps: u32,
     /// Forward or deferred shading.
     pub render_path: RenderPath,
     /// Bokeh depth of field around a focus plane.
@@ -251,6 +264,16 @@ impl RendererConfig {
         }
     }
 
+    pub fn ssr_settings(&self) -> SsrSettings {
+        SsrSettings {
+            enabled: self.ssr,
+            intensity: self.ssr_intensity,
+            max_distance: self.ssr_max_distance,
+            thickness: self.ssr_thickness,
+            steps: self.ssr_steps,
+        }
+    }
+
     pub fn ssao_settings(&self) -> SsaoSettings {
         SsaoSettings {
             enabled: self.ssao,
@@ -289,6 +312,11 @@ impl Default for RendererConfig {
             ssao_bias: 0.025,
             ssao_samples: 16,
             ssao_direct_strength: 0.25,
+            ssr: false,
+            ssr_intensity: 1.0,
+            ssr_max_distance: 12.0,
+            ssr_thickness: 0.5,
+            ssr_steps: 32,
             render_path: RenderPath::Forward,
             depth_of_field: false,
             dof_focus_distance: 10.0,
@@ -404,6 +432,7 @@ pub struct Renderer {
     object_bind_group: wgpu::BindGroup,
     shadow_maps: ShadowMaps,
     ssao: Ssao,
+    ssr: Ssr,
     deferred: Deferred,
     sky: Sky,
     effects: Effects,
@@ -598,6 +627,7 @@ impl Renderer {
         let object_bind_group = create_object_bind_group(&device, &layouts, &object_buffer);
         let shadow_maps = ShadowMaps::new(&device, &layouts.object);
         let ssao = Ssao::new(&device, &queue, &layouts.object);
+        let ssr = Ssr::new(&device);
         let deferred = Deferred::new(&device, &layouts);
         let sky = Sky::new(&device, &layouts);
         let effects = Effects::new(&device);
@@ -658,6 +688,7 @@ impl Renderer {
             object_bind_group,
             shadow_maps,
             ssao,
+            ssr,
             deferred,
             sky,
             effects,
@@ -1015,13 +1046,15 @@ impl Renderer {
         self.collect_draw_items(scene, &frustum, camera_position, camera_layers);
         let shadow_settings = self.config.shadow_settings();
         let ssao_settings = self.config.ssao_settings();
+        let ssr_settings = self.config.ssr_settings();
         let required_layers = ShadowMaps::required_layers(&self.light_sources, &shadow_settings);
         self.shadow_maps
             .ensure_size(&self.device, &shadow_settings, required_layers);
         let deferred = self.config.render_path == RenderPath::Deferred;
         // The forward path needs the depth prepass for its camera effects too.
         let camera_effects = self.config.depth_of_field || self.config.motion_blur;
-        let prepass = ssao_settings.enabled || (!deferred && camera_effects);
+        // Reflections march the same normal and depth prepass, in either path.
+        let prepass = ssao_settings.enabled || ssr_settings.enabled || (!deferred && camera_effects);
         self.ssao.ensure_targets(
             &self.device,
             prepass,
@@ -1402,11 +1435,25 @@ impl Renderer {
         } else {
             self.ssao.depth_view()
         };
-        let hdr_source = self.effects.run(
+        // Reflections go in before the camera effects, so that what a floor
+        // reflects is blurred by the same depth of field and blooms with
+        // everything else rather than being pasted on afterwards.
+        let reflected = self.ssr.run(
             &self.device,
             &self.queue,
             &mut encoder,
             &self.targets.hdr,
+            self.ssao.gbuffer_view(),
+            &projection,
+            self.config.width,
+            self.config.height,
+            &ssr_settings,
+        );
+        let hdr_source = self.effects.run(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            reflected,
             effects_depth,
             self.config.width,
             self.config.height,

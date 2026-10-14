@@ -100,7 +100,9 @@ lights face -Z.
 | `Stats` (`FrameStats`), `AdapterName`, `IsOffscreen` | Diagnostics |
 
 `RendererOptions`: `Width`, `Height`, `VSync`, `MsaaSamples`, `Exposure`, `ToneMapping`, `Bloom`,
-`BloomIntensity`, `BloomThreshold`, `FrustumCulling`, `PowerPreference`, `BgraOutput`,
+`BloomIntensity`, `BloomThreshold`, `Ssr`, `SsrIntensity`, `SsrMaxDistance`, `SsrThickness`, `SsrSteps`
+(screen space reflections; they share the depth prepass with `Ssao`, reflect only what is on screen, and
+are weighted by Fresnel rather than by roughness), `FrustumCulling`, `PowerPreference`, `BgraOutput`,
 `Shadows`, `ShadowMapSize`, `ShadowDistance`, `ShadowCascades`, `ShadowSoftness`,
 `Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`,
 `RenderPath` (`Forward` / `Deferred`), `DepthOfField`, `DofFocusDistance`, `DofFocusRange`, `DofMaxBlur`,

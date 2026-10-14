@@ -3,11 +3,12 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
-## 2026-10-14 - Three.js parity, phase 8 (0.11.0)
+## 2026-10-14 - Three.js parity, phase 8 (0.11.0 partway through)
 
 `threejs_fitur_lengkap.md` was checked feature by feature against the codebase, and the gaps written into
 `PLAN.md` as phase 8, grouped by what each costs to close rather than by the order the list happens to use.
-Group A is finished, and group B with it except for three rows: SMAA, iridescence and SSR.
+Group A is finished and so is group B, apart from SMAA. 0.11.0 went out partway through, so everything from
+the cube capture onwards is still unreleased.
 
 **Group A - geometry, materials and the things around them.** Seven geometry generators (circle, capsule,
 torus knot, tube, lathe, extrude, polyhedra and the four platonic solids). The tube is framed by parallel
@@ -61,13 +62,41 @@ wrapper, so that is where they are checked now.
 runner's WARP driver crashes in it intermittently rather than every time, which is worse than a reliable
 failure: it reddens main at random.
 
-ABI 13 through 20 across the work: a hemisphere light's ground colour, seven geometry entry points, instance
-transforms, the extended material lobes, render targets, cube maps, transmission and the cube capture.
+ABI 13 through 22 across the work: a hemisphere light's ground colour, seven geometry entry points,
+instance transforms, the extended material lobes, render targets, cube maps, transmission, the cube capture,
+the thin film and the reflection settings.
 
-**Still open, with the reason in `PLAN.md` beside each.** SSR, which now only wants the depth buffer in the
-post chain. Iridescence. SMAA, which is worth little beside a working FXAA. Pointer lock, which Avalonia does
-not expose. And light probes, GPU particles and GPU skinning, which all wait on compute pipelines the core
-does not have - that is the one real wall left, and it is a foundation rather than a feature.
+**Iridescence.** A film thin enough to interfere with itself - a soap bubble, an oil slick, anodised
+titanium. The light off the top of the film and the light off the surface underneath have travelled different
+distances, so some wavelengths cancel and others reinforce, and which ones do depends on the angle, which is
+why the hue slides as the object turns and why no tint can stand in for it. The evaluation is the
+Belcour-Barla model `KHR_materials_iridescence` specifies: the optical path difference goes through a
+Gaussian fit of the CIE colour matching curves, which is where the rainbow actually comes from, and the
+result replaces the Fresnel term for direct light and for the environment both. Thickness is in nanometres
+and chooses the bands rather than their strength, which is what the test checks - two thicknesses have to
+give two different hues, not two strengths of one.
+
+**Screen space reflections, and the piece that was already built.** SSR had been waiting on "depth in the
+post chain", but the SSAO prepass already writes full resolution view space normals and linear depth, which
+is exactly what a reflection ray marches through. So SSR reuses that prepass instead of adding a G-buffer of
+its own, and works in the forward path and the deferred one alike. Coarse steps along the reflected ray, each
+projected back to the screen and tested against the depth the scene really has there, then four binary
+refinement steps between the last step in front of a surface and the first behind it. It runs before the
+camera effects, so a reflection is blurred by the same depth of field and blooms with everything else rather
+than being pasted on at the end.
+
+Two limits, both written into the API docs rather than left to be discovered. It reflects what is on screen
+and nothing else, so a ray that leaves the frame or passes behind something nearer returns nothing and the
+reflection fades at the edges rather than ending at a line - a cube probe is the answer when one object needs
+a reflection that is actually correct. And roughness does not blur it, because the prepass carries geometry
+rather than material parameters; the weighting is Fresnel and an intensity, which at least puts the effect
+where it belongs, strongest at grazing angles, which is floors.
+
+**Still open, with the reason in `PLAN.md` beside each.** SMAA, which is three passes to improve on an FXAA
+that already works. Pointer lock, which Avalonia does not expose. And light probes, GPU particles and GPU
+skinning, which all wait on compute pipelines the core does not have - that is the one real wall left, and it
+is a foundation rather than a feature. A cube capture plus a spherical harmonic projection on the CPU would
+reach light probes without it.
 
 ## 2026-10-08 - Morph targets, a sky pass, and water, fire and VFX in the library (0.9.0)
 

@@ -22,6 +22,7 @@ public sealed class RenderControls
 {
     public bool Shadows = true;
     public bool Ssao = true;
+    public bool Ssr;
     public bool Bloom = true;
     public bool DepthOfField;
     public bool MotionBlur;
@@ -44,6 +45,11 @@ public sealed class RenderControls
     public int SsaoSamples = 16;
     public float SsaoRadius = 0.5f;
     public float SsaoIntensity = 1.5f;
+
+    public float SsrIntensity = 1f;
+    public float SsrMaxDistance = 12f;
+    public float SsrThickness = 0.5f;
+    public int SsrSteps = 32;
 
     public float DofFocusDistance = 10f;
     public float DofFocusRange = 4f;
@@ -70,6 +76,7 @@ public sealed class RenderControls
     {
         Shadows = options.Shadows;
         Ssao = options.Ssao;
+        Ssr = options.Ssr;
         Bloom = options.Bloom;
         DepthOfField = options.DepthOfField;
         MotionBlur = options.MotionBlur;
@@ -87,6 +94,10 @@ public sealed class RenderControls
         SsaoSamples = options.SsaoSamples;
         SsaoRadius = options.SsaoRadius;
         SsaoIntensity = options.SsaoIntensity;
+        SsrIntensity = options.SsrIntensity;
+        SsrMaxDistance = options.SsrMaxDistance;
+        SsrThickness = options.SsrThickness;
+        SsrSteps = options.SsrSteps;
         DofFocusDistance = options.DofFocusDistance;
         DofFocusRange = options.DofFocusRange;
         DofMaxBlur = options.DofMaxBlur;
@@ -119,6 +130,11 @@ public sealed class RenderControls
         SsaoSamples = SsaoSamples,
         SsaoRadius = SsaoRadius,
         SsaoIntensity = SsaoIntensity,
+        Ssr = Ssr,
+        SsrIntensity = SsrIntensity,
+        SsrMaxDistance = SsrMaxDistance,
+        SsrThickness = SsrThickness,
+        SsrSteps = SsrSteps,
         DepthOfField = DepthOfField,
         DofFocusDistance = DofFocusDistance,
         DofFocusRange = DofFocusRange,
@@ -140,27 +156,32 @@ public sealed class RenderControls
                 (MsaaSamples, Shadows, ShadowMapSize, ShadowCascades, ShadowSoftness) = (1, false, 1024, 1, 0);
                 (Ssao, SsaoSamples, Bloom, DepthOfField, MotionBlur) = (false, 8, false, false, false);
                 (RenderScale, ToneMapping, ShadowDistance) = (0.75, ToneMapping.Reinhard, 40f);
+                (Ssr, SsrSteps) = (false, 16);
                 break;
             case QualityPreset.Medium:
                 (MsaaSamples, Shadows, ShadowMapSize, ShadowCascades, ShadowSoftness) = (2, true, 1024, 2, 1);
                 (Ssao, SsaoSamples, Bloom, DepthOfField, MotionBlur) = (true, 8, true, false, false);
                 (RenderScale, ToneMapping, ShadowDistance) = (1.0, ToneMapping.Aces, 50f);
+                (Ssr, SsrSteps) = (false, 16);
                 break;
             case QualityPreset.High:
                 (MsaaSamples, Shadows, ShadowMapSize, ShadowCascades, ShadowSoftness) = (4, true, 2048, 3, 1);
                 (Ssao, SsaoSamples, Bloom, DepthOfField, MotionBlur) = (true, 16, true, false, false);
                 (RenderScale, ToneMapping, ShadowDistance) = (1.0, ToneMapping.Aces, 70f);
+                (Ssr, SsrSteps) = (false, 24);
                 break;
             case QualityPreset.Ultra:
                 (MsaaSamples, Shadows, ShadowMapSize, ShadowCascades, ShadowSoftness) = (8, true, 4096, 4, 2);
                 (Ssao, SsaoSamples, Bloom, DepthOfField, MotionBlur) = (true, 32, true, false, false);
                 (RenderScale, ToneMapping, ShadowDistance) = (1.0, ToneMapping.Aces, 110f);
+                (Ssr, SsrSteps) = (true, 32);
                 break;
             case QualityPreset.Cinematic:
                 (MsaaSamples, Shadows, ShadowMapSize, ShadowCascades, ShadowSoftness) = (8, true, 4096, 4, 3);
                 (Ssao, SsaoSamples, Bloom, DepthOfField, MotionBlur) = (true, 32, true, true, true);
                 (RenderScale, ToneMapping, ShadowDistance) = (1.0, ToneMapping.Filmic, 140f);
                 (MotionBlurStrength, MotionBlurSamples, DofMaxBlur) = (0.85f, 16, 18f);
+                (Ssr, SsrSteps) = (true, 48);
                 break;
         }
     }
@@ -187,6 +208,7 @@ public sealed class RenderControls
         ["exposure"] = Exposure.ToString("F2"),
         ["shadows"] = Shadows ? $"{ShadowMapSize} px, {ShadowCascades} cascades, PCF {ShadowSoftness}" : "off",
         ["ssao"] = Ssao ? $"{SsaoSamples} samples, radius {SsaoRadius:F2}" : "off",
+        ["ssr"] = Ssr ? $"{SsrSteps} steps, {SsrMaxDistance:F0} m" : "off",
         ["bloom"] = Bloom ? $"intensity {BloomIntensity:F2}, threshold {BloomThreshold:F2}" : "off",
         ["depthOfField"] = DepthOfField ? $"focus {DofFocusDistance:F1} m, blur {DofMaxBlur:F0} px" : "off",
         ["motionBlur"] = MotionBlur ? $"strength {MotionBlurStrength:F2}, {MotionBlurSamples} samples" : "off",

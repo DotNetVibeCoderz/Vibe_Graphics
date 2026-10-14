@@ -45,6 +45,39 @@ public struct RendererOptions
     public int SsaoSamples;
     /// <summary>How much occlusion also darkens direct light (0 = ambient only, 1 = everything).</summary>
     public float SsaoDirectStrength;
+    /// <summary>
+    /// Screen space reflections: a wet floor, polished concrete, a pool of
+    /// water picking up what is standing on it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reflections are marched through the depth prepass, so turning this on
+    /// turns that prepass on as well - the same one <see cref="Ssao"/> uses,
+    /// and the cost is shared when both are on.
+    /// </para>
+    /// <para>
+    /// It can only reflect what is already on screen. A ray that leaves the
+    /// frame, or that passes behind something nearer, has nothing to return,
+    /// so reflections fade towards the edges instead of ending abruptly. The
+    /// weighting is Fresnel and <see cref="SsrIntensity"/>: the prepass carries
+    /// geometry rather than material parameters, so roughness does not blur
+    /// the reflection. For a correct reflection on one specific object, bake a
+    /// cube probe with <see cref="Renderer.RenderToCube"/> instead.
+    /// </para>
+    /// </remarks>
+    public bool Ssr;
+    /// <summary>How much of the reflection to keep before the Fresnel weighting (0-1).</summary>
+    public float SsrIntensity;
+    /// <summary>How far a reflection ray may travel, in world units.</summary>
+    public float SsrMaxDistance;
+    /// <summary>
+    /// How far behind a surface a ray may pass and still count as having hit
+    /// it. Too small breaks reflections up; too large lets a ray latch onto a
+    /// thin object it was only passing behind.
+    /// </summary>
+    public float SsrThickness;
+    /// <summary>Coarse steps along the ray before the binary refinement (8-128).</summary>
+    public int SsrSteps;
     /// <summary>Forward (default, supports MSAA) or deferred shading (cheaper with many lights).</summary>
     public RenderPath RenderPath;
     /// <summary>Bokeh depth of field around <see cref="DofFocusDistance"/>.</summary>
@@ -138,6 +171,11 @@ public struct RendererOptions
         SsaoBias = 0.025f;
         SsaoSamples = 16;
         SsaoDirectStrength = 0.25f;
+        Ssr = false;
+        SsrIntensity = 1f;
+        SsrMaxDistance = 12f;
+        SsrThickness = 0.5f;
+        SsrSteps = 32;
         RenderPath = RenderPath.Forward;
         DepthOfField = false;
         DofFocusDistance = 10f;
@@ -182,6 +220,11 @@ public struct RendererOptions
         SsaoBias = SsaoBias,
         SsaoSamples = (uint)Math.Clamp(SsaoSamples, 4, 32),
         SsaoDirectStrength = SsaoDirectStrength,
+        Ssr = Ssr ? 1 : 0,
+        SsrIntensity = SsrIntensity,
+        SsrMaxDistance = SsrMaxDistance,
+        SsrThickness = SsrThickness,
+        SsrSteps = (uint)Math.Clamp(SsrSteps, 8, 128),
         RenderPath = (uint)RenderPath,
         DepthOfField = DepthOfField ? 1 : 0,
         DofFocusDistance = DofFocusDistance,

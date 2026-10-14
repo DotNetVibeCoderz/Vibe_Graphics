@@ -251,6 +251,11 @@ internal struct NativeRendererDesc
     public float SsaoBias;
     public uint SsaoSamples;
     public float SsaoDirectStrength;
+    public int Ssr;
+    public float SsrIntensity;
+    public float SsrMaxDistance;
+    public float SsrThickness;
+    public uint SsrSteps;
     public uint RenderPath;
     public int DepthOfField;
     public float DofFocusDistance;
