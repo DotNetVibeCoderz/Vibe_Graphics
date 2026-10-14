@@ -61,22 +61,24 @@ jobs:
       - name: Test
         # GPU tests skip themselves when the runner has no adapter. The Windows
         # runner only has WARP, whose driver crashes (access violation) in the
-        # shadow map / SSAO / debug view tests; they run in the next,
-        # non-blocking step there.
+        # shadow map / SSAO / debug view / sky tests; they run in the next,
+        # non-blocking step there. The sky one crashes intermittently rather
+        # than every time, which is worse: it reddens main at random.
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cargo test --release --manifest-path rust/threenet-core/Cargo.toml -- --skip shadow --skip ssao --skip debug_view
+            cargo test --release --manifest-path rust/threenet-core/Cargo.toml -- --skip shadow --skip ssao --skip debug_view --skip sky
           else
             cargo test --release --manifest-path rust/threenet-core/Cargo.toml
           fi
 
-      - name: Shadow, SSAO and debug view GPU tests (WARP, informational)
+      - name: Shadow, SSAO, debug view and sky GPU tests (WARP, informational)
         if: runner.os == 'Windows'
         continue-on-error: true
         run: |
           cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test shadows_ssao -- --test-threads=1
           cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test debug_views -- --test-threads=1
+          cargo test --release --manifest-path rust/threenet-core/Cargo.toml --test sky -- --test-threads=1
 
       - name: Make the dylib relocatable
         # rustc leaves the build path as the install name, so anything linking

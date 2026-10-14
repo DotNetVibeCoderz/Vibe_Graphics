@@ -3,6 +3,56 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-10-14 - Three.js parity, phase 8 (0.11.0)
+
+`threejs_fitur_lengkap.md` was checked feature by feature against the codebase, and the gaps written into
+`PLAN.md` as phase 8, grouped by what each costs to close rather than by the order the list happens to use.
+Group A is finished and group B is nine rows of ten.
+
+**Group A - geometry, materials and the things around them.** Seven geometry generators (circle, capsule,
+torus knot, tube, lathe, extrude, polyhedra and the four platonic solids). The tube is framed by parallel
+transport rather than Frenet, because a Frenet frame flips wherever a curve stops bending and one straight
+run would twist the tube inside out; extrude triangulates by ear clipping, so a concave outline comes out as
+four cap triangles a side rather than a fan through the notch. A hemisphere light. Toon, depth and normal
+shading models. Points and wide lines, expanded to quads in the vertex shader because WebGPU has no
+`gl_PointSize` and no line width - the same answer Three.js reaches with `Line2`, and doing the expansion on
+the GPU means a turning camera costs nothing. WebP, TIFF, DDS and EXR textures. `AnimationMixer` for cross
+fades and additive clips measured against their own reference pose. Audio analysis - a Hann window and a
+radix-2 transform tapped after the master gain, so it reports what a listener hears. Six helper objects and
+three more camera controllers.
+
+**Group B - the renderer.** Clipping planes, cut in the forward pass, the deferred G-buffer *and* the SSAO
+prepass; without that third one, ambient occlusion goes on occluding against surfaces nothing draws. Levels
+of detail, picked before the bounds are taken so culling and the shadow caster agree with what is drawn.
+Colour grading, a vignette and film grain, folded into the composite after tone mapping because they are what
+a lens and a film stock do. FXAA, which is the only antialiasing the deferred path can have, since MSAA needs
+a multisampled target and the G-buffer is resolved before the lighting sees it. Instanced rendering, with
+`vs_instanced` living beside `vs_main` in one module - an entry point nothing calls places no demand on the
+pipeline layout. Clearcoat, sheen and anisotropy. Render targets. Cube map environment textures.
+
+**What the tests caught.** Three times the first version of a test was wrong and the renderer was right, and
+each correction left a sharper test than the one intended. A clearcoat *lowers* the total brightness of a
+sphere, because it reflects by taking energy from the layer underneath rather than by inventing it - the test
+now asserts the peak rises *and* the total falls, so a coat that only brightened would fail. Anisotropy
+*holds* the peak rather than lowering it, because the remap widens one axis by exactly as much as it narrows
+the other and the GGX normalisation is unchanged. And a test for a malformed cube map found a real memory
+safety bug: the C ABI takes one `face_length` for all six faces, so it could not tell a short face from a full
+one and would read past the end of the caller's array. The six lengths are only knowable in the managed
+wrapper, so that is where they are checked now.
+
+**CI.** The sky GPU test joined shadows, SSAO and the debug views in the non-blocking Windows step. The
+runner's WARP driver crashes in it intermittently rather than every time, which is worse than a reliable
+failure: it reddens main at random.
+
+ABI 13 through 17 across the work: a hemisphere light's ground colour, seven geometry entry points, instance
+transforms, the extended material lobes, render targets and cube maps.
+
+**Still open, with the reason in `PLAN.md` beside each.** `CubeCamera`, SSR and transmission - all three much
+smaller now that render targets exist. SMAA, which is worth little beside FXAA. Pointer lock, which Avalonia
+does not expose. Instance aware culling, since an instanced node still culls against the node bounds rather
+than each instance's. And light probes, GPU particles and GPU skinning, which all wait on compute pipelines
+the core does not have yet - that is the one real wall left, and it is a foundation rather than a feature.
+
 ## 2026-10-08 - Morph targets, a sky pass, and water, fire and VFX in the library (0.9.0)
 
 Four things that had been asked for, and the ABI moved 9 -> 12 to carry them.

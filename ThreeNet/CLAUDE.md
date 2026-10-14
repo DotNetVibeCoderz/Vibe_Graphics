@@ -114,6 +114,9 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
   `custom_texture`) is declared non-filterable for that reason: `textureLoad` it, never `textureSample`.
 - The built-in plane geometry stands on XY facing +Z. Anything that wants a ground plane builds its own
   (`WaterSurface.BuildGrid`, `Procedural.Ground`), because the vertex hook reads object space x and z.
+- The GitHub Windows runner only has WARP, and its driver crashes intermittently in the shadow, SSAO,
+  debug view and sky GPU tests. CI skips those four in the blocking step and runs them again in a
+  `continue-on-error` step, so a WARP crash reports without reddening main.
 - The ThreeGallery `Assets/` folder (RiggedSimple.glb, KTX2/Basis checkers) is copied to the output dir.
 
 ## Conventions
