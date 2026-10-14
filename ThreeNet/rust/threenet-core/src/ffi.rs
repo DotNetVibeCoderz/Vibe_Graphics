@@ -599,6 +599,18 @@ pub struct TnRendererDesc {
     pub debug_view: u32,
     /// Draws every surface as lines regardless of its material.
     pub wireframe: i32,
+    /// Darkens the corners; 0 is off.
+    pub vignette: f32,
+    /// How far in from the corner the darkening starts, 0 to 1.
+    pub vignette_softness: f32,
+    /// Film grain; 0 is off.
+    pub grain: f32,
+    /// 1 leaves colour alone, 0 is greyscale, above 1 pushes it.
+    pub saturation: f32,
+    /// 1 leaves contrast alone.
+    pub contrast: f32,
+    /// Added last; 0 leaves brightness alone.
+    pub brightness: f32,
     /// Up to four world space planes: `xyz` a unit normal, `w` the distance
     /// from the origin. A fragment behind any live plane is cut away.
     pub clip_planes: [TnVec4; 4],
@@ -642,6 +654,12 @@ impl From<TnRendererDesc> for RendererConfig {
             motion_blur_samples: value.motion_blur_samples,
             debug_view: DebugView::from_u32(value.debug_view),
             wireframe: value.wireframe != 0,
+            vignette: value.vignette,
+            vignette_softness: value.vignette_softness,
+            grain: value.grain,
+            saturation: value.saturation,
+            contrast: value.contrast,
+            brightness: value.brightness,
             clip_planes: value.clip_planes.map(|p| [p.x, p.y, p.z, p.w]),
             clip_plane_count: (value.clip_plane_count as usize).min(4),
         }

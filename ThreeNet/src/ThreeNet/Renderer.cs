@@ -83,6 +83,22 @@ public struct RendererOptions
     /// The prepass clips with the colour pass, so SSAO and depth of field never
     /// occlude against a surface nothing draws.
     /// </remarks>
+    /// <summary>
+    /// Darkens the corners of the frame; 0 is off. Applied after tone mapping,
+    /// because a vignette is something a lens does, not something the scene does.
+    /// </summary>
+    public float Vignette;
+    /// <summary>How far in from the corner the darkening starts, 0 to 1.</summary>
+    public float VignetteSoftness;
+    /// <summary>Film grain; 0 is off. It moves with time, or it reads as dirt on the lens.</summary>
+    public float Grain;
+    /// <summary>1 leaves colour alone, 0 is greyscale, above 1 pushes it.</summary>
+    public float Saturation;
+    /// <summary>1 leaves contrast alone. Pivots on middle grey.</summary>
+    public float Contrast;
+    /// <summary>Added last; 0 leaves brightness alone.</summary>
+    public float Brightness;
+
     public Vector4[]? ClipPlanes;
 
     /// <summary>Balanced defaults: 720p, vsync on, 4x MSAA, ACES tone mapping.</summary>
@@ -123,6 +139,12 @@ public struct RendererOptions
         MotionBlurSamples = 12;
         DebugView = DebugView.Off;
         Wireframe = false;
+        Vignette = 0f;
+        VignetteSoftness = 0.5f;
+        Grain = 0f;
+        Saturation = 1f;
+        Contrast = 1f;
+        Brightness = 0f;
     }
 
     internal NativeRendererDesc ToNative() => new()
@@ -160,6 +182,12 @@ public struct RendererOptions
         MotionBlurSamples = (uint)Math.Clamp(MotionBlurSamples, 4, 32),
         DebugView = (uint)DebugView,
         Wireframe = Wireframe ? 1 : 0,
+        Vignette = Vignette,
+        VignetteSoftness = VignetteSoftness,
+        Grain = Grain,
+        Saturation = Saturation,
+        Contrast = Contrast,
+        Brightness = Brightness,
         ClipPlane0 = Plane(0),
         ClipPlane1 = Plane(1),
         ClipPlane2 = Plane(2),

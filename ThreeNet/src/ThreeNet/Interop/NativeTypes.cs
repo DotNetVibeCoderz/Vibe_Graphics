@@ -249,6 +249,12 @@ internal struct NativeRendererDesc
     public uint MotionBlurSamples;
     public uint DebugView;
     public int Wireframe;
+    public float Vignette;
+    public float VignetteSoftness;
+    public float Grain;
+    public float Saturation;
+    public float Contrast;
+    public float Brightness;
     public Vector4 ClipPlane0;
     public Vector4 ClipPlane1;
     public Vector4 ClipPlane2;

@@ -362,6 +362,11 @@ pub struct PostUniform {
     pub params: [f32; 4],
     /// `xy` = texel size of the source texture, `zw` = blur direction.
     pub texel: [f32; 4],
+    /// `x` = vignette strength, `y` = vignette softness, `z` = film grain,
+    /// `w` = seconds, so the grain moves instead of sitting still.
+    pub grade: [f32; 4],
+    /// `x` = saturation, `y` = contrast, `z` = brightness, `w` reserved.
+    pub grade2: [f32; 4],
 }
 
 /// Shading model helper used when sorting draw calls.

@@ -124,7 +124,8 @@ Done in 0.10.0.
 | Render targets as a public API | ⬜ | The renderer can already draw offscreen, but a scene cannot render into a texture another material samples. This is what `CubeCamera`, planar reflections and portals all need |
 | Cube map textures and `CubeCamera` | ⬜ | The environment map is equirectangular only. Needs a cube texture type, six-face capture, and a cube path in `sample_environment` |
 | PBR extensions: clearcoat, transmission, sheen, iridescence, anisotropy | ⬜ | `MeshPhysicalMaterial` territory. Each is a lobe added to the BRDF plus material slots; transmission also needs the scene colour available to the surface stage |
-| Post: SSR, FXAA / SMAA, film grain, vignette, colour grading (LUT) | ⬜ | The post chain has bloom, SSAO, DoF, motion blur and tone mapping. Antialiasing is MSAA only, so there is no post AA for the deferred path |
+| Post: film grain, vignette, colour grading | ✅ | `RendererOptions.Vignette`, `VignetteSoftness`, `Grain`, `Saturation`, `Contrast`, `Brightness`, folded into the composite after tone mapping - they are what a lens and a film stock do, not what the scene does. A debug view switches them off, since it is meant to be read |
+| Post: SSR, FXAA / SMAA, LUT grading | ⬜ | Antialiasing is MSAA only, so the deferred path has no post AA. FXAA needs the composite to land in an intermediate target first; SSR waits on render targets |
 | Light probes | ⬜ | Already open in "Next up" |
 | GPU particles, GPU skinning | ⬜ | Already open in "Next up"; both need compute pipelines in the core |
 | Screen space refraction | ⬜ | Already open in "Next up"; the same missing piece as transmission - no pass hands the scene colour or depth to a material shader |

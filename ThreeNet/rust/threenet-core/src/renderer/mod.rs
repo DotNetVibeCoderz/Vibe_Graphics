@@ -219,6 +219,18 @@ pub struct RendererConfig {
     /// Up to four world space planes that cut the scene away where a fragment
     /// falls behind them: `xyz` is a unit normal, `w` the distance from the
     /// origin. A section through a model without opening the model.
+    /// Darkens the corners; 0 is off.
+    pub vignette: f32,
+    /// How far in from the corner the darkening starts, 0 to 1.
+    pub vignette_softness: f32,
+    /// Film grain; 0 is off.
+    pub grain: f32,
+    /// 1 leaves colour alone, 0 is greyscale, above 1 pushes it.
+    pub saturation: f32,
+    /// 1 leaves contrast alone.
+    pub contrast: f32,
+    /// Added last; 0 leaves brightness alone.
+    pub brightness: f32,
     pub clip_planes: [[f32; 4]; 4],
     /// How many of [RendererConfig::clip_planes] are live.
     pub clip_plane_count: usize,
@@ -283,6 +295,12 @@ impl Default for RendererConfig {
             motion_blur_samples: 12,
             debug_view: DebugView::Off,
             wireframe: false,
+            vignette: 0.0,
+            vignette_softness: 0.5,
+            grain: 0.0,
+            saturation: 1.0,
+            contrast: 1.0,
+            brightness: 0.0,
             clip_planes: [[0.0; 4]; 4],
             clip_plane_count: 0,
         }
@@ -1175,6 +1193,14 @@ impl Renderer {
             },
             bloom_threshold: self.config.bloom_threshold,
             bloom_iterations: 2,
+            // A debug view is meant to be read, not graded.
+            vignette: if debug { 0.0 } else { self.config.vignette },
+            vignette_softness: self.config.vignette_softness,
+            grain: if debug { 0.0 } else { self.config.grain },
+            time: self.start.elapsed().as_secs_f32(),
+            saturation: if debug { 1.0 } else { self.config.saturation },
+            contrast: if debug { 1.0 } else { self.config.contrast },
+            brightness: if debug { 0.0 } else { self.config.brightness },
         };
 
         match &self.surface {

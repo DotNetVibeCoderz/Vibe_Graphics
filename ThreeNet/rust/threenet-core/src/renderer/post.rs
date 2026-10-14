@@ -336,6 +336,9 @@ impl PostProcess {
                         settings.bloom_threshold,
                     ],
                     texel: [texel[0], texel[1], 0.0, 0.0],
+                    // The bloom stages do no grading; zero is neutral there.
+                    grade: [0.0; 4],
+                    grade2: [0.0; 4],
                 }),
             );
             queue.write_buffer(
@@ -344,6 +347,9 @@ impl PostProcess {
                 bytemuck::bytes_of(&PostUniform {
                     params: [settings.exposure, 0.0, 0.0, 0.0],
                     texel: [texel[0], texel[1], 1.0, 0.0],
+                    // The bloom stages do no grading; zero is neutral there.
+                    grade: [0.0; 4],
+                    grade2: [0.0; 4],
                 }),
             );
             queue.write_buffer(
@@ -352,6 +358,9 @@ impl PostProcess {
                 bytemuck::bytes_of(&PostUniform {
                     params: [settings.exposure, 0.0, 0.0, 0.0],
                     texel: [texel[0], texel[1], 0.0, 1.0],
+                    // The bloom stages do no grading; zero is neutral there.
+                    grade: [0.0; 4],
+                    grade2: [0.0; 4],
                 }),
             );
 
@@ -400,6 +409,18 @@ impl PostProcess {
                     settings.bloom_threshold,
                 ],
                 texel: [0.0; 4],
+                grade: [
+                    settings.vignette,
+                    settings.vignette_softness,
+                    settings.grain,
+                    settings.time,
+                ],
+                grade2: [
+                    settings.saturation,
+                    settings.contrast,
+                    settings.brightness,
+                    0.0,
+                ],
             }),
         );
 
@@ -449,6 +470,20 @@ pub struct PostSettings {
     pub bloom_intensity: f32,
     pub bloom_threshold: f32,
     pub bloom_iterations: u32,
+    /// Darkens the corners; 0 is off.
+    pub vignette: f32,
+    /// How far in from the corner the darkening starts, 0 to 1.
+    pub vignette_softness: f32,
+    /// Film grain; 0 is off.
+    pub grain: f32,
+    /// Seconds, so the grain moves rather than sitting still on the lens.
+    pub time: f32,
+    /// 1 leaves colour alone, 0 is greyscale, above 1 pushes it.
+    pub saturation: f32,
+    /// 1 leaves contrast alone.
+    pub contrast: f32,
+    /// Added after everything else; 0 leaves brightness alone.
+    pub brightness: f32,
 }
 
 impl Default for PostSettings {
@@ -459,6 +494,13 @@ impl Default for PostSettings {
             bloom_intensity: 0.0,
             bloom_threshold: 1.0,
             bloom_iterations: 2,
+            vignette: 0.0,
+            vignette_softness: 0.5,
+            grain: 0.0,
+            time: 0.0,
+            saturation: 1.0,
+            contrast: 1.0,
+            brightness: 0.0,
         }
     }
 }
