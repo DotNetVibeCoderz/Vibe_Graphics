@@ -136,6 +136,17 @@ pub struct Material {
     /// off. Forward path only, for the same reason.
     pub sheen: Vec3,
     pub sheen_roughness: f32,
+    /// How much light passes through rather than reflecting off: glass, water,
+    /// a gemstone. 0 is opaque. Forward path only - a transmissive surface has
+    /// to sample what the opaque pass left, which the deferred lighting pass
+    /// has already consumed.
+    pub transmission: f32,
+    /// Index of refraction, which decides how far the view bends: 1.0 is air,
+    /// 1.33 water, 1.5 window glass, 2.4 diamond.
+    pub ior: f32,
+    /// How thick the glass is, in metres. Thicker glass bends further and
+    /// absorbs more.
+    pub thickness: f32,
     /// Stretches the highlight along the surface grain: brushed metal, hair, a
     /// vinyl record. 0 is off, 1 stretches along the tangent, -1 across it.
     /// Forward path only, like the other extended lobes.
@@ -179,6 +190,9 @@ impl Default for Material {
             clearcoat_roughness: 0.1,
             sheen: Vec3::ZERO,
             sheen_roughness: 0.3,
+            transmission: 0.0,
+            ior: 1.5,
+            thickness: 0.0,
             anisotropy: 0.0,
             anisotropy_rotation: 0.0,
             normal_scale: 1.0,

@@ -108,6 +108,9 @@ impl Layouts {
                 // Blurred SSAO term.
                 texture(7),
                 sampler(8),
+                // What the opaque pass left, for a transmissive surface to
+                // refract. Bound to the HDR target itself when nothing needs it.
+                texture(10),
                 // Cube environment map, bound to a 1x1 black cube when unset.
                 wgpu::BindGroupLayoutEntry {
                     binding: 9,

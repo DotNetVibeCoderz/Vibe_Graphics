@@ -272,6 +272,12 @@ pub struct TnMaterialDesc {
     /// Retroreflective rim for cloth; black is off. Forward path only.
     pub sheen: TnVec3,
     pub sheen_roughness: f32,
+    /// How much light passes through rather than reflecting; 0 is opaque.
+    pub transmission: f32,
+    /// Index of refraction: 1.0 air, 1.33 water, 1.5 glass, 2.4 diamond.
+    pub ior: f32,
+    /// Thickness of the glass in metres.
+    pub thickness: f32,
     /// Stretches the highlight along the grain; 0 is off. Forward path only.
     pub anisotropy: f32,
     /// Turns the grain within the tangent plane, in radians.
@@ -323,6 +329,9 @@ impl From<Material> for TnMaterialDesc {
             clearcoat_roughness: value.clearcoat_roughness,
             sheen: value.sheen.into(),
             sheen_roughness: value.sheen_roughness,
+            transmission: value.transmission,
+            ior: value.ior,
+            thickness: value.thickness,
             anisotropy: value.anisotropy,
             anisotropy_rotation: value.anisotropy_rotation,
             normal_scale: value.normal_scale,
@@ -364,6 +373,9 @@ impl TnMaterialDesc {
         material.clearcoat_roughness = self.clearcoat_roughness;
         material.sheen = self.sheen.into();
         material.sheen_roughness = self.sheen_roughness;
+        material.transmission = self.transmission.clamp(0.0, 1.0);
+        material.ior = self.ior.max(1.0);
+        material.thickness = self.thickness.max(0.0);
         material.anisotropy = self.anisotropy.clamp(-1.0, 1.0);
         material.anisotropy_rotation = self.anisotropy_rotation;
         material.normal_scale = self.normal_scale;
@@ -735,6 +747,8 @@ pub struct TnRayHit {
     pub normal: TnVec3,
     pub triangle: u32,
     pub barycentric: TnVec2,
+    /// Which copy of an instanced node was hit; 0 for an ordinary one.
+    pub instance: u32,
 }
 
 #[repr(C)]
@@ -2813,6 +2827,7 @@ pub unsafe extern "C" fn tn_raycast(
                 normal: hit.normal.into(),
                 triangle: hit.triangle,
                 barycentric: hit.barycentric.into(),
+                instance: hit.instance,
             }
         };
     }

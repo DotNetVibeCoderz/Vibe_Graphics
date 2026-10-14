@@ -297,6 +297,28 @@ public struct MaterialOptions
     /// <summary>How wide the sheen rim is.</summary>
     public float SheenRoughness;
     /// <summary>
+    /// How much light passes through the surface rather than reflecting off it:
+    /// glass, water, a gemstone. 0 is opaque, 1 is clear.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A transmissive surface samples what the opaque pass left behind, bent by
+    /// <see cref="Ior"/> and tinted by <see cref="Thickness"/>. It replaces the
+    /// diffuse rather than adding to it: light that passed through did not
+    /// scatter back.
+    /// </para>
+    /// <para>
+    /// Forward path only, and glass does not refract other glass - both halves
+    /// of the scene pass draw after the colour was copied aside, so only the
+    /// opaque result is there to sample. Three.js has the same limitation.
+    /// </para>
+    /// </remarks>
+    public float Transmission;
+    /// <summary>Index of refraction: 1.0 air, 1.33 water, 1.5 window glass, 2.4 diamond.</summary>
+    public float Ior;
+    /// <summary>How thick the glass is, in metres. Thicker bends further and absorbs more.</summary>
+    public float Thickness;
+    /// <summary>
     /// Stretches the highlight along the surface grain: brushed metal, hair, a
     /// vinyl record. 0 is off, 1 stretches along the tangent and -1 across it.
     /// The mean roughness is held, so turning this up streaks the highlight
@@ -361,6 +383,9 @@ public struct MaterialOptions
         ClearcoatRoughness = 0.1f;
         Sheen = Vector3.Zero;
         SheenRoughness = 0.3f;
+        Transmission = 0f;
+        Ior = 1.5f;
+        Thickness = 0f;
         Anisotropy = 0f;
         AnisotropyRotation = 0f;
         NormalScale = 1f;
@@ -417,6 +442,9 @@ public struct MaterialOptions
         ClearcoatRoughness = ClearcoatRoughness,
         Sheen = Sheen,
         SheenRoughness = SheenRoughness,
+        Transmission = Transmission,
+        Ior = Ior,
+        Thickness = Thickness,
         Anisotropy = Anisotropy,
         AnisotropyRotation = AnisotropyRotation,
         NormalScale = NormalScale,
@@ -465,6 +493,9 @@ public struct MaterialOptions
         ClearcoatRoughness = desc.ClearcoatRoughness,
         Sheen = desc.Sheen,
         SheenRoughness = desc.SheenRoughness,
+        Transmission = desc.Transmission,
+        Ior = desc.Ior,
+        Thickness = desc.Thickness,
         Anisotropy = desc.Anisotropy,
         AnisotropyRotation = desc.AnisotropyRotation,
         NormalScale = desc.NormalScale,

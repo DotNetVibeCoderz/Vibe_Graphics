@@ -588,7 +588,8 @@ public sealed class Scene : IDisposable
                 buffer[i].Point,
                 buffer[i].Normal,
                 (int)buffer[i].Triangle,
-                buffer[i].Barycentric);
+                buffer[i].Barycentric,
+                (int)buffer[i].Instance);
         }
 
         return hits;

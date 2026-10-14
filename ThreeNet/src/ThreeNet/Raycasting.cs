@@ -23,7 +23,8 @@ public readonly record struct RayHit(
     Vector3 Point,
     Vector3 Normal,
     int TriangleIndex,
-    Vector2 Barycentric);
+    Vector2 Barycentric,
+    int InstanceIndex = 0);
 
 /// <summary>Filters narrowing which nodes take part in a cast.</summary>
 public struct RaycastOptions

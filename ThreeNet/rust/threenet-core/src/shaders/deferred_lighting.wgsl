@@ -66,6 +66,12 @@ fn fs_lighting(input: FullscreenVertex) -> @location(0) vec4<f32> {
     surface.sheen_roughness = 0.1;
     surface.anisotropy = 0.0;
     surface.tangent = vec3<f32>(0.0);
+    // Transmission needs what the opaque pass left, which this pass has already
+    // consumed. A transmissive material is drawn in the forward half instead.
+    surface.transmission = 0.0;
+    surface.ior = 1.5;
+    surface.thickness = 0.0;
+    surface.screen_uv = vec2<f32>(0.0);
 
     var mode = debug_view();
     if (mode == DEBUG_UV) {

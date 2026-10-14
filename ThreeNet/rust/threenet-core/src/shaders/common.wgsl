@@ -106,6 +106,7 @@ struct ShadowData {
 @group(0) @binding(7) var ao_texture: texture_2d<f32>;
 @group(0) @binding(8) var ao_sampler: sampler;
 @group(0) @binding(9) var environment_cube: texture_cube<f32>;
+@group(0) @binding(10) var scene_color_texture: texture_2d<f32>;
 
 /// Everything the lighting needs about one shaded point. Custom surface
 /// shaders receive and return this struct.
@@ -134,6 +135,15 @@ struct Surface {
     anisotropy: f32,
     /// The surface tangent, which is the direction the grain runs.
     tangent: vec3<f32>,
+    /// How much light passes through rather than reflecting: glass, water, a
+    /// gemstone. 0 is opaque.
+    transmission: f32,
+    /// Index of refraction: 1.0 air, 1.33 water, 1.5 window glass, 2.4 diamond.
+    ior: f32,
+    /// Thickness of the glass in metres. Thicker bends further and absorbs more.
+    thickness: f32,
+    /// Where this fragment is on screen, for sampling what is behind it.
+    screen_uv: vec2<f32>,
 };
 
 fn distribution_ggx(n_dot_h: f32, roughness: f32) -> f32 {
@@ -546,6 +556,14 @@ fn evaluate_light(light: Light, surface: Surface, view: vec3<f32>, world_positio
     return result * radiance * n_dot_l;
 }
 
+/// What the opaque pass left at a point on screen. Only meaningful inside the
+/// blended half of the scene pass, which is the only place transmission runs.
+fn scene_color_at(uv: vec2<f32>) -> vec3<f32> {
+    let size = vec2<f32>(textureDimensions(scene_color_texture, 0));
+    let texel = vec2<i32>(clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)) * (size - vec2<f32>(1.0)));
+    return textureLoad(scene_color_texture, texel, 0).rgb;
+}
+
 /// Full lighting of a surface: every light with its shadow, SSAO, ambient,
 /// image based lighting and emission. Returns linear HDR radiance.
 fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32, pixel: vec2<f32>) -> vec3<f32> {
@@ -596,6 +614,22 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
     }
 
     var ambient = ambient_light * surface.albedo * surface.occlusion;
+
+    // Glass: what is behind the surface, bent by the refraction and tinted by
+    // how far the light travelled through it. This replaces the diffuse rather
+    // than adding to it - light that passed through did not scatter back.
+    if (surface.transmission > 0.0) {
+        let view_direction = normalize(frame.camera_position.xyz - world_position);
+        let bent = refract(-view_direction, surface.normal, 1.0 / max(surface.ior, 1.0001));
+        // The offset is in screen space and scaled by thickness: a thick pane
+        // displaces what is behind it further than a thin one.
+        let offset = bent.xy * surface.thickness * 0.1;
+        let behind = scene_color_at(surface.screen_uv + offset);
+        // Beer-Lambert through the glass, tinted by the surface colour.
+        let absorbed = behind * mix(vec3<f32>(1.0), surface.albedo, clamp(surface.thickness, 0.0, 1.0));
+        lit = lit + absorbed * surface.transmission;
+        ambient = ambient * (1.0 - surface.transmission);
+    }
 
     // Image based lighting: from the equirectangular environment map when there
     // is one, and otherwise from the procedural sky, so a mirror standing under

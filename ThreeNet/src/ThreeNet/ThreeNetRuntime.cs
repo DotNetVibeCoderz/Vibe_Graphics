@@ -7,7 +7,7 @@ namespace ThreeNet;
 public static class ThreeNetRuntime
 {
     /// <summary>ABI revision the managed bindings were generated against.</summary>
-    public const uint ExpectedAbiVersion = 17;
+    public const uint ExpectedAbiVersion = 19;
 
     /// <summary>Semantic version of the loaded native core.</summary>
     public static unsafe string NativeVersion => NativeError.ReadString((buffer, capacity) =>

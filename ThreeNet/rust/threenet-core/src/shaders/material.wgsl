@@ -27,6 +27,8 @@ struct MaterialData {
     extended0: vec4<f32>,
     // xyz = sheen colour, w = sheen roughness
     extended1: vec4<f32>,
+    // x = transmission, y = ior, z = thickness, w reserved
+    extended2: vec4<f32>,
 };
 
 struct ObjectData {
@@ -251,6 +253,10 @@ fn material_surface(input: VertexOutput, front_facing: bool) -> Surface {
     surface.sheen = material.extended1.rgb;
     surface.sheen_roughness = max(material.extended1.w, 0.07);
     surface.anisotropy = material.extended0.z;
+    surface.transmission = material.extended2.x;
+    surface.ior = material.extended2.y;
+    surface.thickness = material.extended2.z;
+    surface.screen_uv = input.clip_position.xy / frame.screen.xy;
     // The grain runs along the tangent, turned in the tangent plane by the
     // angle in w - so a brushed disc can have its grain go round rather than
     // along the uv.

@@ -2,7 +2,7 @@
 //! bounding boxes, the narrow phase runs Moeller-Trumbore per triangle.
 
 use crate::geometry::Topology;
-use crate::math::{Mat3, Vec2, Vec3};
+use crate::math::{Mat3, Mat4, Vec2, Vec3};
 use crate::scene::{NodeId, Scene};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -36,6 +36,8 @@ pub struct RayHit {
     pub triangle: u32,
     /// Barycentric coordinates, useful to interpolate vertex attributes.
     pub barycentric: Vec2,
+    /// Which copy of an instanced node was hit; 0 for an ordinary one.
+    pub instance: u32,
 }
 
 /// Options narrowing which nodes take part in a cast.
@@ -86,7 +88,27 @@ pub fn raycast(scene: &mut Scene, ray: &Ray, options: &RaycastOptions) -> Vec<Ra
             continue;
         }
 
-        let world = node.world_matrix();
+        let node_world = node.world_matrix();
+        let indices: Vec<u32> = if geometry.indices.is_empty() {
+            (0..geometry.vertices.len() as u32).collect()
+        } else {
+            geometry.indices.clone()
+        };
+
+        // An instanced node is many copies of one mesh, and a ray can hit any
+        // of them. Testing only the node transform would make every copy but
+        // the one at the origin unpickable.
+        let transforms: Vec<Mat4> = if node.instances.is_empty() {
+            vec![node_world]
+        } else {
+            node.instances
+                .iter()
+                .map(|instance| node_world * *instance)
+                .collect()
+        };
+
+        for (instance_index, world) in transforms.iter().enumerate() {
+        let world = *world;
         // Broad phase in world space.
         let bounds = geometry.bounds.transformed(&world);
         match bounds.ray_intersection(ray.origin, ray.direction) {
@@ -101,12 +123,6 @@ pub fn raycast(scene: &mut Scene, ray: &Ray, options: &RaycastOptions) -> Vec<Ra
         let local_direction = Mat3::from_mat4(inverse).mul_vec3(ray.direction);
         // Object space direction is not normalised, so distances come out in
         // world units directly.
-
-        let indices: Vec<u32> = if geometry.indices.is_empty() {
-            (0..geometry.vertices.len() as u32).collect()
-        } else {
-            geometry.indices.clone()
-        };
 
         for (triangle, tri) in indices.chunks_exact(3).enumerate() {
             let v0 = Vec3::from_array(geometry.vertices[tri[0] as usize].position);
@@ -142,7 +158,9 @@ pub fn raycast(scene: &mut Scene, ray: &Ray, options: &RaycastOptions) -> Vec<Ra
                 normal,
                 triangle: triangle as u32,
                 barycentric: Vec2::new(u, v),
+                instance: instance_index as u32,
             });
+        }
         }
     }
 

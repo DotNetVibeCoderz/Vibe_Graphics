@@ -359,6 +359,13 @@ struct CasterItem {
 #[derive(Debug)]
 struct Targets {
     hdr: wgpu::TextureView,
+    /// The HDR texture itself, so the opaque result can be copied out of it.
+    hdr_texture: wgpu::Texture,
+    /// What the opaque pass left behind, for a transmissive surface to refract.
+    /// A surface cannot sample the target it is drawing into, so the colour has
+    /// to be copied aside between the two halves of the scene pass.
+    scene_color: wgpu::Texture,
+    scene_color_view: wgpu::TextureView,
     depth: wgpu::TextureView,
     /// Multisampled colour buffer, resolved into `hdr`.
     msaa: Option<wgpu::TextureView>,
@@ -393,7 +400,7 @@ pub struct Renderer {
     frame_bind_group: wgpu::BindGroup,
     /// Environment map, shadow map generation and SSAO generation the frame
     /// bind group was built with.
-    frame_bind_group_key: Option<(Option<u32>, u64, u64)>,
+    frame_bind_group_key: Option<(Option<u32>, u64, u64, u32)>,
     object_bind_group: wgpu::BindGroup,
     shadow_maps: ShadowMaps,
     ssao: Ssao,
@@ -414,6 +421,9 @@ pub struct Renderer {
     /// Set by [Renderer::render_to_texture] for the length of one frame: the
     /// post chain lands here instead of in the surface or the offscreen buffer.
     render_target: Option<wgpu::TextureView>,
+    /// Bumped whenever the targets are rebuilt, so the frame bind group knows
+    /// its views went stale.
+    targets_generation: u32,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -602,6 +612,9 @@ impl Renderer {
             &defaults.white_linear,
             ssao.linear_sampler(),
             &defaults.black_cube,
+            // A placeholder until the first frame, which rebuilds this anyway:
+            // the targets do not exist yet here.
+            &defaults.white_linear,
         );
 
         let targets = create_targets(
@@ -630,6 +643,7 @@ impl Renderer {
             post,
             overlay: overlay_renderer,
             render_target: None,
+            targets_generation: 0,
             mipmaps,
             resources: ResourceCache::default(),
             defaults,
@@ -802,6 +816,9 @@ impl Renderer {
     }
 
     fn rebuild_targets(&mut self) {
+        // The frame bind group holds a view into the old targets, so it has to
+        // be rebuilt too; the key carries this so that happens on its own.
+        self.targets_generation = self.targets_generation.wrapping_add(1);
         self.targets = create_targets(
             &self.device,
             self.config.width,
@@ -1003,6 +1020,13 @@ impl Renderer {
             a: background[3] as f64,
         };
 
+        // Only pay for the split and the copy when something actually refracts.
+        let needs_scene_color = self.draw_items.iter().any(|item| {
+            scene
+                .material(item.material)
+                .is_some_and(|material| material.transmission > 0.0)
+        });
+
         let (draw_calls, triangles) = if deferred && let Some(gbuffer) = self.deferred.targets() {
             // 1. Geometry: opaque surfaces into the G-buffer.
             let mut counts = {
@@ -1191,7 +1215,7 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_bind_group(0, &self.frame_bind_group, &[]);
-            draw_scene_items(
+            let opaque = draw_scene_items(
                 &mut pass,
                 &self.device,
                 &mut self.pipelines,
@@ -1200,9 +1224,65 @@ impl Renderer {
                 scene,
                 &self.draw_items,
                 self.samples,
-                DrawFilter::All,
+                // Split in two so a transmissive surface can sample what is
+                // behind it. A pass cannot read the target it draws into, so
+                // the opaque result is copied aside in between.
+                if needs_scene_color { DrawFilter::ForwardOpaque } else { DrawFilter::All },
                 self.config.wireframe,
-            )
+            );
+            drop(pass);
+
+            if !needs_scene_color {
+                opaque
+            } else {
+                encoder.copy_texture_to_texture(
+                    self.targets.hdr_texture.as_image_copy(),
+                    self.targets.scene_color.as_image_copy(),
+                    wgpu::Extent3d {
+                        width: self.config.width,
+                        height: self.config.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("threenet.pass.forward.blended"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: color_view,
+                        depth_slice: None,
+                        resolve_target,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.targets.depth,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
+                pass.set_bind_group(0, &self.frame_bind_group, &[]);
+                let blended = draw_scene_items(
+                    &mut pass,
+                    &self.device,
+                    &mut self.pipelines,
+                    &self.resources,
+                    &self.object_bind_group,
+                    scene,
+                    &self.draw_items,
+                    self.samples,
+                    DrawFilter::ForwardBlended,
+                    self.config.wireframe,
+                );
+                (opaque.0 + blended.0, opaque.1 + blended.1)
+            }
         };
 
         self.stats.draw_calls = draw_calls;
@@ -1449,7 +1529,19 @@ impl Renderer {
                 continue;
             }
             let world = node.world_matrix();
-            let bounds = geometry.bounds.transformed(&world);
+            // An instanced node covers everywhere its copies are, not just
+            // where its origin is: culling and the shadow caster both read
+            // these bounds, and the node bounds alone would drop a forest the
+            // moment its origin left the view.
+            let bounds = if node.instances.is_empty() {
+                geometry.bounds.transformed(&world)
+            } else {
+                let mut union = Aabb::EMPTY;
+                for instance in &node.instances {
+                    union = union.union(&geometry.bounds.transformed(&(world * *instance)));
+                }
+                union
+            };
             // Casters are gathered before culling: an object behind the camera
             // can still throw a shadow into the view.
             let casts = shadows
@@ -1610,6 +1702,7 @@ impl Renderer {
             scene.environment.environment_map,
             self.shadow_maps.generation(),
             self.ssao.generation(),
+            self.targets_generation,
         );
         if self.frame_bind_group_key != Some(key) {
             // One environment map, bound to whichever of the two slots suits
@@ -1653,6 +1746,7 @@ impl Renderer {
                 self.ssao.ao_view().unwrap_or(&self.defaults.white_linear),
                 self.ssao.linear_sampler(),
                 environment_cube,
+                &self.targets.scene_color_view,
             );
             self.frame_bind_group_key = Some(key);
         }
@@ -1883,6 +1977,11 @@ enum DrawFilter {
     DeferredOpaque,
     /// Deferred late pass: transparent meshes, lines and points.
     DeferredForward,
+    /// Forward pass, first half: everything that is not blended.
+    ForwardOpaque,
+    /// Forward pass, second half: the blended surfaces, which may refract what
+    /// the first half left behind.
+    ForwardBlended,
 }
 
 /// Issues the draw calls of one scene pass. Returns (draw calls, triangles).
@@ -1919,6 +2018,8 @@ fn draw_scene_items(
         match filter {
             DrawFilter::DeferredOpaque if !deferrable => continue,
             DrawFilter::DeferredForward if deferrable => continue,
+            DrawFilter::ForwardOpaque if item.transparent => continue,
+            DrawFilter::ForwardBlended if !item.transparent => continue,
             _ => {}
         }
 
@@ -2029,6 +2130,7 @@ fn create_frame_bind_group(
     ao: &wgpu::TextureView,
     ao_sampler: &wgpu::Sampler,
     environment_cube: &wgpu::TextureView,
+    scene_color: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("threenet.bind_group.frame"),
@@ -2074,6 +2176,10 @@ fn create_frame_bind_group(
                 binding: 9,
                 resource: wgpu::BindingResource::TextureView(environment_cube),
             },
+            wgpu::BindGroupEntry {
+                binding: 10,
+                resource: wgpu::BindingResource::TextureView(scene_color),
+            },
         ],
     })
 }
@@ -2091,18 +2197,31 @@ fn create_targets(
         height,
         depth_or_array_layers: 1,
     };
-    let hdr = device
-        .create_texture(&wgpu::TextureDescriptor {
-            label: Some("threenet.target.hdr"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: HDR_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        })
-        .create_view(&wgpu::TextureViewDescriptor::default());
+    let hdr_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("threenet.target.hdr"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: HDR_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let hdr = hdr_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+    let scene_color = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("threenet.target.scene_color"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: HDR_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let scene_color_view = scene_color.create_view(&wgpu::TextureViewDescriptor::default());
 
     let depth = device
         .create_texture(&wgpu::TextureDescriptor {
@@ -2153,6 +2272,9 @@ fn create_targets(
 
     Targets {
         hdr,
+        hdr_texture,
+        scene_color,
+        scene_color_view,
         depth,
         msaa,
         offscreen: offscreen_texture,

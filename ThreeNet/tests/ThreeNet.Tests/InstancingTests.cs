@@ -133,6 +133,61 @@ public class InstancingTests
     }
 
     [Fact]
+    public void CullingSeesWhereTheInstancesAreNotJustTheNode()
+    {
+        using Renderer? renderer = TryCreateRenderer();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        using Scene scene = new();
+        Node node = scene.AddMesh(
+            scene.CreateBoxGeometry(1f, 1f, 1f),
+            scene.CreateMaterial(MaterialOptions.Pbr(Vector4.One, 0f, 1f)));
+
+        // The node origin sits far off screen; the instances are in view. With
+        // culling on, node bounds alone would throw the whole set away.
+        node.Position = new Vector3(0f, 0f, -400f);
+        node.SetInstances([
+            Matrix4x4.CreateTranslation(new Vector3(0f, 0f, 395f)),
+            Matrix4x4.CreateTranslation(new Vector3(2f, 0f, 395f)),
+        ]);
+
+        renderer.Options = renderer.Options with { FrustumCulling = true };
+        Node camera = scene.AddCamera(Camera.Perspective(60f.ToRadians()), new Vector3(0f, 0f, 10f));
+        camera.LookAt(new Vector3(0f, 0f, -5f));
+        renderer.Render(scene, camera);
+
+        Assert.True(renderer.Stats.Triangles > 0, "the instances were culled with the node origin");
+    }
+
+    [Fact]
+    public void ARayHitsAnInstanceAndSaysWhichOne()
+    {
+        using Scene scene = new();
+        Node node = scene.AddMesh(
+            scene.CreateBoxGeometry(1f, 1f, 1f),
+            scene.CreateMaterial(Vector4.One));
+        node.SetInstances([
+            Matrix4x4.CreateTranslation(new Vector3(-5f, 0f, 0f)),
+            Matrix4x4.CreateTranslation(new Vector3(5f, 0f, 0f)),
+        ]);
+
+        // Aimed at the second copy, which is nowhere near the node origin.
+        IReadOnlyList<RayHit> hits = scene.Raycast(new Ray(new Vector3(5f, 0f, 10f), new Vector3(0f, 0f, -1f)));
+        Assert.NotEmpty(hits);
+        Assert.Equal(1, hits[0].InstanceIndex);
+
+        IReadOnlyList<RayHit> first = scene.Raycast(new Ray(new Vector3(-5f, 0f, 10f), new Vector3(0f, 0f, -1f)));
+        Assert.NotEmpty(first);
+        Assert.Equal(0, first[0].InstanceIndex);
+
+        // And the middle, where the node origin is, hits nothing.
+        Assert.Empty(scene.Raycast(new Ray(new Vector3(0f, 0f, 10f), new Vector3(0f, 0f, -1f))));
+    }
+
+    [Fact]
     public void MovingTheNodeMovesEveryInstance()
     {
         using Renderer? renderer = TryCreateRenderer();

@@ -59,6 +59,9 @@ internal struct NativeMaterialDesc
     public float ClearcoatRoughness;
     public Vector3 Sheen;
     public float SheenRoughness;
+    public float Transmission;
+    public float Ior;
+    public float Thickness;
     public float Anisotropy;
     public float AnisotropyRotation;
     public float NormalScale;
@@ -311,6 +314,7 @@ internal struct NativeRayHit
     public Vector3 Normal;
     public uint Triangle;
     public Vector2 Barycentric;
+    public uint Instance;
 }
 
 [StructLayout(LayoutKind.Sequential)]

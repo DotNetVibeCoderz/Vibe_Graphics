@@ -208,6 +208,8 @@ pub struct MaterialUniform {
     pub extended0: [f32; 4],
     /// `xyz` = sheen colour, `w` = sheen roughness.
     pub extended1: [f32; 4],
+    /// `x` = transmission, `y` = index of refraction, `z` = thickness.
+    pub extended2: [f32; 4],
 }
 
 impl Default for MaterialUniform {
@@ -274,6 +276,12 @@ impl From<&Material> for MaterialUniform {
                 material.sheen.y,
                 material.sheen.z,
                 material.sheen_roughness,
+            ],
+            extended2: [
+                material.transmission,
+                material.ior,
+                material.thickness,
+                0.0,
             ],
         }
     }

@@ -67,7 +67,8 @@ lights face -Z.
   show what a scene is doing rather than what it looks like.
 - `MaterialOptions` (struct): `Shading`, `AlphaMode`, `CullMode`, `BaseColor`, `Emissive`, `EmissiveIntensity`,
   `Metallic`, `Roughness`, `Specular`, `Shininess`, `Reflectance`, `Clearcoat`, `ClearcoatRoughness`,
-  `Sheen`, `SheenRoughness`, `Anisotropy`, `AnisotropyRotation` (those six are forward path only),
+  `Sheen`, `SheenRoughness`, `Anisotropy`, `AnisotropyRotation`, `Transmission`, `Ior`, `Thickness`
+  (those nine are forward path only),
   `NormalScale`, `OcclusionStrength`,
   `AlphaCutoff`, `UvScale`, `UvOffset`, `DepthWrite`, `DepthTest`, `Wireframe`, `RenderOrder`, `BaseColorMap`,
   `NormalMap`, `MetallicRoughnessMap`, `EmissiveMap`, `OcclusionMap`, `CustomMap`, `Shader`,
