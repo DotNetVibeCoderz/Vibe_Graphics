@@ -169,6 +169,60 @@ public sealed class Scene : IDisposable
     }
 
     /// <summary>
+    /// A cube map from six square faces, in the order +X, -X, +Y, -Y, +Z, -Z.
+    /// </summary>
+    /// <remarks>
+    /// Set as <see cref="SceneEnvironment.EnvironmentMap"/> it is sampled by
+    /// direction outright, which is even everywhere - an equirectangular image
+    /// has to go through angles and crowds its samples at the poles.
+    /// </remarks>
+    public unsafe Texture CreateCubeTexture(
+        int size,
+        ReadOnlySpan<byte> positiveX,
+        ReadOnlySpan<byte> negativeX,
+        ReadOnlySpan<byte> positiveY,
+        ReadOnlySpan<byte> negativeY,
+        ReadOnlySpan<byte> positiveZ,
+        ReadOnlySpan<byte> negativeZ,
+        TextureFormat format = TextureFormat.Rgba8UnormSrgb)
+    {
+        // The native side takes one length for all six faces, so it cannot
+        // tell a short face from a full one - it would read past the end of the
+        // array. The lengths are only knowable here, so they are checked here.
+        int bytesPerPixel = format == TextureFormat.Rgba32Float ? 16 : 4;
+        int expected = size * size * bytesPerPixel;
+        ReadOnlySpan<int> lengths =
+        [
+            positiveX.Length, negativeX.Length, positiveY.Length,
+            negativeY.Length, positiveZ.Length, negativeZ.Length,
+        ];
+        for (int i = 0; i < lengths.Length; i++)
+        {
+            if (lengths[i] != expected)
+            {
+                throw new ArgumentException(
+                    $"cube face {i} is {lengths[i]} bytes, but a {size}x{size} face needs {expected}",
+                    nameof(size));
+            }
+        }
+
+        fixed (byte* px = positiveX)
+        fixed (byte* nx = negativeX)
+        fixed (byte* py = positiveY)
+        fixed (byte* ny = negativeY)
+        fixed (byte* pz = positiveZ)
+        fixed (byte* nz = negativeZ)
+        {
+            byte*[] faces = [px, nx, py, ny, pz, nz];
+            fixed (byte** pointers = faces)
+            {
+                return new(this, NativeError.CheckHandle(NativeMethods.tn_texture_create_cube(
+                    Handle, (uint)size, (uint)format, pointers, (uint)positiveX.Length)));
+            }
+        }
+    }
+
+    /// <summary>
     /// A texture the renderer draws into rather than one uploaded from pixels.
     /// Pass it to <see cref="Renderer.RenderToTexture"/> and bind it to a
     /// material like any other texture to sample what was drawn.

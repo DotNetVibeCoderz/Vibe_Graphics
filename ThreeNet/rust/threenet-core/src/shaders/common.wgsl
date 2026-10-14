@@ -37,7 +37,7 @@ struct Frame {
     fog_color: vec4<f32>,
     // x = fog start, y = fog end, z = time, w = environment intensity
     fog_params: vec4<f32>,
-    // x = light count, y = has environment map, z = near, w = far
+    // x = light count, y = environment kind (0 none, 1 equirect, 2 cube), z = near, w = far
     misc: vec4<f32>,
     // xy = target size, z = SSAO enabled, w = SSAO strength on direct light
     screen: vec4<f32>,
@@ -105,6 +105,7 @@ struct ShadowData {
 @group(0) @binding(6) var<uniform> shadows: ShadowData;
 @group(0) @binding(7) var ao_texture: texture_2d<f32>;
 @group(0) @binding(8) var ao_sampler: sampler;
+@group(0) @binding(9) var environment_cube: texture_cube<f32>;
 
 /// Everything the lighting needs about one shaded point. Custom surface
 /// shaders receive and return this struct.
@@ -172,7 +173,12 @@ fn distance_attenuation(distance: f32, range: f32) -> f32 {
 }
 
 fn sample_environment(direction: vec3<f32>, lod: f32) -> vec3<f32> {
-    // Equirectangular lookup.
+    // A cube is sampled by direction outright, which is even everywhere. The
+    // equirectangular path has to go through angles, and crowds its samples at
+    // the poles - misc.y says which one is bound: 2 is a cube, 1 is flat.
+    if (frame.misc.y > 1.5) {
+        return textureSampleLevel(environment_cube, environment_sampler, direction, lod).rgb;
+    }
     let uv = vec2<f32>(
         atan2(direction.z, direction.x) / (2.0 * PI) + 0.5,
         acos(clamp(direction.y, -1.0, 1.0)) / PI,

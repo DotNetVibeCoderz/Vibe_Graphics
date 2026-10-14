@@ -52,7 +52,8 @@ impl FrameUniform {
         exposure: f32,
         environment: &Environment,
         light_count: u32,
-        has_environment_map: bool,
+        // 0 = none, 1 = equirectangular, 2 = cube.
+        environment_kind: f32,
         near: f32,
         far: f32,
         time: f32,
@@ -85,7 +86,7 @@ impl FrameUniform {
             ],
             misc: [
                 light_count as f32,
-                if has_environment_map { 1.0 } else { 0.0 },
+                environment_kind,
                 near,
                 far,
             ],

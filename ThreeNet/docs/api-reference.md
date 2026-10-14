@@ -53,6 +53,9 @@ lights face -Z.
   `MorphTargetCount`, `MorphTargetNames`, `GetMorphTargetName(i)`, `AddMorphTarget(name, positionDeltas, normalDeltas?)`, `Destroy()`.
 - `Material`: `Options` (get/set), `Update(Func<MaterialOptions, MaterialOptions>)`, `BaseColor`, `Destroy()`.
 - `Scene.CreateRenderTarget(width, height)` makes a texture the renderer draws into.
+- `Scene.CreateCubeTexture(size, +X, -X, +Y, -Y, +Z, -Z)` makes a cube map. Set as
+  `SceneEnvironment.EnvironmentMap` it is sampled by direction, which is even everywhere; an
+  equirectangular image crowds its samples at the poles.
 - `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `Update(pixels)` (bytes or floats,
   written into the existing GPU texture), `State` (`TextureState`), `LoadError`, `Destroy()`.
 - `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.

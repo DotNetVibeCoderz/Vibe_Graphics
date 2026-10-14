@@ -2116,6 +2116,41 @@ pub unsafe extern "C" fn tn_texture_load_memory(
     }
 }
 
+/// Creates a cube map from six square faces, in the order +X -X +Y -Y +Z -Z.
+/// `faces` points at six pixel buffers, each `size * size * bytes_per_pixel`.
+/// Bound as the environment map it gives even sampling everywhere, which an
+/// equirectangular image cannot do at the poles.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_create_cube(
+    scene: *mut Scene,
+    size: u32,
+    format: u32,
+    faces: *const *const u8,
+    face_length: u32,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    if faces.is_null() {
+        set_last_error("face array is null");
+        return 0;
+    }
+    let pointers = unsafe { std::slice::from_raw_parts(faces, 6) };
+    let mut data: [Vec<u8>; 6] = Default::default();
+    for (slot, pointer) in data.iter_mut().zip(pointers) {
+        if pointer.is_null() {
+            set_last_error("a cube face is null");
+            return 0;
+        }
+        *slot = unsafe { std::slice::from_raw_parts(*pointer, face_length as usize) }.to_vec();
+    }
+    match Texture::cube(size, TextureFormat::from_u32(format), data) {
+        Ok(texture) => scene.add_texture(texture),
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
 /// Creates a texture the renderer draws into rather than one uploaded from
 /// pixels. Pass it to `tn_renderer_render_to_texture`, and bind it to a
 /// material like any other texture to sample what was drawn.

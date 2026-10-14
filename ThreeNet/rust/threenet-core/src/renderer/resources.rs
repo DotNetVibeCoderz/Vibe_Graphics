@@ -52,6 +52,10 @@ pub struct DefaultTextures {
     pub black_srgb: wgpu::TextureView,
     /// Flat tangent space normal (0.5, 0.5, 1.0).
     pub flat_normal: wgpu::TextureView,
+    /// A 1x1 black cube, bound whenever no cube environment map is set. The
+    /// binding has to exist either way: a layout entry with nothing in it is
+    /// a validation error, not an empty slot.
+    pub black_cube: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
 }
 
@@ -100,6 +104,31 @@ impl DefaultTextures {
                 [128, 128, 255, 255],
                 wgpu::TextureFormat::Rgba8Unorm,
             ),
+            black_cube: {
+                let texture = device.create_texture_with_data(
+                    queue,
+                    &wgpu::TextureDescriptor {
+                        label: Some("threenet.default.black_cube"),
+                        size: wgpu::Extent3d {
+                            width: 1,
+                            height: 1,
+                            depth_or_array_layers: 6,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    },
+                    wgpu::util::TextureDataOrder::LayerMajor,
+                    &[0u8; 24],
+                );
+                texture.create_view(&wgpu::TextureViewDescriptor {
+                    dimension: Some(wgpu::TextureViewDimension::Cube),
+                    ..Default::default()
+                })
+            },
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("threenet.default.sampler"),
                 address_mode_u: wgpu::AddressMode::Repeat,
@@ -570,7 +599,7 @@ impl ResourceCache {
         let size = wgpu::Extent3d {
             width: texture.width,
             height: texture.height,
-            depth_or_array_layers: 1,
+            depth_or_array_layers: texture.layers.max(1),
         };
         let gpu_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(if texture.name.is_empty() {
@@ -605,7 +634,16 @@ impl ResourceCache {
             mipmaps.generate(device, encoder, &gpu_texture, format, mip_level_count);
         }
 
-        let view = gpu_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // Six layers are a cube: the view has to say so, or a shader sampling
+        // it by direction gets an array instead.
+        let view = gpu_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(if texture.is_cube() {
+                wgpu::TextureViewDimension::Cube
+            } else {
+                wgpu::TextureViewDimension::D2
+            }),
+            ..Default::default()
+        });
         let sampler = create_sampler(device, &texture.sampler, mip_level_count);
         self.textures.insert(
             id,

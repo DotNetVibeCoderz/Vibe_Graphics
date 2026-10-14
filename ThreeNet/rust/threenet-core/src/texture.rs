@@ -103,6 +103,9 @@ pub struct Texture {
     /// uploaded, and `pixels` stays empty. A material sampling it sees whatever
     /// was last rendered there.
     pub render_target: bool,
+    /// 1 for an ordinary 2D texture, 6 for a cube map. The six faces live in
+    /// `pixels` one after another, in the usual +X -X +Y -Y +Z -Z order.
+    pub layers: u32,
     pub(crate) version: u32,
 }
 
@@ -126,6 +129,7 @@ impl Texture {
             sampler: SamplerDesc::default(),
             compressed: None,
             render_target: false,
+            layers: 1,
             version: 1,
         })
     }
@@ -148,6 +152,7 @@ impl Texture {
             },
             compressed: None,
             render_target: false,
+            layers: 1,
             version: 1,
         }
     }
@@ -195,6 +200,7 @@ impl Texture {
                 sampler: SamplerDesc::default(),
                 compressed: None,
                 render_target: false,
+                layers: 1,
                 version: 1,
             })
         } else {
@@ -212,6 +218,7 @@ impl Texture {
                 sampler: SamplerDesc::default(),
                 compressed: None,
                 render_target: false,
+                layers: 1,
                 version: 1,
             })
         }
@@ -236,6 +243,7 @@ impl Texture {
             sampler: SamplerDesc::default(),
             compressed,
             render_target: false,
+            layers: 1,
             version: 1,
         })
     }
@@ -268,8 +276,55 @@ impl Texture {
             },
             compressed: None,
             render_target: true,
+            layers: 1,
             version: 1,
         })
+    }
+
+    /// A cube map from six faces, each `size` by `size`, in the order
+    /// +X -X +Y -Y +Z -Z. Used as an environment map, it gives even sampling
+    /// everywhere, which an equirectangular image cannot do at the poles.
+    pub fn cube(size: u32, format: TextureFormat, faces: [Vec<u8>; 6]) -> Result<Self> {
+        let expected = (size as usize)
+            .saturating_mul(size as usize)
+            .saturating_mul(format.bytes_per_pixel() as usize);
+        if size == 0 {
+            return Err(Error::InvalidArgument("a cube face needs a non zero size".into()));
+        }
+        let mut pixels = Vec::with_capacity(expected * 6);
+        for (index, face) in faces.iter().enumerate() {
+            if face.len() != expected {
+                return Err(Error::InvalidArgument(format!(
+                    "cube face {index} is {} bytes, expected {expected}",
+                    face.len()
+                )));
+            }
+            pixels.extend_from_slice(face);
+        }
+
+        Ok(Self {
+            name: String::from("cube"),
+            width: size,
+            height: size,
+            format,
+            pixels,
+            sampler: SamplerDesc {
+                // A cube is sampled by direction; wrapping has no meaning and a
+                // mip chain would need per face generation.
+                mipmaps: false,
+                ..SamplerDesc::default()
+            },
+            compressed: None,
+            render_target: false,
+            layers: 6,
+            version: 1,
+        })
+    }
+
+    /// True when this is a cube map rather than a flat texture.
+    #[inline]
+    pub fn is_cube(&self) -> bool {
+        self.layers == 6
     }
 
     #[inline]

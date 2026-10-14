@@ -601,6 +601,7 @@ impl Renderer {
             &shadow_maps,
             &defaults.white_linear,
             ssao.linear_sampler(),
+            &defaults.black_cube,
         );
 
         let targets = create_targets(
@@ -1611,12 +1612,30 @@ impl Renderer {
             self.ssao.generation(),
         );
         if self.frame_bind_group_key != Some(key) {
-            let environment_view = scene
+            // One environment map, bound to whichever of the two slots suits
+            // its shape: the flat one if it is equirectangular, the cube one if
+            // it has six faces. The other slot takes a default, because a
+            // layout entry with nothing in it is a validation error.
+            let is_cube = scene
+                .environment
+                .environment_map
+                .and_then(|id| scene.texture(id))
+                .is_some_and(|texture| texture.is_cube());
+            let bound = scene
                 .environment
                 .environment_map
                 .and_then(|id| self.resources.texture(id))
-                .map(|t| &t.view)
-                .unwrap_or(&self.defaults.black_srgb);
+                .map(|t| &t.view);
+            let environment_view = if is_cube {
+                &self.defaults.black_srgb
+            } else {
+                bound.unwrap_or(&self.defaults.black_srgb)
+            };
+            let environment_cube = if is_cube {
+                bound.unwrap_or(&self.defaults.black_cube)
+            } else {
+                &self.defaults.black_cube
+            };
             let environment_sampler = scene
                 .environment
                 .environment_map
@@ -1633,6 +1652,7 @@ impl Renderer {
                 &self.shadow_maps,
                 self.ssao.ao_view().unwrap_or(&self.defaults.white_linear),
                 self.ssao.linear_sampler(),
+                environment_cube,
             );
             self.frame_bind_group_key = Some(key);
         }
@@ -1649,7 +1669,16 @@ impl Renderer {
         far: f32,
         lights: &[LightUniform],
     ) {
-        let has_environment = scene.environment.environment_map.is_some();
+        // 0 = no environment map, 1 = equirectangular, 2 = cube.
+        let has_environment = match scene
+            .environment
+            .environment_map
+            .and_then(|id| scene.texture(id))
+        {
+            Some(texture) if texture.is_cube() => 2.0,
+            Some(_) => 1.0,
+            None => 0.0,
+        };
         let frame = FrameUniform::new(
             *view,
             *projection,
@@ -1999,6 +2028,7 @@ fn create_frame_bind_group(
     shadow_maps: &ShadowMaps,
     ao: &wgpu::TextureView,
     ao_sampler: &wgpu::Sampler,
+    environment_cube: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("threenet.bind_group.frame"),
@@ -2039,6 +2069,10 @@ fn create_frame_bind_group(
             wgpu::BindGroupEntry {
                 binding: 8,
                 resource: wgpu::BindingResource::Sampler(ao_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: wgpu::BindingResource::TextureView(environment_cube),
             },
         ],
     })

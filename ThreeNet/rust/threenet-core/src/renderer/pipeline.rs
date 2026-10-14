@@ -108,6 +108,17 @@ impl Layouts {
                 // Blurred SSAO term.
                 texture(7),
                 sampler(8),
+                // Cube environment map, bound to a 1x1 black cube when unset.
+                wgpu::BindGroupLayoutEntry {
+                    binding: 9,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::Cube,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
             ],
         });
 

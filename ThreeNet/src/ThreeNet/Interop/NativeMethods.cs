@@ -280,6 +280,9 @@ internal static unsafe partial class NativeMethods
     internal static partial uint tn_texture_create(nint scene, uint width, uint height, uint format, byte* pixels, uint length);
 
     [LibraryImport(Library)]
+    internal static partial uint tn_texture_create_cube(nint scene, uint size, uint format, byte** faces, uint faceLength);
+
+    [LibraryImport(Library)]
     internal static partial uint tn_texture_create_target(nint scene, uint width, uint height);
 
     [LibraryImport(Library)]
