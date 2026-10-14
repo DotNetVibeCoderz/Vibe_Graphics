@@ -2116,6 +2116,21 @@ pub unsafe extern "C" fn tn_texture_load_memory(
     }
 }
 
+/// Creates a texture the renderer draws into rather than one uploaded from
+/// pixels. Pass it to `tn_renderer_render_to_texture`, and bind it to a
+/// material like any other texture to sample what was drawn.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_create_target(scene: *mut Scene, width: u32, height: u32) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    match Texture::render_target(width, height) {
+        Ok(texture) => scene.add_texture(texture),
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
 /// Replaces the pixels of an existing texture, keeping its size and format.
 /// The GPU texture is written in place, so a height field or a flow map can be
 /// updated every frame without reallocating anything.
@@ -2494,6 +2509,21 @@ pub unsafe extern "C" fn tn_renderer_set_config(
     };
     renderer.set_config((*desc).into());
     status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_render_to_texture(
+    renderer: *mut Renderer,
+    scene: *mut Scene,
+    camera_node: u32,
+    texture: u32,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    let scene = scene_ref!(scene);
+    match renderer.render_to_texture(scene, (camera_node != 0).then_some(camera_node), texture) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
 }
 
 #[unsafe(no_mangle)]

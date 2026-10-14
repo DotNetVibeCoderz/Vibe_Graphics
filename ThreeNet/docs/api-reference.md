@@ -52,6 +52,7 @@ lights face -Z.
 - `Geometry`: `Counts`, `Update(vertices, indices)`, `ComputeNormals()`, `ComputeTangents()`,
   `MorphTargetCount`, `MorphTargetNames`, `GetMorphTargetName(i)`, `AddMorphTarget(name, positionDeltas, normalDeltas?)`, `Destroy()`.
 - `Material`: `Options` (get/set), `Update(Func<MaterialOptions, MaterialOptions>)`, `BaseColor`, `Destroy()`.
+- `Scene.CreateRenderTarget(width, height)` makes a texture the renderer draws into.
 - `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `Update(pixels)` (bytes or floats,
   written into the existing GPU texture), `State` (`TextureState`), `LoadError`, `Destroy()`.
 - `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.
@@ -86,6 +87,7 @@ lights face -Z.
 |---|---|
 | `CreateOffscreen(options)`, `CreateForWin32(hwnd, options)`, `CreateForX11(window, display, screen, options)`, `CreateForAppKit(nsView, options)`, `CreateForAndroid(nativeWindow, options)` | Factories |
 | `Render(scene, camera?)` | Draws a frame |
+| `RenderToTexture(scene, camera?, target)` | Draws into a texture a material can sample; the target must match the renderer size |
 | `Resize(width, height)`, `Options`, `Width`, `Height`, `AspectRatio` | Target |
 | `ReadPixels()`, `ReadPixels(Span<byte>)`, `PixelBufferSize` | Offscreen readback |
 | `Stats` (`FrameStats`), `AdapterName`, `IsOffscreen` | Diagnostics |

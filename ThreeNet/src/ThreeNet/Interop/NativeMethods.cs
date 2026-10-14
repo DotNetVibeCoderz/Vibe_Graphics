@@ -280,6 +280,9 @@ internal static unsafe partial class NativeMethods
     internal static partial uint tn_texture_create(nint scene, uint width, uint height, uint format, byte* pixels, uint length);
 
     [LibraryImport(Library)]
+    internal static partial uint tn_texture_create_target(nint scene, uint width, uint height);
+
+    [LibraryImport(Library)]
     internal static partial int tn_texture_update(nint scene, uint texture, byte* pixels, uint length);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
@@ -592,6 +595,9 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport(Library)]
     internal static partial int tn_renderer_render(nint renderer, nint scene, uint cameraNode);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_render_to_texture(nint renderer, nint scene, uint cameraNode, uint texture);
 
     [LibraryImport(Library)]
     internal static partial int tn_renderer_read_pixels(nint renderer, byte* buffer, uint capacity);

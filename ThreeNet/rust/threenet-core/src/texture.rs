@@ -99,6 +99,10 @@ pub struct Texture {
     pub sampler: SamplerDesc,
     /// Block compressed or Basis Universal payload; `pixels` is empty then.
     pub compressed: Option<crate::compressed::CompressedData>,
+    /// The renderer owns the pixels of this one: it is drawn into rather than
+    /// uploaded, and `pixels` stays empty. A material sampling it sees whatever
+    /// was last rendered there.
+    pub render_target: bool,
     pub(crate) version: u32,
 }
 
@@ -121,6 +125,7 @@ impl Texture {
             pixels,
             sampler: SamplerDesc::default(),
             compressed: None,
+            render_target: false,
             version: 1,
         })
     }
@@ -142,6 +147,7 @@ impl Texture {
                 ..Default::default()
             },
             compressed: None,
+            render_target: false,
             version: 1,
         }
     }
@@ -188,6 +194,7 @@ impl Texture {
                 pixels: bytemuck::cast_slice(rgba.as_raw()).to_vec(),
                 sampler: SamplerDesc::default(),
                 compressed: None,
+                render_target: false,
                 version: 1,
             })
         } else {
@@ -204,6 +211,7 @@ impl Texture {
                 pixels: rgba.into_raw(),
                 sampler: SamplerDesc::default(),
                 compressed: None,
+                render_target: false,
                 version: 1,
             })
         }
@@ -227,6 +235,7 @@ impl Texture {
             pixels,
             sampler: SamplerDesc::default(),
             compressed,
+            render_target: false,
             version: 1,
         })
     }
@@ -236,6 +245,31 @@ impl Texture {
         let mut texture = Self::from_encoded_bytes(&bytes, srgb)?;
         texture.name = path.to_string();
         Ok(texture)
+    }
+
+    /// A texture the renderer draws into. It carries no pixels: the GPU side is
+    /// created on first use and sampled by whatever material binds it.
+    pub fn render_target(width: u32, height: u32) -> Result<Self> {
+        if width == 0 || height == 0 {
+            return Err(Error::InvalidArgument(format!(
+                "a render target needs a non zero size, got {width}x{height}"
+            )));
+        }
+        Ok(Self {
+            name: String::from("render target"),
+            width,
+            height,
+            format: TextureFormat::Rgba8UnormSrgb,
+            pixels: Vec::new(),
+            sampler: SamplerDesc {
+                // No mip chain: nothing generates one between frames.
+                mipmaps: false,
+                ..SamplerDesc::default()
+            },
+            compressed: None,
+            render_target: true,
+            version: 1,
+        })
     }
 
     #[inline]

@@ -32,7 +32,7 @@ use crate::renderer::timing::GpuTimer;
 use crate::renderer::uniforms::{
     FrameUniform, LightUniform, LightsUniform, MAX_LIGHTS, ObjectUniform,
 };
-use crate::scene::{GeometryId, MaterialId, NodeId, Scene};
+use crate::scene::{GeometryId, MaterialId, NodeId, Scene, TextureId};
 
 pub use crate::renderer::post::ToneMapping;
 
@@ -411,6 +411,9 @@ pub struct Renderer {
     stats: FrameStats,
     gpu_timer: GpuTimer,
     start: Instant,
+    /// Set by [Renderer::render_to_texture] for the length of one frame: the
+    /// post chain lands here instead of in the surface or the offscreen buffer.
+    render_target: Option<wgpu::TextureView>,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -625,6 +628,7 @@ impl Renderer {
             pipelines,
             post,
             overlay: overlay_renderer,
+            render_target: None,
             mipmaps,
             resources: ResourceCache::default(),
             defaults,
@@ -813,7 +817,60 @@ impl Renderer {
     }
 
     /// Renders `scene` from `camera_node` (or the scene active camera).
+    /// Renders the scene into a texture the scene owns, which any material can
+    /// then sample: a mirror, a portal, a security monitor, a minimap.
+    ///
+    /// The texture must have been made as a render target
+    /// (`Texture::render_target`) and must be the same size as the renderer.
+    /// That restriction is what keeps this cheap: every pass between here and
+    /// the post chain - the shadow maps, the depth prepass, SSAO, the bloom
+    /// chain - owns buffers sized to the renderer, and a different size would
+    /// mean rebuilding all of them twice a frame. Rendering at another size
+    /// wants a second renderer, or the size agreement relaxing later.
+    ///
+    /// Nothing goes through the CPU: the result is a GPU texture the material
+    /// bind groups reference directly.
+    pub fn render_to_texture(
+        &mut self,
+        scene: &mut Scene,
+        camera_node: Option<NodeId>,
+        texture: TextureId,
+    ) -> Result<()> {
+        let Some(target) = scene.texture(texture) else {
+            return Err(Error::InvalidHandle("texture"));
+        };
+        if !target.render_target {
+            return Err(Error::InvalidArgument(
+                "that texture was not created as a render target".into(),
+            ));
+        }
+        if target.width != self.config.width || target.height != self.config.height {
+            return Err(Error::InvalidArgument(format!(
+                "a render target must match the renderer: target is {}x{}, renderer is {}x{}",
+                target.width, target.height, self.config.width, self.config.height
+            )));
+        }
+
+        let sampler = target.sampler;
+        let view = self.resources.ensure_render_target(
+            &self.device,
+            texture,
+            self.config.width,
+            self.config.height,
+            self.output_format,
+            &sampler,
+        );
+
+        self.render_target = Some(view);
+        let result = self.render(scene, camera_node);
+        // Cleared whatever happened, or every later frame would draw into the
+        // texture instead of the window.
+        self.render_target = None;
+        result
+    }
+
     pub fn render(&mut self, scene: &mut Scene, camera_node: Option<NodeId>) -> Result<()> {
+
         let cpu_start = Instant::now();
         scene.poll_streaming();
         let camera_node = camera_node
@@ -1210,6 +1267,39 @@ impl Renderer {
             brightness: if debug { 0.0 } else { self.config.brightness },
             fxaa: self.config.fxaa && !debug,
         };
+
+        // A render to texture frame ends here: the post chain and the overlay
+        // land in the texture a material will sample, with no round trip
+        // through the CPU.
+        if let Some(target) = self.render_target.clone() {
+            self.post.execute(
+                &self.device,
+                &self.queue,
+                &mut encoder,
+                hdr_source,
+                &target,
+                self.output_format,
+                settings,
+            );
+            self.overlay.draw(
+                &self.device,
+                &self.queue,
+                &mut encoder,
+                &target,
+                self.output_format,
+                self.config.width,
+                self.config.height,
+                scene,
+                &self.resources,
+                &self.defaults,
+            );
+            self.gpu_timer.end(&mut encoder, timed);
+            self.queue.submit(Some(encoder.finish()));
+            self.gpu_timer.after_submit(timed);
+            self.stats.gpu_time_ms = self.gpu_timer.last_ms();
+            self.stats.cpu_time_ms = cpu_start.elapsed().as_secs_f32() * 1000.0;
+            return Ok(());
+        }
 
         match &self.surface {
             Some(surface) => {

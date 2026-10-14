@@ -168,6 +168,15 @@ public sealed class Scene : IDisposable
         }
     }
 
+    /// <summary>
+    /// A texture the renderer draws into rather than one uploaded from pixels.
+    /// Pass it to <see cref="Renderer.RenderToTexture"/> and bind it to a
+    /// material like any other texture to sample what was drawn.
+    /// </summary>
+    public Texture CreateRenderTarget(int width, int height) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_texture_create_target(
+            Handle, (uint)width, (uint)height)));
+
     /// <summary>Subdivided plane on the XY plane facing +Z.</summary>
     public Geometry CreatePlaneGeometry(float width = 1f, float height = 1f, int widthSegments = 1, int heightSegments = 1) =>
         new(this, NativeError.CheckHandle(NativeMethods.tn_geometry_plane(

@@ -470,6 +470,33 @@ public sealed class Renderer : IDisposable
         NativeError.Check(NativeMethods.tn_renderer_render(Handle, scene.Handle, camera?.Id ?? 0));
     }
 
+    /// <summary>
+    /// Renders the scene into a texture that any material can then sample: a
+    /// mirror, a portal, a security monitor, a minimap.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The texture must come from <see cref="Scene.CreateRenderTarget"/> and
+    /// must be the same size as this renderer. That restriction is what keeps
+    /// it cheap: the shadow maps, the depth prepass, SSAO and the bloom chain
+    /// all own buffers sized to the renderer, and a different target size would
+    /// mean rebuilding every one of them twice a frame. Rendering at another
+    /// size wants a second renderer.
+    /// </para>
+    /// <para>
+    /// Nothing goes through the CPU - the result is a GPU texture the material
+    /// bind groups reference directly. Render the reflection first, then the
+    /// main view, or the mirror shows the frame before.
+    /// </para>
+    /// </remarks>
+    public void RenderToTexture(Scene scene, Node? camera, Texture target)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(target);
+        NativeError.Check(NativeMethods.tn_renderer_render_to_texture(
+            Handle, scene.Handle, camera?.Id ?? 0, target.Id));
+    }
+
     /// <summary>Number of bytes <see cref="ReadPixels(Span{byte})"/> needs.</summary>
     public int PixelBufferSize => Width * Height * 4;
 

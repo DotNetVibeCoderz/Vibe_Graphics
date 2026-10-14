@@ -278,6 +278,54 @@ impl ResourceCache {
         self.meshes.get(&id)
     }
 
+    /// Creates or reuses the GPU texture behind a render target, and returns a
+    /// view to draw into. Materials binding the same texture id sample it
+    /// directly, so what is drawn here needs no round trip through the CPU.
+    pub fn ensure_render_target(
+        &mut self,
+        device: &wgpu::Device,
+        id: TextureId,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        sampler: &crate::texture::SamplerDesc,
+    ) -> wgpu::TextureView {
+        let matches = self.textures.get(&id).is_some_and(|existing| {
+            existing.texture.width() == width
+                && existing.texture.height() == height
+                && existing.texture.format() == format
+        });
+        if !matches {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("threenet.render_target"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let generation = self.textures.get(&id).map_or(0, |t| t.generation);
+            self.textures.insert(
+                id,
+                GpuTexture {
+                    texture,
+                    view,
+                    sampler: create_sampler(device, sampler, 1),
+                    version: 1,
+                    generation: generation.wrapping_add(1),
+                },
+            );
+        }
+        self.textures.get(&id).expect("just built").view.clone()
+    }
+
     pub fn instances(&self, id: crate::scene::NodeId) -> Option<&GpuInstances> {
         self.instances.get(&id)
     }
@@ -440,6 +488,11 @@ impl ResourceCache {
         id: TextureId,
         texture: &Texture,
     ) {
+        if texture.render_target {
+            // The renderer owns these: they are drawn into, not uploaded. The
+            // GPU side is made on demand by ensure_render_target.
+            return;
+        }
         if let Some(existing) = self.textures.get(&id)
             && existing.version == texture.version()
         {
