@@ -696,6 +696,9 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_vox(nint scene, string path, uint parent, out NativeImportResult result);
 
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_3ds(nint scene, string path, uint parent, out NativeImportResult result);
+
     // ---------------------------------------------------------- raycasting
 
     [LibraryImport(Library)]

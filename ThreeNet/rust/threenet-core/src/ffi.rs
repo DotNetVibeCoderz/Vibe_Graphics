@@ -2862,6 +2862,32 @@ pub unsafe extern "C" fn tn_load_stl(
     }
 }
 
+/// Imports an Autodesk `.3ds` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_3ds(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::tds::load_tds(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
 /// Imports a MagicaVoxel `.vox` file.
 ///
 /// # Safety

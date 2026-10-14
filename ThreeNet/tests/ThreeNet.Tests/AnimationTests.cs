@@ -60,7 +60,7 @@ public class AnimationTests
         scene.UpdateAnimations(scene.Animations[^1].Duration * 0.5f);
         Assert.NotEqual(before, scene.GetBounds(rig.Root));
 
-        Assert.Throws<NotSupportedException>(() => scene.LoadModel("model.3ds"));
+        Assert.Throws<NotSupportedException>(() => scene.LoadModel("model.blend"));
     }
 
     [Fact]

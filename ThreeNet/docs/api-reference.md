@@ -25,7 +25,7 @@ lights face -Z.
 | `CreateMaterial(in MaterialOptions)`, `CreateMaterial(color, metallic, roughness)` | Materials |
 | `LoadTexture(path, srgb)`, `LoadTexture(bytes, srgb)`, `CreateTexture(width, height, pixels, format)` | Textures |
 | `LoadTextureAsync(path, srgb)`, `LoadTextureCached(path, srgb)`, `PollStreaming()`, `FinishStreaming(timeout)`, `SetStreamingBudget(n)`, `AssetStats`, `ClearAssetCache()` | Streaming and cache |
-| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadVox(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply, .vox |
+| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadVox(path, parent?)`, `Load3ds(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply, .vox, .3ds |
 | `CreateShader(source, language, name?)` | Custom shader hooks (WGSL / GLSL) |
 | `Animations`, `CreateAnimation(name)`, `UpdateAnimations(delta)` | Animation clips |
 | `Raycast(ray, options?, maxHits)`, `CreateCameraRay(camera, ndcX, ndcY, aspect)` | Picking |

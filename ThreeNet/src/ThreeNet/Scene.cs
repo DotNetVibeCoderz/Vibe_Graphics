@@ -705,7 +705,7 @@ public sealed class Scene : IDisposable
 
     /// <summary>
     /// Imports a model, picking the loader from the file extension (.gltf,
-    /// .glb, .fbx, .obj, .stl, .ply, .vox).
+    /// .glb, .fbx, .obj, .stl, .ply, .vox, .3ds).
     /// </summary>
     public ImportResult LoadModel(string path, Node? parent = null) =>
         Path.GetExtension(path).ToLowerInvariant() switch
@@ -716,6 +716,7 @@ public sealed class Scene : IDisposable
             ".stl" => LoadStl(path, parent),
             ".ply" => LoadPly(path, parent),
             ".vox" => LoadVox(path, parent),
+            ".3ds" => Load3ds(path, parent),
             var extension => throw new NotSupportedException($"no importer for '{extension}' files"),
         };
 
@@ -737,6 +738,26 @@ public sealed class Scene : IDisposable
     public ImportResult LoadStl(string path, Node? parent = null)
     {
         NativeError.Check(NativeMethods.tn_load_stl(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports an Autodesk <c>.3ds</c> file.</summary>
+    /// <remarks>
+    /// <para>
+    /// Each object in the file becomes a mesh under one root node. The format
+    /// carries no normals, so they are computed from the faces, and it is Z up,
+    /// so the geometry is turned Y up on the way in.
+    /// </para>
+    /// <para>
+    /// Materials are not read; every mesh gets a default one. The format's own
+    /// limits apply: vertex and face counts are 16 bit, so no single mesh can
+    /// hold more than 65535 of either. Faces pointing past the end of the
+    /// vertex list are dropped rather than trusted.
+    /// </para>
+    /// </remarks>
+    public ImportResult Load3ds(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_3ds(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
         return ImportResult.From(this, result);
     }
 
