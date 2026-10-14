@@ -41,6 +41,10 @@ pub struct FrameUniform {
     pub clip_planes: [[f32; 4]; 4],
     /// `x` = how many of `clip_planes` are live, `yzw` reserved.
     pub clip_count: [f32; 4],
+    /// Light probe irradiance: nine spherical harmonic coefficients, `xyz` of
+    /// each holding one colour. `w` of the first says whether there is a probe
+    /// at all.
+    pub light_probe: [[f32; 4]; 9],
 }
 
 impl FrameUniform {
@@ -102,6 +106,19 @@ impl FrameUniform {
                 planes
             },
             clip_count: [clip_planes.len().min(4) as f32, 0.0, 0.0, 0.0],
+            light_probe: {
+                let mut packed = [[0.0f32; 4]; 9];
+                let probe = environment.light_probe.scaled(environment.light_probe_intensity);
+                // A probe of all zeroes is indistinguishable from no probe, so
+                // the flag rides in w rather than being inferred.
+                let live = environment.light_probe_intensity > 0.0
+                    && probe.coefficients.iter().any(|c| *c != crate::math::Vec3::ZERO);
+                for (slot, coefficient) in packed.iter_mut().zip(probe.coefficients) {
+                    *slot = [coefficient.x, coefficient.y, coefficient.z, 0.0];
+                }
+                packed[0][3] = if live { 1.0 } else { 0.0 };
+                packed
+            },
         }
     }
 }

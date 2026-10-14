@@ -540,6 +540,39 @@ public sealed class Renderer : IDisposable
     }
 
     /// <summary>
+    /// Bakes the light arriving at a point into a <see cref="ThreeNet.LightProbe"/>:
+    /// six renders, projected onto spherical harmonics.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Hand the result to <see cref="Scene.LightProbe"/> and every surface gets
+    /// ambient light that knows which way it faces. The renderer has to be
+    /// offscreen and square, because the faces are read back through the
+    /// ordinary readback path; a small one is plenty, since a three band fit
+    /// cannot hold detail finer than a hemisphere anyway.
+    /// </para>
+    /// <para>
+    /// Tone mapping, exposure and antialiasing are turned off for the capture
+    /// and put back afterwards, so what is projected is radiance rather than a
+    /// picture of it. The readback is still eight bits a channel, so anything
+    /// brighter than white clips: an indoor probe is faithful, one staring into
+    /// the sun records a sun no brighter than a sheet of paper.
+    /// </para>
+    /// </remarks>
+    public unsafe LightProbe BakeLightProbe(Scene scene, Vector3 position)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        Vector3[] coefficients = new Vector3[LightProbe.CoefficientCount];
+        fixed (Vector3* pointer = coefficients)
+        {
+            NativeError.Check(NativeMethods.tn_renderer_bake_light_probe(
+                Handle, scene.Handle, position, pointer));
+        }
+
+        return new LightProbe(coefficients);
+    }
+
+    /// <summary>
     /// Captures the surroundings of a point into a cube texture - a reflection
     /// probe, or the input to a light probe.
     /// </summary>

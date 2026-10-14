@@ -506,6 +506,75 @@ public sealed class Scene : IDisposable
         }
     }
 
+    /// <summary>
+    /// Directional ambient light for the whole scene, baked with
+    /// <see cref="Renderer.BakeLightProbe"/>. Null clears it.
+    /// </summary>
+    /// <remarks>
+    /// It adds to <see cref="SceneEnvironment.AmbientColor"/> rather than
+    /// replacing it, so a scene can have a floor of constant ambient and a
+    /// probe for the shape of the light on top.
+    /// </remarks>
+    public unsafe LightProbe? LightProbe
+    {
+        get
+        {
+            Vector3[] coefficients = new Vector3[ThreeNet.LightProbe.CoefficientCount];
+            float intensity;
+            fixed (Vector3* pointer = coefficients)
+            {
+                NativeError.Check(NativeMethods.tn_scene_get_light_probe(Handle, pointer, &intensity));
+            }
+
+            LightProbe probe = new(coefficients);
+            return probe.IsDark ? null : probe;
+        }
+
+        set
+        {
+            if (value is null)
+            {
+                NativeError.Check(NativeMethods.tn_scene_set_light_probe(Handle, null, 0f));
+                return;
+            }
+
+            fixed (Vector3* pointer = value.Storage)
+            {
+                NativeError.Check(NativeMethods.tn_scene_set_light_probe(Handle, pointer, _lightProbeIntensity));
+            }
+        }
+    }
+
+    private float _lightProbeIntensity = 1f;
+
+    /// <summary>Scales the light probe; 0 turns it off without discarding it.</summary>
+    public unsafe float LightProbeIntensity
+    {
+        get
+        {
+            Vector3[] coefficients = new Vector3[ThreeNet.LightProbe.CoefficientCount];
+            float intensity;
+            fixed (Vector3* pointer = coefficients)
+            {
+                NativeError.Check(NativeMethods.tn_scene_get_light_probe(Handle, pointer, &intensity));
+            }
+
+            return intensity;
+        }
+
+        set
+        {
+            _lightProbeIntensity = value;
+            LightProbe? probe = LightProbe;
+            if (probe is not null)
+            {
+                // Writing the probe back is what carries the new intensity
+                // across, since the two live together on the native side.
+                LightProbe = probe;
+            }
+        }
+    }
+
     /// <summary>Forgets cached paths and removes hidden model prototypes; placed instances stay.</summary>
     public void ClearAssetCache() => NativeError.Check(NativeMethods.tn_scene_clear_asset_cache(Handle));
 

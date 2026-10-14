@@ -634,6 +634,16 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_obj(nint scene, string path, uint parent, out NativeImportResult result);
 
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_bake_light_probe(
+        nint renderer, nint scene, Vector3 position, Vector3* coefficients);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_set_light_probe(nint scene, Vector3* coefficients, float intensity);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_scene_get_light_probe(nint scene, Vector3* coefficients, float* intensity);
+
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_stl(nint scene, string path, uint parent, out NativeImportResult result);
 

@@ -2887,6 +2887,90 @@ pub unsafe extern "C" fn tn_load_ply(
     }
 }
 
+/// Bakes the light arriving at `position` into nine spherical harmonic
+/// coefficients, written to `out_coefficients`.
+///
+/// The renderer must be offscreen and square. Tone mapping and exposure are
+/// turned off for the capture and restored afterwards.
+///
+/// # Safety
+/// `renderer` and `scene` must be valid; `out_coefficients` must point at space
+/// for nine `TnVec3`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_bake_light_probe(
+    renderer: *mut Renderer,
+    scene: *mut Scene,
+    position: TnVec3,
+    out_coefficients: *mut TnVec3,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    let scene = scene_ref!(scene);
+    if out_coefficients.is_null() {
+        set_last_error("out_coefficients is null");
+        return status::INVALID_ARGUMENT;
+    }
+    match renderer.bake_light_probe(scene, position.into()) {
+        Ok(probe) => {
+            for (index, coefficient) in probe.coefficients.iter().enumerate() {
+                unsafe { out_coefficients.add(index).write((*coefficient).into()) };
+            }
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Sets the scene light probe from nine coefficients, or clears it when
+/// `coefficients` is null.
+///
+/// # Safety
+/// `scene` must be valid; `coefficients`, when not null, must point at nine
+/// `TnVec3`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_set_light_probe(
+    scene: *mut Scene,
+    coefficients: *const TnVec3,
+    intensity: f32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if coefficients.is_null() {
+        scene.environment.light_probe = crate::light_probe::LightProbe::DARK;
+        scene.environment.light_probe_intensity = 0.0;
+        return status::OK;
+    }
+    let mut probe = crate::light_probe::LightProbe::DARK;
+    for (index, slot) in probe.coefficients.iter_mut().enumerate() {
+        *slot = unsafe { coefficients.add(index).read() }.into();
+    }
+    scene.environment.light_probe = probe;
+    scene.environment.light_probe_intensity = intensity;
+    status::OK
+}
+
+/// Reads the scene light probe back into `out_coefficients`, and its intensity
+/// into `out_intensity`.
+///
+/// # Safety
+/// `scene` must be valid; `out_coefficients` must point at space for nine
+/// `TnVec3` and `out_intensity` at one `f32`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_scene_get_light_probe(
+    scene: *mut Scene,
+    out_coefficients: *mut TnVec3,
+    out_intensity: *mut f32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_coefficients.is_null() || out_intensity.is_null() {
+        set_last_error("output pointer is null");
+        return status::INVALID_ARGUMENT;
+    }
+    for (index, coefficient) in scene.environment.light_probe.coefficients.iter().enumerate() {
+        unsafe { out_coefficients.add(index).write((*coefficient).into()) };
+    }
+    unsafe { out_intensity.write(scene.environment.light_probe_intensity) };
+    status::OK
+}
+
 // ------------------------------------------------------------------ raycasting
 
 #[repr(C)]

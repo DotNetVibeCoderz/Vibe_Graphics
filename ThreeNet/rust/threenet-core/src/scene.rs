@@ -265,6 +265,12 @@ pub struct Environment {
     pub sky_clouds: f32,
     /// Spins an equirectangular sky around the vertical axis, in radians.
     pub sky_rotation: f32,
+    /// Directional ambient light, as spherical harmonics. Bake one with
+    /// [`crate::renderer::Renderer::bake_light_probe`]. It adds to the constant
+    /// ambient rather than replacing it, so a scene can have both.
+    pub light_probe: crate::light_probe::LightProbe,
+    /// Scales the probe; 0 turns it off without discarding it.
+    pub light_probe_intensity: f32,
 }
 
 impl Default for Environment {
@@ -285,6 +291,8 @@ impl Default for Environment {
             sky_haze: 0.25,
             sky_clouds: 0.0,
             sky_rotation: 0.0,
+            light_probe: crate::light_probe::LightProbe::DARK,
+            light_probe_intensity: 1.0,
         }
     }
 }

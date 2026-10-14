@@ -17,6 +17,7 @@ struct Frame {
     // Kept in step with common.wgsl: this prepass binds the same buffer.
     clip_planes: array<vec4<f32>, 4>,
     clip_count: vec4<f32>,
+    light_probe: array<vec4<f32>, 9>,
 };
 
 struct ObjectData {

@@ -52,6 +52,9 @@ struct Frame {
     clip_planes: array<vec4<f32>, 4>,
     // x = how many planes are live, yzw reserved
     clip_count: vec4<f32>,
+    // Nine spherical harmonic coefficients of the light probe; w of the first
+    // is 1 when a probe is set.
+    light_probe: array<vec4<f32>, 9>,
 };
 
 /// True where a fragment falls behind one of the clipping planes. Called at the
@@ -575,6 +578,28 @@ fn iridescent_fresnel(surface: Surface, f0: vec3<f32>, cos_theta: f32) -> vec3<f
     return mix(base, film, clamp(surface.iridescence, 0.0, 1.0));
 }
 
+/// What a Lambertian surface facing `normal` reflects from the light probe,
+/// per unit albedo. The band weights are the cosine lobe the surface
+/// integrates over - pi, two thirds of pi and a quarter of pi - each already
+/// divided by the pi that turns irradiance into reflected radiance.
+fn light_probe_irradiance(normal: vec3<f32>) -> vec3<f32> {
+    let x = normal.x;
+    let y = normal.y;
+    let z = normal.z;
+    var total = frame.light_probe[0].rgb * 0.282095;
+    total = total + frame.light_probe[1].rgb * (0.488603 * y * (2.0 / 3.0));
+    total = total + frame.light_probe[2].rgb * (0.488603 * z * (2.0 / 3.0));
+    total = total + frame.light_probe[3].rgb * (0.488603 * x * (2.0 / 3.0));
+    total = total + frame.light_probe[4].rgb * (1.092548 * x * y * 0.25);
+    total = total + frame.light_probe[5].rgb * (1.092548 * y * z * 0.25);
+    total = total + frame.light_probe[6].rgb * (0.315392 * (3.0 * z * z - 1.0) * 0.25);
+    total = total + frame.light_probe[7].rgb * (1.092548 * x * z * 0.25);
+    total = total + frame.light_probe[8].rgb * (0.546274 * (x * x - y * y) * 0.25);
+    // A three band fit of a dark room with a bright window in it can ring below
+    // zero. Negative light is not light.
+    return max(total, vec3<f32>(0.0));
+}
+
 fn surface_f0(surface: Surface) -> vec3<f32> {
     let dielectric = vec3<f32>(0.16 * surface.reflectance * surface.reflectance);
     return mix(dielectric, surface.albedo, surface.metallic);
@@ -722,6 +747,11 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
     let view = normalize(frame.camera_position.xyz - world_position);
     var lit = vec3<f32>(0.0);
     var ambient_light = frame.ambient.rgb * frame.ambient.w;
+    if (frame.light_probe[0].w > 0.5) {
+        // Directional ambient: the side of a surface facing the window is lit
+        // and the side facing away is not, which a scalar ambient cannot do.
+        ambient_light = ambient_light + light_probe_irradiance(surface.normal);
+    }
 
     let count = u32(frame.misc.x);
     for (var i: u32 = 0u; i < count; i = i + 1u) {

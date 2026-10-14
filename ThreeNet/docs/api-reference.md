@@ -82,6 +82,11 @@ lights face -Z.
 
 ## Lighting and cameras
 
+- `LightProbe`: `Coefficients` (nine `Vector3`), `Irradiance(normal)`, `Uniform(radiance)`, `Scaled(factor)`,
+  `IsDark`. Bake one with `Renderer.BakeLightProbe` and set it as `Scene.LightProbe`, with
+  `Scene.LightProbeIntensity` to scale it. It adds to the constant ambient rather than replacing it, so a
+  surface facing the window is lit and the side away from it is not.
+
 - `Light` (struct): `Type`, `Color`, `Intensity`, `Range`, `InnerConeAngle`, `OuterConeAngle`, `Size`,
   `CastShadow`, `Enabled`, `ShadowBias`, `ShadowNormalBias`, `ShadowStrength`;
   factories `Directional`, `Point`, `Spot`, `Ambient`.
@@ -98,6 +103,7 @@ lights face -Z.
 | `Render(scene, camera?)` | Draws a frame |
 | `RenderToTexture(scene, camera?, target)` | Draws into a texture a material can sample; the target must match the renderer size |
 | `RenderToCube(scene, position, target)` | Captures the surroundings of a point into a cube render target: six frames at 90 degrees, through a camera the capture creates and removes itself |
+| `BakeLightProbe(scene, position)` | The same six frames projected onto spherical harmonics, giving a `LightProbe` of directional ambient light. Offscreen and square renderers only |
 | `Resize(width, height)`, `Options`, `Width`, `Height`, `AspectRatio` | Target |
 | `ReadPixels()`, `ReadPixels(Span<byte>)`, `PixelBufferSize` | Offscreen readback |
 | `Stats` (`FrameStats`), `AdapterName`, `IsOffscreen` | Diagnostics |

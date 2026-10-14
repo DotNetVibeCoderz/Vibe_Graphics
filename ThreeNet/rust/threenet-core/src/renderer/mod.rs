@@ -30,6 +30,7 @@ use crate::renderer::shadows::{LightSource, ShadowCaster, ShadowMaps, ShadowSett
 use crate::renderer::sky::Sky;
 use crate::renderer::ssao::{GBufferItem, Ssao, SsaoSettings};
 use crate::renderer::ssr::{Ssr, SsrSettings};
+use crate::light_probe::LightProbe;
 use crate::renderer::timing::GpuTimer;
 use crate::renderer::uniforms::{
     FrameUniform, LightUniform, LightsUniform, MAX_LIGHTS, ObjectUniform,
@@ -886,6 +887,127 @@ impl Renderer {
     /// This is a bake, not something to do every frame - it is six full frames.
     /// Anything that renders a camera node is rendered, so a probe sees the
     /// scene as a camera there would.
+    /// Bakes the light arriving at a point into a light probe: six renders, the
+    /// same six a cube capture makes, projected onto spherical harmonics.
+    ///
+    /// Set the result as `scene.environment.light_probe` and every surface gets
+    /// ambient light that knows which way it is facing - lit on the side towards
+    /// the window, dark on the side away from it.
+    ///
+    /// The renderer has to be offscreen and square, because the faces are read
+    /// back through the ordinary readback path. A small one is enough: the fit
+    /// is three bands, so detail finer than a hemisphere cannot survive it
+    /// anyway, and thirty two pixels a side is plenty.
+    ///
+    /// Tone mapping and exposure are turned off for the duration and put back
+    /// afterwards, so what is projected is radiance rather than a picture of it.
+    /// The readback is still eight bits a channel, so anything brighter than
+    /// white clips - an indoor probe is faithful, and one staring into the sun
+    /// records a sun no brighter than a sheet of paper.
+    pub fn bake_light_probe(&mut self, scene: &mut Scene, position: Vec3) -> Result<LightProbe> {
+        if self.targets.offscreen.is_none() {
+            return Err(Error::Surface(
+                "baking a light probe needs an offscreen renderer, because it reads the faces back".into(),
+            ));
+        }
+        if self.config.width != self.config.height {
+            return Err(Error::InvalidArgument(format!(
+                "a light probe needs a square renderer, this one is {}x{}",
+                self.config.width, self.config.height
+            )));
+        }
+
+        // The capture wants linear radiance, not a photograph of it.
+        let restore = (self.config.tone_mapping, self.config.exposure, self.config.fxaa);
+        self.config.tone_mapping = ToneMapping::None;
+        self.config.exposure = 1.0;
+        // Antialiasing would blur across the seams between faces for no gain:
+        // the fit is three bands wide.
+        self.config.fxaa = false;
+
+        let probe = self.bake_faces(scene, position);
+
+        self.config.tone_mapping = restore.0;
+        self.config.exposure = restore.1;
+        self.config.fxaa = restore.2;
+        probe
+    }
+
+    /// The six renders themselves, split out so the settings above are always
+    /// put back even when a face fails.
+    fn bake_faces(&mut self, scene: &mut Scene, position: Vec3) -> Result<LightProbe> {
+        let probe_node = scene.create_node(None)?;
+        {
+            let node = scene
+                .node_mut(probe_node)
+                .ok_or(Error::InvalidHandle("probe node"))?;
+            node.camera = Some(crate::camera::Camera::perspective(
+                std::f32::consts::FRAC_PI_2,
+                0.05,
+                500.0,
+            ));
+            node.transform.translation = position;
+        }
+
+        const FACES: [(Vec3, Vec3); 6] = [
+            (Vec3::X, Vec3::NEG_Y),
+            (Vec3::NEG_X, Vec3::NEG_Y),
+            (Vec3::Y, Vec3::Z),
+            (Vec3::NEG_Y, Vec3::NEG_Z),
+            (Vec3::Z, Vec3::NEG_Y),
+            (Vec3::NEG_Z, Vec3::NEG_Y),
+        ];
+
+        let mut probe = LightProbe::DARK;
+        let mut outcome = Ok(());
+        for (direction, up) in FACES {
+            if let Some(node) = scene.node_mut(probe_node) {
+                node.transform.look_at(position + direction, up);
+            }
+            scene.mark_dirty(probe_node);
+
+            outcome = self.render(scene, Some(probe_node));
+            if outcome.is_err() {
+                break;
+            }
+
+            // Take the basis from the matrix the render actually used rather
+            // than from the direction above, so the sampled directions cannot
+            // drift out of step with how look_at orients a camera.
+            let world = match scene.node(probe_node) {
+                Some(node) => node.world_matrix(),
+                None => break,
+            };
+            let right = world.x_axis.truncate().normalize_or_zero();
+            let face_up = world.y_axis.truncate().normalize_or_zero();
+            // A camera looks down its own -Z.
+            let forward = -world.z_axis.truncate().normalize_or_zero();
+
+            let pixels = match self.read_pixels() {
+                Ok(pixels) => pixels,
+                Err(error) => {
+                    outcome = Err(error);
+                    break;
+                }
+            };
+            crate::light_probe::project_face(
+                &mut probe,
+                &crate::light_probe::FaceSamples {
+                    pixels: &pixels,
+                    size: self.config.width,
+                    forward,
+                    right,
+                    up: face_up,
+                    bgra: self.config.bgra_output,
+                },
+            );
+        }
+
+        let _ = scene.remove_node(probe_node);
+        outcome?;
+        Ok(probe)
+    }
+
     pub fn render_to_cube(
         &mut self,
         scene: &mut Scene,
