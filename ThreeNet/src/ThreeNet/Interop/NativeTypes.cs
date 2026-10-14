@@ -55,6 +55,10 @@ internal struct NativeMaterialDesc
     public Vector3 Specular;
     public float Shininess;
     public float Reflectance;
+    public float Clearcoat;
+    public float ClearcoatRoughness;
+    public Vector3 Sheen;
+    public float SheenRoughness;
     public float NormalScale;
     public float OcclusionStrength;
     public float AlphaCutoff;

@@ -266,6 +266,12 @@ pub struct TnMaterialDesc {
     pub specular: TnVec3,
     pub shininess: f32,
     pub reflectance: f32,
+    /// A thin glossy layer over the whole surface; 0 is off. Forward path only.
+    pub clearcoat: f32,
+    pub clearcoat_roughness: f32,
+    /// Retroreflective rim for cloth; black is off. Forward path only.
+    pub sheen: TnVec3,
+    pub sheen_roughness: f32,
     pub normal_scale: f32,
     pub occlusion_strength: f32,
     pub alpha_cutoff: f32,
@@ -309,6 +315,10 @@ impl From<Material> for TnMaterialDesc {
             specular: value.specular.into(),
             shininess: value.shininess,
             reflectance: value.reflectance,
+            clearcoat: value.clearcoat,
+            clearcoat_roughness: value.clearcoat_roughness,
+            sheen: value.sheen.into(),
+            sheen_roughness: value.sheen_roughness,
             normal_scale: value.normal_scale,
             occlusion_strength: value.occlusion_strength,
             alpha_cutoff: value.alpha_cutoff,
@@ -344,6 +354,10 @@ impl TnMaterialDesc {
         material.specular = self.specular.into();
         material.shininess = self.shininess;
         material.reflectance = self.reflectance;
+        material.clearcoat = self.clearcoat.clamp(0.0, 1.0);
+        material.clearcoat_roughness = self.clearcoat_roughness;
+        material.sheen = self.sheen.into();
+        material.sheen_roughness = self.sheen_roughness;
         material.normal_scale = self.normal_scale;
         material.occlusion_strength = self.occlusion_strength;
         material.alpha_cutoff = self.alpha_cutoff;

@@ -121,6 +121,13 @@ struct Surface {
     reflectance: f32,
     shading_model: f32,
     receive_shadow: f32,
+    /// A thin glossy layer over the whole surface: car paint, lacquer, a
+    /// varnished floor. 0 is off.
+    clearcoat: f32,
+    clearcoat_roughness: f32,
+    /// Retroreflective rim for cloth - velvet, satin, brushed wool. Black is off.
+    sheen: vec3<f32>,
+    sheen_roughness: f32,
 };
 
 fn distribution_ggx(n_dot_h: f32, roughness: f32) -> f32 {
@@ -381,6 +388,22 @@ fn shadow_visibility(light: Light, world_position: vec3<f32>, normal: vec3<f32>,
 
 // ------------------------------------------------------------------ lights
 
+/// The Charlie distribution Estevez and Kulla use for cloth: unlike GGX it
+/// peaks at grazing angles, which is why velvet lights up around its edge
+/// instead of in the middle.
+fn distribution_charlie(n_dot_h: f32, roughness: f32) -> f32 {
+    let alpha = max(roughness * roughness, 1.0e-3);
+    let inv = 1.0 / alpha;
+    let sin2 = max(1.0 - n_dot_h * n_dot_h, 1.0e-6);
+    return (2.0 + inv) * pow(sin2, inv * 0.5) / (2.0 * PI);
+}
+
+/// A cheap visibility term for the sheen lobe (Ashikhmin), which keeps it from
+/// blowing up at the rim where the Charlie lobe is strongest.
+fn visibility_sheen(n_dot_v: f32, n_dot_l: f32) -> f32 {
+    return 1.0 / (4.0 * (n_dot_l + n_dot_v - n_dot_l * n_dot_v) + 1.0e-4);
+}
+
 fn surface_f0(surface: Surface) -> vec3<f32> {
     let dielectric = vec3<f32>(0.16 * surface.reflectance * surface.reflectance);
     return mix(dielectric, surface.albedo, surface.metallic);
@@ -454,7 +477,29 @@ fn evaluate_light(light: Light, surface: Surface, view: vec3<f32>, world_positio
     let specular = (d * g * f) / max(4.0 * n_dot_v * n_dot_l, 1e-4);
     let kd = (vec3<f32>(1.0) - f) * (1.0 - surface.metallic);
     let diffuse = kd * surface.albedo / PI;
-    return (diffuse + specular) * radiance * n_dot_l;
+    var result = diffuse + specular;
+
+    // Cloth: a wide retroreflective lobe over the top, strongest at the rim.
+    if (any(surface.sheen > vec3<f32>(0.0))) {
+        let sheen_d = distribution_charlie(n_dot_h, surface.sheen_roughness);
+        let sheen_v = visibility_sheen(n_dot_v, n_dot_l);
+        result = result + surface.sheen * sheen_d * sheen_v;
+    }
+
+    // A clear lacquer over everything: its own narrow lobe, always dielectric,
+    // and what it reflects it also takes away from the layer underneath.
+    if (surface.clearcoat > 0.0) {
+        let coat_roughness = clamp(surface.clearcoat_roughness, 0.03, 1.0);
+        let coat_d = distribution_ggx(n_dot_h, coat_roughness);
+        let coat_g = geometry_smith(n_dot_v, n_dot_l, coat_roughness);
+        // 0.04 is the Fresnel reflectance of a clear coat at normal incidence.
+        let coat_f = 0.04 + 0.96 * pow(clamp(1.0 - v_dot_h, 0.0, 1.0), 5.0);
+        let coat = (coat_d * coat_g * coat_f) / max(4.0 * n_dot_v * n_dot_l, 1e-4);
+        let attenuation = 1.0 - surface.clearcoat * coat_f;
+        result = result * attenuation + vec3<f32>(coat * surface.clearcoat);
+    }
+
+    return result * radiance * n_dot_l;
 }
 
 /// Full lighting of a surface: every light with its shadow, SSAO, ambient,

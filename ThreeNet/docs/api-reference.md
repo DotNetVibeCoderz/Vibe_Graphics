@@ -62,7 +62,8 @@ lights face -Z.
 - `Helpers`: `AddAxes`, `AddBox`, `AddArrow`, `AddCameraFrustum`, `AddSkeleton`, `AddGrid` - line meshes that
   show what a scene is doing rather than what it looks like.
 - `MaterialOptions` (struct): `Shading`, `AlphaMode`, `CullMode`, `BaseColor`, `Emissive`, `EmissiveIntensity`,
-  `Metallic`, `Roughness`, `Specular`, `Shininess`, `Reflectance`, `NormalScale`, `OcclusionStrength`,
+  `Metallic`, `Roughness`, `Specular`, `Shininess`, `Reflectance`, `Clearcoat`, `ClearcoatRoughness`,
+  `Sheen`, `SheenRoughness` (the last four are forward path only), `NormalScale`, `OcclusionStrength`,
   `AlphaCutoff`, `UvScale`, `UvOffset`, `DepthWrite`, `DepthTest`, `Wireframe`, `RenderOrder`, `BaseColorMap`,
   `NormalMap`, `MetallicRoughnessMap`, `EmissiveMap`, `OcclusionMap`, `CustomMap`, `Shader`,
   `Custom0`..`Custom3`; factories `Pbr`, `Basic`, `Phong`, `Lambert`. `AlphaMode.Additive` adds the fragment

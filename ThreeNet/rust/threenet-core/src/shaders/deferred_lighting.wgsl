@@ -57,6 +57,13 @@ fn fs_lighting(input: FullscreenVertex) -> @location(0) vec4<f32> {
     surface.reflectance = extra.x;
     surface.shading_model = extra.y;
     surface.receive_shadow = extra.z;
+    // The G-buffer has no room for the extra lobes: five targets are already
+    // full, and clearcoat and sheen would need a sixth. They are a forward path
+    // feature, and a material that wants them should say so.
+    surface.clearcoat = 0.0;
+    surface.clearcoat_roughness = 0.0;
+    surface.sheen = vec3<f32>(0.0);
+    surface.sheen_roughness = 0.1;
 
     var mode = debug_view();
     if (mode == DEBUG_UV) {

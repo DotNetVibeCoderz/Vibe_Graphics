@@ -275,6 +275,27 @@ public struct MaterialOptions
     public Vector3 Specular;
     public float Shininess;
     public float Reflectance;
+    /// <summary>
+    /// A thin glossy layer over the whole surface: car paint, lacquer, a
+    /// varnished floor. 0 is off. What the coat reflects it also takes away
+    /// from the layer underneath, so a strong coat dulls the colour below it.
+    /// </summary>
+    /// <remarks>
+    /// Forward path only. The deferred G-buffer has five targets and no room
+    /// for a sixth, so a deferred frame ignores this.
+    /// </remarks>
+    public float Clearcoat;
+    /// <summary>How sharp the clearcoat reflection is; low is a mirror finish.</summary>
+    public float ClearcoatRoughness;
+    /// <summary>
+    /// Retroreflective rim for cloth - velvet, satin, brushed wool. Black is
+    /// off. Unlike the ordinary specular lobe it peaks at grazing angles, which
+    /// is why velvet lights up around its edge rather than in the middle.
+    /// </summary>
+    /// <remarks>Forward path only, for the same reason as <see cref="Clearcoat"/>.</remarks>
+    public Vector3 Sheen;
+    /// <summary>How wide the sheen rim is.</summary>
+    public float SheenRoughness;
     public float NormalScale;
     public float OcclusionStrength;
     public float AlphaCutoff;
@@ -323,6 +344,10 @@ public struct MaterialOptions
         Specular = new Vector3(0.04f);
         Shininess = 32f;
         Reflectance = 0.5f;
+        Clearcoat = 0f;
+        ClearcoatRoughness = 0.1f;
+        Sheen = Vector3.Zero;
+        SheenRoughness = 0.3f;
         NormalScale = 1f;
         OcclusionStrength = 1f;
         AlphaCutoff = 0.5f;
@@ -373,6 +398,10 @@ public struct MaterialOptions
         Specular = Specular,
         Shininess = Shininess,
         Reflectance = Reflectance,
+        Clearcoat = Clearcoat,
+        ClearcoatRoughness = ClearcoatRoughness,
+        Sheen = Sheen,
+        SheenRoughness = SheenRoughness,
         NormalScale = NormalScale,
         OcclusionStrength = OcclusionStrength,
         AlphaCutoff = AlphaCutoff,
@@ -415,6 +444,10 @@ public struct MaterialOptions
         Specular = desc.Specular,
         Shininess = desc.Shininess,
         Reflectance = desc.Reflectance,
+        Clearcoat = desc.Clearcoat,
+        ClearcoatRoughness = desc.ClearcoatRoughness,
+        Sheen = desc.Sheen,
+        SheenRoughness = desc.SheenRoughness,
         NormalScale = desc.NormalScale,
         OcclusionStrength = desc.OcclusionStrength,
         AlphaCutoff = desc.AlphaCutoff,

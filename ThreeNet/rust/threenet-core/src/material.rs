@@ -128,6 +128,14 @@ pub struct Material {
     pub specular: Vec3,
     pub shininess: f32,
     pub reflectance: f32,
+    /// A thin glossy layer over the whole surface - car paint, lacquer, a
+    /// varnished floor. 0 is off. Forward path only: the G-buffer has no room.
+    pub clearcoat: f32,
+    pub clearcoat_roughness: f32,
+    /// Retroreflective rim for cloth - velvet, satin, brushed wool. Black is
+    /// off. Forward path only, for the same reason.
+    pub sheen: Vec3,
+    pub sheen_roughness: f32,
     pub normal_scale: f32,
     pub occlusion_strength: f32,
     pub alpha_cutoff: f32,
@@ -161,6 +169,10 @@ impl Default for Material {
             specular: Vec3::splat(0.04),
             shininess: 32.0,
             reflectance: 0.5,
+            clearcoat: 0.0,
+            clearcoat_roughness: 0.1,
+            sheen: Vec3::ZERO,
+            sheen_roughness: 0.3,
             normal_scale: 1.0,
             occlusion_strength: 1.0,
             alpha_cutoff: 0.5,

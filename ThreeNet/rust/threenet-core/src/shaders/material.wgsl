@@ -23,6 +23,10 @@ struct MaterialData {
     custom1: vec4<f32>,
     custom2: vec4<f32>,
     custom3: vec4<f32>,
+    // x = clearcoat, y = clearcoat roughness, zw reserved
+    extended0: vec4<f32>,
+    // xyz = sheen colour, w = sheen roughness
+    extended1: vec4<f32>,
 };
 
 struct ObjectData {
@@ -242,6 +246,10 @@ fn material_surface(input: VertexOutput, front_facing: bool) -> Surface {
     surface.reflectance = material.params0.z;
     surface.shading_model = material.params1.w;
     surface.receive_shadow = input.receive_shadow;
+    surface.clearcoat = material.extended0.x;
+    surface.clearcoat_roughness = material.extended0.y;
+    surface.sheen = material.extended1.rgb;
+    surface.sheen_roughness = max(material.extended1.w, 0.07);
 
     var context: SurfaceContext;
     context.world_position = input.world_position;
