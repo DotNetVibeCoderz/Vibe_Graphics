@@ -147,6 +147,20 @@ pub struct Material {
     /// How thick the glass is, in metres. Thicker glass bends further and
     /// absorbs more.
     pub thickness: f32,
+    /// A thin film over the surface, thin enough that the light bouncing off
+    /// its top interferes with the light bouncing off the base underneath: a
+    /// soap bubble, an oil slick, anodised metal, the inside of a shell. The
+    /// hue swings with the viewing angle rather than being a colour the
+    /// material has. 0 is off. Forward path only, like the other extended
+    /// lobes.
+    pub iridescence: f32,
+    /// Index of refraction of the film itself. 1.3 is a soap bubble, and the
+    /// further it sits from the surrounding air the stronger the colours.
+    pub iridescence_ior: f32,
+    /// How thick the film is, in nanometres - a few hundred, since that is the
+    /// scale visible light works at. This is what the hue is a function of:
+    /// 100nm is a pale gold, 400nm cycles through a full set of bands.
+    pub iridescence_thickness: f32,
     /// Stretches the highlight along the surface grain: brushed metal, hair, a
     /// vinyl record. 0 is off, 1 stretches along the tangent, -1 across it.
     /// Forward path only, like the other extended lobes.
@@ -193,6 +207,9 @@ impl Default for Material {
             transmission: 0.0,
             ior: 1.5,
             thickness: 0.0,
+            iridescence: 0.0,
+            iridescence_ior: 1.3,
+            iridescence_thickness: 400.0,
             anisotropy: 0.0,
             anisotropy_rotation: 0.0,
             normal_scale: 1.0,

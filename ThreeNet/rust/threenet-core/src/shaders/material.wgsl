@@ -29,6 +29,8 @@ struct MaterialData {
     extended1: vec4<f32>,
     // x = transmission, y = ior, z = thickness, w reserved
     extended2: vec4<f32>,
+    // x = iridescence, y = film ior, z = film thickness in nanometres
+    extended3: vec4<f32>,
 };
 
 struct ObjectData {
@@ -256,6 +258,9 @@ fn material_surface(input: VertexOutput, front_facing: bool) -> Surface {
     surface.transmission = material.extended2.x;
     surface.ior = material.extended2.y;
     surface.thickness = material.extended2.z;
+    surface.iridescence = material.extended3.x;
+    surface.iridescence_ior = material.extended3.y;
+    surface.iridescence_thickness = material.extended3.z;
     surface.screen_uv = input.clip_position.xy / frame.screen.xy;
     // The grain runs along the tangent, turned in the tangent plane by the
     // angle in w - so a brushed disc can have its grain go round rather than

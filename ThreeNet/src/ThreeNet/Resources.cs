@@ -319,6 +319,38 @@ public struct MaterialOptions
     /// <summary>How thick the glass is, in metres. Thicker bends further and absorbs more.</summary>
     public float Thickness;
     /// <summary>
+    /// A film thin enough to interfere with itself, laid over the surface: a
+    /// soap bubble, an oil slick on a puddle, anodised titanium, the inside of
+    /// a shell. 0 is off, 1 is the full effect.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The hue is not a colour the material has. Light bouncing off the top of
+    /// the film and light bouncing off the surface underneath travel different
+    /// distances, so some wavelengths cancel and others reinforce - and which
+    /// ones do depends on the angle you look from, which is why the colour
+    /// slides as the object turns. <see cref="IridescenceThickness"/> chooses
+    /// the set of bands and <see cref="IridescenceIor"/> how strong they are.
+    /// </para>
+    /// <para>
+    /// Forward path only, like the other extended lobes. The evaluation is the
+    /// Belcour-Barla model that KHR_materials_iridescence specifies, so a glTF
+    /// authored for Three.js or Blender looks the same here.
+    /// </para>
+    /// </remarks>
+    public float Iridescence;
+    /// <summary>
+    /// Index of refraction of the film itself; 1.3 is a soap bubble. The
+    /// further it sits from the air around it, the stronger the colours.
+    /// </summary>
+    public float IridescenceIor;
+    /// <summary>
+    /// How thick the film is, in nanometres - the scale visible light works
+    /// at, so this is what the hue is a function of. Around 100 is a pale
+    /// gold; 400 runs through a full set of bands.
+    /// </summary>
+    public float IridescenceThickness;
+    /// <summary>
     /// Stretches the highlight along the surface grain: brushed metal, hair, a
     /// vinyl record. 0 is off, 1 stretches along the tangent and -1 across it.
     /// The mean roughness is held, so turning this up streaks the highlight
@@ -386,6 +418,9 @@ public struct MaterialOptions
         Transmission = 0f;
         Ior = 1.5f;
         Thickness = 0f;
+        Iridescence = 0f;
+        IridescenceIor = 1.3f;
+        IridescenceThickness = 400f;
         Anisotropy = 0f;
         AnisotropyRotation = 0f;
         NormalScale = 1f;
@@ -445,6 +480,9 @@ public struct MaterialOptions
         Transmission = Transmission,
         Ior = Ior,
         Thickness = Thickness,
+        Iridescence = Iridescence,
+        IridescenceIor = IridescenceIor,
+        IridescenceThickness = IridescenceThickness,
         Anisotropy = Anisotropy,
         AnisotropyRotation = AnisotropyRotation,
         NormalScale = NormalScale,
@@ -496,6 +534,9 @@ public struct MaterialOptions
         Transmission = desc.Transmission,
         Ior = desc.Ior,
         Thickness = desc.Thickness,
+        Iridescence = desc.Iridescence,
+        IridescenceIor = desc.IridescenceIor,
+        IridescenceThickness = desc.IridescenceThickness,
         Anisotropy = desc.Anisotropy,
         AnisotropyRotation = desc.AnisotropyRotation,
         NormalScale = desc.NormalScale,

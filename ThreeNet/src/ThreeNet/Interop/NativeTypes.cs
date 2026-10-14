@@ -62,6 +62,9 @@ internal struct NativeMaterialDesc
     public float Transmission;
     public float Ior;
     public float Thickness;
+    public float Iridescence;
+    public float IridescenceIor;
+    public float IridescenceThickness;
     public float Anisotropy;
     public float AnisotropyRotation;
     public float NormalScale;

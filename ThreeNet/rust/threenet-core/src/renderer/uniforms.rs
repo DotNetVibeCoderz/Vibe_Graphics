@@ -210,6 +210,9 @@ pub struct MaterialUniform {
     pub extended1: [f32; 4],
     /// `x` = transmission, `y` = index of refraction, `z` = thickness.
     pub extended2: [f32; 4],
+    /// `x` = iridescence, `y` = film index of refraction, `z` = film thickness
+    /// in nanometres.
+    pub extended3: [f32; 4],
 }
 
 impl Default for MaterialUniform {
@@ -281,6 +284,12 @@ impl From<&Material> for MaterialUniform {
                 material.transmission,
                 material.ior,
                 material.thickness,
+                0.0,
+            ],
+            extended3: [
+                material.iridescence,
+                material.iridescence_ior,
+                material.iridescence_thickness,
                 0.0,
             ],
         }

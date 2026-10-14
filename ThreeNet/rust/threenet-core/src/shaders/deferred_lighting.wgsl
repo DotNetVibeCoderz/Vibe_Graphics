@@ -71,6 +71,9 @@ fn fs_lighting(input: FullscreenVertex) -> @location(0) vec4<f32> {
     surface.transmission = 0.0;
     surface.ior = 1.5;
     surface.thickness = 0.0;
+    surface.iridescence = 0.0;
+    surface.iridescence_ior = 1.3;
+    surface.iridescence_thickness = 0.0;
     surface.screen_uv = vec2<f32>(0.0);
 
     var mode = debug_view();

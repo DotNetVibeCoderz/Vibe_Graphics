@@ -142,6 +142,13 @@ struct Surface {
     ior: f32,
     /// Thickness of the glass in metres. Thicker bends further and absorbs more.
     thickness: f32,
+    /// A thin film over the surface: soap bubble, oil slick, anodised metal.
+    /// 0 is off.
+    iridescence: f32,
+    /// Index of refraction of the film.
+    iridescence_ior: f32,
+    /// Thickness of the film in nanometres, which is what sets the hue.
+    iridescence_thickness: f32,
     /// Where this fragment is on screen, for sampling what is behind it.
     screen_uv: vec2<f32>,
 };
@@ -441,6 +448,133 @@ fn visibility_sheen(n_dot_v: f32, n_dot_l: f32) -> f32 {
     return 1.0 / (4.0 * (n_dot_l + n_dot_v - n_dot_l * n_dot_v) + 1.0e-4);
 }
 
+// ----------------------------------------------------- thin film iridescence
+
+/// A film only hundreds of nanometres thick makes the light reflected off its
+/// top surface interfere with the light reflected off the base underneath.
+/// Which wavelengths cancel and which reinforce depends on how much further
+/// the second ray travelled, so the hue swings with the viewing angle instead
+/// of being a colour the material has. This is the Belcour-Barla model, the
+/// one KHR_materials_iridescence specifies.
+const XYZ_TO_REC709 = mat3x3<f32>(
+    vec3<f32>(3.2404542, -0.9692660, 0.0556434),
+    vec3<f32>(-1.5371385, 1.8760108, -0.2040259),
+    vec3<f32>(-0.4985314, 0.0415560, 1.0572252),
+);
+
+/// The index of refraction a dielectric with this normal incidence
+/// reflectance would have, which is what the second interface is described in.
+fn fresnel0_to_ior(fresnel0: vec3<f32>) -> vec3<f32> {
+    let sqrt_f0 = sqrt(clamp(fresnel0, vec3<f32>(0.0), vec3<f32>(0.9999)));
+    return (vec3<f32>(1.0) + sqrt_f0) / max(vec3<f32>(1.0) - sqrt_f0, vec3<f32>(1.0e-4));
+}
+
+fn ior_to_fresnel0(transmitted: vec3<f32>, incident: f32) -> vec3<f32> {
+    let r = (transmitted - vec3<f32>(incident)) / (transmitted + vec3<f32>(incident));
+    return r * r;
+}
+
+/// How much colour a given optical path difference is worth to the eye, as a
+/// sum of Gaussians fitted to the CIE colour matching curves. This is where
+/// the rainbow comes from: the phase shift is one number, and this is what
+/// turns it into a hue.
+fn eval_sensitivity(opd: f32, shift: vec3<f32>) -> vec3<f32> {
+    let phase = 2.0 * PI * opd * 1.0e-9;
+    let val = vec3<f32>(5.4856e-13, 4.4201e-13, 5.2481e-13);
+    let pos = vec3<f32>(1.6810e+06, 1.7953e+06, 2.2084e+06);
+    let variance = vec3<f32>(4.3278e+09, 9.3046e+09, 6.6121e+09);
+
+    var xyz = val * sqrt(2.0 * PI * variance) * cos(pos * phase + shift)
+        * exp(-(phase * phase) * variance);
+    xyz.x = xyz.x + 9.7470e-14 * sqrt(2.0 * PI * 4.5282e+09)
+        * cos(2.2399e+06 * phase + shift.x) * exp(-4.5282e+09 * phase * phase);
+    xyz = xyz / 1.0685e-7;
+    return XYZ_TO_REC709 * xyz;
+}
+
+/// The reflectance of a thin film sitting on a base of reflectance `base_f0`,
+/// seen at `cos_theta1`. It returns a colour rather than a scalar, which is
+/// the entire point of the effect.
+fn eval_iridescence(
+    outside_ior: f32,
+    film_ior: f32,
+    cos_theta1: f32,
+    thickness: f32,
+    base_f0: vec3<f32>,
+) -> vec3<f32> {
+    // A film of no thickness is not a film: fade its index back towards the
+    // air around it so that turning thickness down turns the effect off
+    // instead of leaving a flat tint behind.
+    let iridescence_ior = mix(outside_ior, film_ior, smoothstep(0.0, 0.03, thickness));
+    let ratio = outside_ior / iridescence_ior;
+    let sin_theta2_sq = ratio * ratio * (1.0 - cos_theta1 * cos_theta1);
+    let cos_theta2_sq = 1.0 - sin_theta2_sq;
+    if (cos_theta2_sq < 0.0) {
+        // Total internal reflection: all of it comes back, none of it interferes.
+        return vec3<f32>(1.0);
+    }
+    let cos_theta2 = sqrt(cos_theta2_sq);
+
+    // First interface: the air against the film.
+    let r0 = ior_to_fresnel0(vec3<f32>(iridescence_ior), outside_ior).x;
+    let r12 = fresnel_schlick(cos_theta1, vec3<f32>(r0)).x;
+    let t121 = 1.0 - r12;
+    var phi12 = 0.0;
+    if (iridescence_ior < outside_ior) {
+        phi12 = PI;
+    }
+    let phi21 = PI - phi12;
+
+    // Second interface: the film against whatever the surface is made of.
+    let base_ior = fresnel0_to_ior(base_f0);
+    let r23 = fresnel_schlick(cos_theta2, ior_to_fresnel0(base_ior, iridescence_ior));
+    var phi23 = vec3<f32>(0.0);
+    if (base_ior.x < iridescence_ior) { phi23.x = PI; }
+    if (base_ior.y < iridescence_ior) { phi23.y = PI; }
+    if (base_ior.z < iridescence_ior) { phi23.z = PI; }
+
+    // How much further the ray that went through the film had to travel.
+    let opd = 2.0 * iridescence_ior * thickness * cos_theta2;
+    let phi = vec3<f32>(phi21) + phi23;
+
+    let r123 = clamp(r12 * r23, vec3<f32>(1.0e-5), vec3<f32>(0.9999));
+    let r123_root = sqrt(r123);
+    let rs = (t121 * t121) * r23 / (vec3<f32>(1.0) - r123);
+
+    // The constant term, then two orders of the interference series. The terms
+    // shrink by a factor of r123 each time, and by the third the difference is
+    // below what a display can show, so the reference implementations stop at
+    // two as well.
+    var result = r12 + rs;
+    var cm = rs - vec3<f32>(t121);
+    for (var m = 1; m <= 2; m = m + 1) {
+        cm = cm * r123_root;
+        result = result + cm * 2.0 * eval_sensitivity(f32(m) * opd, f32(m) * phi);
+    }
+
+    // Interference can land outside the gamut and the Gaussian fit can dip
+    // slightly below zero; a negative reflectance is not a colour.
+    return max(result, vec3<f32>(0.0));
+}
+
+/// The Fresnel term a surface shows once a thin film is over it, faded in by
+/// how much film there is. With `iridescence` at 0 this is exactly the plain
+/// Schlick term, so a material that does not ask for it pays only a branch.
+fn iridescent_fresnel(surface: Surface, f0: vec3<f32>, cos_theta: f32) -> vec3<f32> {
+    let base = fresnel_schlick(cos_theta, f0);
+    if (surface.iridescence <= 0.0) {
+        return base;
+    }
+    let film = eval_iridescence(
+        1.0,
+        max(surface.iridescence_ior, 1.0),
+        cos_theta,
+        max(surface.iridescence_thickness, 0.0),
+        f0,
+    );
+    return mix(base, film, clamp(surface.iridescence, 0.0, 1.0));
+}
+
 fn surface_f0(surface: Surface) -> vec3<f32> {
     let dielectric = vec3<f32>(0.16 * surface.reflectance * surface.reflectance);
     return mix(dielectric, surface.albedo, surface.metallic);
@@ -526,7 +660,7 @@ fn evaluate_light(light: Light, surface: Surface, view: vec3<f32>, world_positio
         );
     }
     let g = geometry_smith(n_dot_v, n_dot_l, surface.roughness);
-    let f = fresnel_schlick(v_dot_h, f0);
+    let f = iridescent_fresnel(surface, f0, v_dot_h);
 
     let specular = (d * g * f) / max(4.0 * n_dot_v * n_dot_l, 1e-4);
     let kd = (vec3<f32>(1.0) - f) * (1.0 - surface.metallic);
@@ -649,7 +783,22 @@ fn shade_surface(surface_in: Surface, world_position: vec3<f32>, view_depth: f32
             irradiance = sky_radiance(surface.normal, 1.0);
             prefiltered = sky_radiance(reflected, surface.roughness);
         }
-        let f = fresnel_schlick_roughness(n_dot_v, f0, surface.roughness);
+        var f = fresnel_schlick_roughness(n_dot_v, f0, surface.roughness);
+        if (surface.iridescence > 0.0) {
+            // The film colours what the surface takes from the environment as
+            // well, which is most of what a bubble or an oil slick is made of.
+            f = mix(
+                f,
+                eval_iridescence(
+                    1.0,
+                    max(surface.iridescence_ior, 1.0),
+                    n_dot_v,
+                    max(surface.iridescence_thickness, 0.0),
+                    f0,
+                ),
+                clamp(surface.iridescence, 0.0, 1.0),
+            );
+        }
         let kd = (vec3<f32>(1.0) - f) * (1.0 - surface.metallic);
         ambient = ambient + (kd * irradiance * surface.albedo + prefiltered * f) * surface.occlusion;
     }

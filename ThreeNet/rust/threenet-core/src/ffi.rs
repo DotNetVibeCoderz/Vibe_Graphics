@@ -278,6 +278,12 @@ pub struct TnMaterialDesc {
     pub ior: f32,
     /// Thickness of the glass in metres.
     pub thickness: f32,
+    /// A thin interference film over the surface; 0 is off. Forward path only.
+    pub iridescence: f32,
+    /// Index of refraction of the film itself.
+    pub iridescence_ior: f32,
+    /// Thickness of the film in nanometres, which is what sets the hue.
+    pub iridescence_thickness: f32,
     /// Stretches the highlight along the grain; 0 is off. Forward path only.
     pub anisotropy: f32,
     /// Turns the grain within the tangent plane, in radians.
@@ -332,6 +338,9 @@ impl From<Material> for TnMaterialDesc {
             transmission: value.transmission,
             ior: value.ior,
             thickness: value.thickness,
+            iridescence: value.iridescence,
+            iridescence_ior: value.iridescence_ior,
+            iridescence_thickness: value.iridescence_thickness,
             anisotropy: value.anisotropy,
             anisotropy_rotation: value.anisotropy_rotation,
             normal_scale: value.normal_scale,
@@ -376,6 +385,9 @@ impl TnMaterialDesc {
         material.transmission = self.transmission.clamp(0.0, 1.0);
         material.ior = self.ior.max(1.0);
         material.thickness = self.thickness.max(0.0);
+        material.iridescence = self.iridescence.clamp(0.0, 1.0);
+        material.iridescence_ior = self.iridescence_ior.max(1.0);
+        material.iridescence_thickness = self.iridescence_thickness.max(0.0);
         material.anisotropy = self.anisotropy.clamp(-1.0, 1.0);
         material.anisotropy_rotation = self.anisotropy_rotation;
         material.normal_scale = self.normal_scale;
