@@ -115,6 +115,19 @@ The cut is applied in the forward pass, in the deferred G-buffer **and** in the 
 matters: without it, ambient occlusion and depth of field go on occluding against surfaces nothing draws, and
 the cut face picks up a shadow from the half that is no longer there.
 
+## Antialiasing and the look of the frame
+
+Forward rendering antialiases with MSAA (`RendererOptions.MsaaSamples`). The deferred path cannot: MSAA needs
+a multisampled target, and the G-buffer is resolved before the lighting pass ever reads it. `Fxaa` fills that
+gap by smoothing the finished image, and it is useful on the forward path too wherever MSAA is unavailable or
+not enough.
+
+Grading, the vignette and the grain all run after tone mapping, because they are what a lens and a film stock
+do rather than what the scene does. Contrast pivots on middle grey, desaturation keeps the Rec. 709 luma so
+apparent brightness holds, and the grain moves with time - a still grain reads as dirt on the lens.
+
+A debug view switches every one of them off, since a debug view is meant to be read.
+
 ## Debug views
 
 `RendererOptions.DebugView` replaces the shaded image with one channel of the surface, in both render paths.

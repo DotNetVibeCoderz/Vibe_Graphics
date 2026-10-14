@@ -118,16 +118,18 @@ Done in 0.10.0.
 
 | Item | Status | Notes |
 |---|---|---|
-| Instanced rendering (`InstancedMesh`) | ⬜ | Every draw is `draw_indexed(.., 0..1)` today, so a thousand clones are a thousand draws. Needs a per-instance buffer, instance-aware bounds and a decision on how picking reports a hit |
+| Instanced rendering (`InstancedMesh`) | ✅ | `Node.SetInstances`. One instance buffer per node, grown but never shrunk, and a `vs_instanced` entry point beside `vs_main` in the same module - an entry point nothing calls places no demand on the pipeline layout. The transforms apply inside the node transform, so moving the node moves the set. The cost: instances share one material, one set of morph weights and one entry in the frustum test, against `Clone` which costs a draw each but culls individually |
 | LOD | ✅ | `Node.SetLevelsOfDetail`. The level is picked before the bounds are taken, so culling and the shadow caster agree with what is drawn; a null level lets a node disappear entirely in the distance |
 | Clipping planes | ✅ | `RendererOptions.ClipPlanes`, up to four world space planes. Clipped in the forward pass, the deferred G-buffer and the SSAO prepass - the prepass matters, or ambient occlusion and depth of field keep occluding against surfaces nothing draws |
 | Render targets as a public API | ⬜ | The renderer can already draw offscreen, but a scene cannot render into a texture another material samples. This is what `CubeCamera`, planar reflections and portals all need |
 | Cube map textures and `CubeCamera` | ⬜ | The environment map is equirectangular only. Needs a cube texture type, six-face capture, and a cube path in `sample_environment` |
 | PBR extensions: clearcoat, transmission, sheen, iridescence, anisotropy | ⬜ | `MeshPhysicalMaterial` territory. Each is a lobe added to the BRDF plus material slots; transmission also needs the scene colour available to the surface stage |
 | Post: film grain, vignette, colour grading | ✅ | `RendererOptions.Vignette`, `VignetteSoftness`, `Grain`, `Saturation`, `Contrast`, `Brightness`, folded into the composite after tone mapping - they are what a lens and a film stock do, not what the scene does. A debug view switches them off, since it is meant to be read |
-| Post: SSR, FXAA / SMAA, LUT grading | ⬜ | Antialiasing is MSAA only, so the deferred path has no post AA. FXAA needs the composite to land in an intermediate target first; SSR waits on render targets |
+| Post: FXAA | ✅ | `RendererOptions.Fxaa`. The composite lands in an intermediate and FXAA copies it out, so nothing pays for a pass it is not using. This is the only antialiasing the deferred path can have: MSAA needs a multisampled target and the G-buffer is resolved before lighting |
+| Post: SMAA, SSR, LUT grading | ⬜ | SMAA is a heavier three pass technique than FXAA; SSR waits on render targets |
 | Light probes | ⬜ | Already open in "Next up" |
 | GPU particles, GPU skinning | ⬜ | Already open in "Next up"; both need compute pipelines in the core |
+| Instance aware culling and picking | ⬜ | Instanced nodes cull and raycast against the node bounds, not each instance. Enough for a scattered forest, wrong for anything far apart |
 | Screen space refraction | ⬜ | Already open in "Next up"; the same missing piece as transmission - no pass hands the scene colour or depth to a material shader |
 
 ### C. Asset formats

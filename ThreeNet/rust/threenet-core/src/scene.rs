@@ -135,6 +135,13 @@ pub struct Node {
     /// to. Sorted near to far; an id of 0 draws nothing, which is how a level
     /// becomes a disappearance. Empty means the mesh binding is used as it is.
     pub lod: Vec<(GeometryId, f32)>,
+    /// One transform per copy of the mesh, applied inside the node transform -
+    /// so moving the node still moves every instance with it. Empty draws the
+    /// mesh once, as an ordinary node.
+    pub instances: Vec<Mat4>,
+    /// Bumped whenever [Node::instances] changes, so the renderer knows to
+    /// re-upload rather than comparing a thousand matrices.
+    pub(crate) instance_version: u32,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
     pub(crate) world: Mat4,
@@ -142,6 +149,17 @@ pub struct Node {
 }
 
 impl Node {
+    /// Replaces the instance transforms and marks them for re-upload.
+    pub fn set_instances(&mut self, instances: Vec<Mat4>) {
+        self.instances = instances;
+        self.instance_version = self.instance_version.wrapping_add(1).max(1);
+    }
+
+    #[inline]
+    pub fn instance_version(&self) -> u32 {
+        self.instance_version
+    }
+
     /// The geometry for a camera this far away, or None past the last level -
     /// which is how a node is allowed to disappear entirely in the distance.
     pub fn lod_geometry(&self, distance: f32) -> Option<GeometryId> {
@@ -163,6 +181,8 @@ impl Default for Node {
             layers: 1,
             user_data: 0,
             lod: Vec::new(),
+            instances: Vec::new(),
+            instance_version: 0,
             mesh: None,
             light: None,
             camera: None,
@@ -391,6 +411,8 @@ impl Scene {
                 // A clone starts from the same expression as the original.
                 morph_weights: node.morph_weights.clone(),
                 lod: node.lod.clone(),
+                instances: node.instances.clone(),
+                instance_version: 1,
                 parent: Some(new_parent),
                 children: Vec::new(),
                 world: Mat4::IDENTITY,

@@ -219,6 +219,10 @@ pub struct RendererConfig {
     /// Up to four world space planes that cut the scene away where a fragment
     /// falls behind them: `xyz` is a unit normal, `w` the distance from the
     /// origin. A section through a model without opening the model.
+    /// Fast approximate antialiasing on the finished image. The only
+    /// antialiasing the deferred path can have, because MSAA needs a
+    /// multisampled target and the G-buffer is resolved before lighting.
+    pub fxaa: bool,
     /// Darkens the corners; 0 is off.
     pub vignette: f32,
     /// How far in from the corner the darkening starts, 0 to 1.
@@ -295,6 +299,7 @@ impl Default for RendererConfig {
             motion_blur_samples: 12,
             debug_view: DebugView::Off,
             wireframe: false,
+            fxaa: false,
             vignette: 0.0,
             vignette_softness: 0.5,
             grain: 0.0,
@@ -329,6 +334,8 @@ pub struct FrameStats {
 struct DrawItem {
     geometry: GeometryId,
     material: MaterialId,
+    /// The node holding the instance buffer, when this item is instanced.
+    instances: Option<crate::scene::NodeId>,
     world: Mat4,
     depth: f32,
     transparent: bool,
@@ -1201,6 +1208,7 @@ impl Renderer {
             saturation: if debug { 1.0 } else { self.config.saturation },
             contrast: if debug { 1.0 } else { self.config.contrast },
             brightness: if debug { 0.0 } else { self.config.brightness },
+            fxaa: self.config.fxaa && !debug,
         };
 
         match &self.surface {
@@ -1378,6 +1386,7 @@ impl Renderer {
             self.draw_items.push(DrawItem {
                 geometry: binding.geometry,
                 material: binding.material,
+                instances: (!node.instances.is_empty()).then_some(id),
                 world,
                 depth: (bounds.center() - camera_position).length_squared(),
                 transparent: material.is_transparent(),
@@ -1457,6 +1466,21 @@ impl Renderer {
                     &mut self.mipmaps,
                     id,
                     texture,
+                );
+            }
+        }
+
+        // Instance buffers, for the nodes whose draw items asked for one.
+        let instanced: Vec<crate::scene::NodeId> =
+            self.draw_items.iter().filter_map(|item| item.instances).collect();
+        for id in instanced {
+            if let Some(node) = scene.node(id) {
+                self.resources.ensure_instances(
+                    &self.device,
+                    &self.queue,
+                    id,
+                    &node.instances,
+                    node.instance_version(),
                 );
             }
         }
@@ -1779,9 +1803,12 @@ fn draw_scene_items(
             _ => {}
         }
 
+        // An item is instanced only if its buffer actually made it to the GPU.
+        let instances = item.instances.and_then(|id| resources.instances(id));
         let custom = material.shader.and_then(|id| scene.shader(id));
         let mut key = PipelineKey::for_material(material, mesh.topology, samples, HDR_FORMAT, custom);
         key.wireframe |= force_wireframe;
+        key.instanced = instances.is_some();
         if filter == DrawFilter::DeferredOpaque {
             key = key.gbuffer();
         }
@@ -1795,15 +1822,22 @@ fn draw_scene_items(
         }
         pass.set_bind_group(2, object_bind_group, &[item.object_offset]);
         pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        let copies = match instances {
+            Some(gpu) => {
+                pass.set_vertex_buffer(1, gpu.buffer.slice(..));
+                gpu.count
+            }
+            None => 1,
+        };
         match &mesh.index_buffer {
             Some(index_buffer) => {
                 pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                pass.draw_indexed(0..mesh.index_count, 0, 0..copies);
             }
-            None => pass.draw(0..mesh.vertex_count, 0..1),
+            None => pass.draw(0..mesh.vertex_count, 0..copies),
         }
         draw_calls += 1;
-        triangles += mesh.index_count / 3;
+        triangles += (mesh.index_count / 3) * copies;
     }
 
     (draw_calls, triangles)

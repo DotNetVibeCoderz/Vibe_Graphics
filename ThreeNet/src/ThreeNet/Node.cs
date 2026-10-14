@@ -189,7 +189,56 @@ public sealed class Node : IEquatable<Node>
         NativeError.Check(NativeMethods.tn_node_attach_mesh(Scene.Handle, Id, geometry.Id, material.Id));
 
     /// <summary>
+    /// Draws the mesh on this node many times from one draw call, once per
+    /// transform given. The transforms apply inside the node transform, so
+    /// moving the node still moves the whole set.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what a forest or a crowd wants: <see cref="Clone"/> shares the
+    /// geometry but still costs a draw call each, while a thousand instances
+    /// here are one. The cost is that they share everything - one material, one
+    /// set of morph weights, one entry in the frustum test, which uses the
+    /// node's own bounds rather than each instance's.
+    /// </para>
+    /// <para>
+    /// Pass an empty span to make it an ordinary single mesh again.
+    /// </para>
+    /// </remarks>
+    public unsafe void SetInstances(ReadOnlySpan<Matrix4x4> transforms)
+    {
+        fixed (Matrix4x4* matrices = transforms)
+        {
+            NativeError.Check(NativeMethods.tn_node_set_instances(
+                Scene.Handle, Id, (float*)matrices, (uint)transforms.Length));
+        }
+    }
+
+    /// <summary>
+    /// Places instances from positions alone, each with its own uniform scale
+    /// and turn about Y - which is most of what scattering trees or rocks needs.
+    /// </summary>
+    public void SetInstances(ReadOnlySpan<Vector3> positions, float scale = 1f)
+    {
+        Matrix4x4[] transforms = new Matrix4x4[positions.Length];
+        for (int i = 0; i < positions.Length; i++)
+        {
+            transforms[i] = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateTranslation(positions[i]);
+        }
+
+        SetInstances(transforms);
+    }
+
+    /// <summary>Drops the instances, leaving an ordinary single mesh.</summary>
+    public unsafe void ClearInstances() =>
+        NativeError.Check(NativeMethods.tn_node_set_instances(Scene.Handle, Id, null, 0));
+
+    /// <summary>How many copies this node draws; 0 means it is an ordinary mesh.</summary>
+    public int InstanceCount => Math.Max(0, NativeMethods.tn_node_instance_count(Scene.Handle, Id));
+
+    /// <summary>
     /// Replaces the mesh with a different geometry as the camera gets further
+
     /// away. Each level is the geometry to draw and the distance it is used out
     /// to, nearest first; past the last distance the node is not drawn at all,
     /// so pass <see cref="float.PositiveInfinity"/> last to keep it forever.

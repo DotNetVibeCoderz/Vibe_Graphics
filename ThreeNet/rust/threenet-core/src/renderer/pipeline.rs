@@ -215,6 +215,9 @@ pub struct PipelineKey {
     /// Custom shader id (0 = built-in) and its version.
     pub shader: u32,
     pub shader_version: u32,
+    /// Draws many copies from one instance buffer. A different vertex buffer
+    /// layout and a different entry point, so it needs its own pipeline.
+    pub instanced: bool,
 }
 
 impl PipelineKey {
@@ -244,6 +247,7 @@ impl PipelineKey {
             format,
             shader: shader_id,
             shader_version: shader.map_or(0, CustomShader::version),
+            instanced: false,
         }
     }
 
@@ -346,8 +350,12 @@ impl PipelineCache {
                 layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module,
-                    entry_point: Some("vs_main"),
-                    buffers: &[Some(Vertex::LAYOUT)],
+                    entry_point: Some(if key.instanced { "vs_instanced" } else { "vs_main" }),
+                    buffers: if key.instanced {
+                        &[Some(Vertex::LAYOUT), Some(Vertex::INSTANCE_LAYOUT)]
+                    } else {
+                        &[Some(Vertex::LAYOUT)]
+                    },
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {

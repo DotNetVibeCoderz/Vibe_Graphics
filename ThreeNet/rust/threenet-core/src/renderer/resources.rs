@@ -259,12 +259,80 @@ pub struct ResourceCache {
     meshes: HashMap<GeometryId, GpuMesh>,
     textures: HashMap<TextureId, GpuTexture>,
     materials: HashMap<MaterialId, GpuMaterial>,
+    /// One instance buffer per node that carries instances, keyed by node id.
+    instances: HashMap<crate::scene::NodeId, GpuInstances>,
+}
+
+#[derive(Debug)]
+pub struct GpuInstances {
+    pub buffer: wgpu::Buffer,
+    pub count: u32,
+    version: u32,
+    /// Capacity in instances, so a buffer is only rebuilt when it grows.
+    capacity: u32,
 }
 
 impl ResourceCache {
     #[inline]
     pub fn mesh(&self, id: GeometryId) -> Option<&GpuMesh> {
         self.meshes.get(&id)
+    }
+
+    pub fn instances(&self, id: crate::scene::NodeId) -> Option<&GpuInstances> {
+        self.instances.get(&id)
+    }
+
+    /// Uploads a node instance transforms, growing the buffer only when it has
+    /// to. A buffer that is already big enough is written in place.
+    pub fn ensure_instances(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        id: crate::scene::NodeId,
+        matrices: &[crate::math::Mat4],
+        version: u32,
+    ) {
+        let count = matrices.len() as u32;
+        if let Some(existing) = self.instances.get(&id)
+            && existing.version == version
+            && existing.count == count
+        {
+            return;
+        }
+
+        let bytes: Vec<f32> = matrices.iter().flat_map(|m| m.to_cols_array()).collect();
+        let data: &[u8] = bytemuck::cast_slice(&bytes);
+
+        let fits = self
+            .instances
+            .get(&id)
+            .is_some_and(|existing| existing.capacity >= count);
+        if fits {
+            let existing = self.instances.get_mut(&id).expect("checked above");
+            queue.write_buffer(&existing.buffer, 0, data);
+            existing.count = count;
+            existing.version = version;
+            return;
+        }
+
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("threenet.instances"),
+            contents: data,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+        self.instances.insert(
+            id,
+            GpuInstances {
+                buffer,
+                count,
+                version,
+                capacity: count,
+            },
+        );
+    }
+
+    pub fn forget_instances(&mut self, id: crate::scene::NodeId) {
+        self.instances.remove(&id);
     }
 
     #[inline]

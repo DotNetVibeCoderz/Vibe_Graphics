@@ -38,6 +38,19 @@ impl Vertex {
         ],
     };
 
+    /// One transform per instance, as four columns. Stepped per instance, so a
+    /// thousand copies of a mesh are one draw call rather than a thousand.
+    pub const INSTANCE_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: (size_of::<f32>() * 16) as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &wgpu::vertex_attr_array![
+            4 => Float32x4,
+            5 => Float32x4,
+            6 => Float32x4,
+            7 => Float32x4,
+        ],
+    };
+
     #[inline]
     pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
         Self {

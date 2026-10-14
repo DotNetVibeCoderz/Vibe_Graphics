@@ -84,6 +84,15 @@ public struct RendererOptions
     /// occlude against a surface nothing draws.
     /// </remarks>
     /// <summary>
+    /// Fast approximate antialiasing, run on the finished image. This is the
+    /// only antialiasing the deferred path can have: MSAA needs a multisampled
+    /// target, and the G-buffer is resolved before the lighting ever sees it.
+    /// Forward rendering keeps <see cref="MsaaSamples"/>; reach for this when
+    /// that is not available or not enough.
+    /// </summary>
+    public bool Fxaa;
+
+    /// <summary>
     /// Darkens the corners of the frame; 0 is off. Applied after tone mapping,
     /// because a vignette is something a lens does, not something the scene does.
     /// </summary>
@@ -139,6 +148,7 @@ public struct RendererOptions
         MotionBlurSamples = 12;
         DebugView = DebugView.Off;
         Wireframe = false;
+        Fxaa = false;
         Vignette = 0f;
         VignetteSoftness = 0.5f;
         Grain = 0f;
@@ -182,6 +192,7 @@ public struct RendererOptions
         MotionBlurSamples = (uint)Math.Clamp(MotionBlurSamples, 4, 32),
         DebugView = (uint)DebugView,
         Wireframe = Wireframe ? 1 : 0,
+        Fxaa = Fxaa ? 1 : 0,
         Vignette = Vignette,
         VignetteSoftness = VignetteSoftness,
         Grain = Grain,

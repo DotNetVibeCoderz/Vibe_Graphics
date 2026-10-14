@@ -122,7 +122,69 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     return out;
 }
 
+
+/// The instanced vertex stage. One extra vertex buffer carries a transform per
+/// instance, as four columns, and it is applied inside the node transform - so
+/// moving the node still moves every instance with it.
+///
+/// This entry point lives beside `vs_main` in the same module. An entry point
+/// nothing calls places no demand on the pipeline layout, so the ordinary
+/// pipelines are unaffected by the attributes declared here.
+struct InstanceInput {
+    @location(4) model_0: vec4<f32>,
+    @location(5) model_1: vec4<f32>,
+    @location(6) model_2: vec4<f32>,
+    @location(7) model_3: vec4<f32>,
+};
+
+@vertex
+fn vs_instanced(input: VertexInput, instance: InstanceInput) -> VertexOutput {
+    let instance_model = mat4x4<f32>(
+        instance.model_0,
+        instance.model_1,
+        instance.model_2,
+        instance.model_3,
+    );
+
+    var context: VertexContext;
+    context.position = input.position;
+    context.normal = input.normal;
+    context.uv = input.uv;
+    context.time = frame.fog_params.z;
+    context.custom0 = material.custom0;
+    context.custom1 = material.custom1;
+    context.custom2 = material.custom2;
+    context.custom3 = material.custom3;
+    let local_position = user_vertex(context);
+
+    var out: VertexOutput;
+    let model = object.model * instance_model;
+    let world_position = model * vec4<f32>(local_position, 1.0);
+    out.world_position = world_position.xyz;
+    out.clip_position = frame.view_projection * world_position;
+    // The instance transform is rigid in every use this has, so its upper 3x3
+    // rotates a normal correctly without being inverted and transposed.
+    let normal_matrix = mat3x3<f32>(
+        (object.normal_matrix[0].xyz),
+        (object.normal_matrix[1].xyz),
+        (object.normal_matrix[2].xyz),
+    ) * mat3x3<f32>(
+        instance_model[0].xyz,
+        instance_model[1].xyz,
+        instance_model[2].xyz,
+    );
+    out.world_normal = normalize(normal_matrix * input.normal);
+    let tangent = normal_matrix * input.tangent.xyz;
+    out.world_tangent = vec4<f32>(tangent, input.tangent.w);
+    out.uv = input.uv * material.uv_transform.xy + material.uv_transform.zw;
+    out.view_distance = length(world_position.xyz - frame.camera_position.xyz);
+    out.view_depth = -(frame.view * world_position).z;
+    out.receive_shadow = object.flags.x;
+    return out;
+}
+
 fn shading_normal(input: VertexOutput, front_facing: bool) -> vec3<f32> {
+
     var normal = normalize(input.world_normal);
     if (!front_facing) {
         normal = -normal;

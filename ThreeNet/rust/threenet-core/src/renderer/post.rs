@@ -85,6 +85,13 @@ pub struct PostProcess {
     blur_v_uniform: wgpu::Buffer,
     composite_uniform: wgpu::Buffer,
     bloom: Option<BloomTargets>,
+    fxaa_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
+    fxaa_uniform: wgpu::Buffer,
+    /// The composite lands here first when antialiasing is on, so FXAA has
+    /// something to read. Keyed by size and format; rebuilt when either moves.
+    fxaa_target: Option<(wgpu::Texture, wgpu::TextureView, u32, u32, wgpu::TextureFormat)>,
+    width: u32,
+    height: u32,
 }
 
 impl PostProcess {
@@ -191,6 +198,15 @@ impl PostProcess {
             threshold_pipeline,
             blur_pipeline,
             composite_pipelines: HashMap::new(),
+            fxaa_pipelines: HashMap::new(),
+            fxaa_uniform: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("threenet.post.fxaa.uniform"),
+                contents: bytemuck::bytes_of(&PostUniform::default()),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }),
+            fxaa_target: None,
+            width: 1,
+            height: 1,
             threshold_uniform: uniform("threenet.post.threshold.uniform"),
             blur_h_uniform: uniform("threenet.post.blur_h.uniform"),
             blur_v_uniform: uniform("threenet.post.blur_v.uniform"),
@@ -237,8 +253,87 @@ impl PostProcess {
         })
     }
 
+    fn fxaa_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> &wgpu::RenderPipeline {
+        let shader = &self.shader;
+        let layout = &self.simple_layout;
+        self.fxaa_pipelines.entry(format).or_insert_with(|| {
+            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("threenet.post.fxaa.layout"),
+                bind_group_layouts: &[Some(layout)],
+                immediate_size: 0,
+            });
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("threenet.post.fxaa"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: shader,
+                    entry_point: Some("vs_fullscreen"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: shader,
+                    entry_point: Some("fs_fxaa"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        })
+    }
+
+    /// The intermediate the composite writes into while FXAA is on.
+    fn ensure_fxaa_target(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> wgpu::TextureView {
+        let (width, height) = (self.width.max(1), self.height.max(1));
+        let matches = self
+            .fxaa_target
+            .as_ref()
+            .is_some_and(|(_, _, w, h, f)| *w == width && *h == height && *f == format);
+        if !matches {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("threenet.post.fxaa.target"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            self.fxaa_target = Some((texture, view, width, height, format));
+        }
+        self.fxaa_target
+            .as_ref()
+            .expect("just built")
+            .1
+            .clone()
+    }
+
     /// (Re)allocates the half resolution bloom targets.
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32, bloom_enabled: bool) {
+        self.width = width.max(1);
+        self.height = height.max(1);
         if !bloom_enabled {
             self.bloom = None;
             return;
@@ -452,14 +547,43 @@ impl PostProcess {
                 },
             ],
         });
+        // With antialiasing on, the composite lands in an intermediate and
+        // FXAA copies it to the output; without it, the composite is the output.
+        let composite_target = if settings.fxaa {
+            self.ensure_fxaa_target(device, output_format)
+        } else {
+            output.clone()
+        };
+
         let pipeline = self.composite_pipeline(device, output_format).clone();
         Self::full_screen_pass(
             encoder,
             "threenet.post.composite",
-            output,
+            &composite_target,
             &pipeline,
             &composite_bind,
         );
+
+        if settings.fxaa {
+            queue.write_buffer(
+                &self.fxaa_uniform,
+                0,
+                bytemuck::bytes_of(&PostUniform {
+                    params: [0.0; 4],
+                    texel: [
+                        1.0 / self.width.max(1) as f32,
+                        1.0 / self.height.max(1) as f32,
+                        0.0,
+                        0.0,
+                    ],
+                    grade: [0.0; 4],
+                    grade2: [0.0; 4],
+                }),
+            );
+            let bind = self.bind_simple(device, &composite_target, &self.fxaa_uniform);
+            let pipeline = self.fxaa_pipeline(device, output_format).clone();
+            Self::full_screen_pass(encoder, "threenet.post.fxaa", output, &pipeline, &bind);
+        }
     }
 }
 
@@ -484,6 +608,10 @@ pub struct PostSettings {
     pub contrast: f32,
     /// Added after everything else; 0 leaves brightness alone.
     pub brightness: f32,
+    /// Fast approximate antialiasing, run on the finished image. The only
+    /// antialiasing the deferred path can have, since MSAA needs a multisampled
+    /// target and the G-buffer is resolved before the lighting sees it.
+    pub fxaa: bool,
 }
 
 impl Default for PostSettings {
@@ -501,6 +629,7 @@ impl Default for PostSettings {
             saturation: 1.0,
             contrast: 1.0,
             brightness: 0.0,
+            fxaa: false,
         }
     }
 }

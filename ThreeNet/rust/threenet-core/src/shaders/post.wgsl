@@ -155,3 +155,64 @@ fn fs_composite(input: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), scene.a);
 }
 
+
+/// Perceptual weight of a colour, for the edge test.
+fn fxaa_luma(color: vec3<f32>) -> f32 {
+    return dot(color, vec3<f32>(0.299, 0.587, 0.114));
+}
+
+/// FXAA 3.11, the quick version: find an edge from the luma of the four
+/// diagonal neighbours, work out which way it runs, and blur along it.
+///
+/// This is the only antialiasing the deferred path can have, because MSAA needs
+/// a multisampled target and the G-buffer is resolved before the lighting ever
+/// sees it. Forward rendering keeps MSAA; this is for when that is not there or
+/// not enough.
+@fragment
+fn fs_fxaa(input: VertexOutput) -> @location(0) vec4<f32> {
+    let texel = post.texel.xy;
+    let center = textureSample(source_texture, source_sampler, input.uv);
+
+    let luma_m = fxaa_luma(center.rgb);
+    let luma_nw = fxaa_luma(textureSample(source_texture, source_sampler, input.uv + vec2<f32>(-texel.x, -texel.y)).rgb);
+    let luma_ne = fxaa_luma(textureSample(source_texture, source_sampler, input.uv + vec2<f32>(texel.x, -texel.y)).rgb);
+    let luma_sw = fxaa_luma(textureSample(source_texture, source_sampler, input.uv + vec2<f32>(-texel.x, texel.y)).rgb);
+    let luma_se = fxaa_luma(textureSample(source_texture, source_sampler, input.uv + vec2<f32>(texel.x, texel.y)).rgb);
+
+    let luma_min = min(luma_m, min(min(luma_nw, luma_ne), min(luma_sw, luma_se)));
+    let luma_max = max(luma_m, max(max(luma_nw, luma_ne), max(luma_sw, luma_se)));
+
+    // Flat enough to leave alone. Without the absolute floor, dark areas where
+    // the relative test is meaningless get smeared.
+    let range = luma_max - luma_min;
+    if (range < max(0.0312, luma_max * 0.125)) {
+        return center;
+    }
+
+    // The edge runs perpendicular to the luma gradient across the diagonals.
+    var direction = vec2<f32>(
+        -((luma_nw + luma_ne) - (luma_sw + luma_se)),
+        ((luma_nw + luma_sw) - (luma_ne + luma_se)),
+    );
+    // Keep a nearly axis aligned edge from producing a huge step.
+    let reduce = max((luma_nw + luma_ne + luma_sw + luma_se) * 0.03125, 0.0078125);
+    let scale = 1.0 / (min(abs(direction.x), abs(direction.y)) + reduce);
+    direction = clamp(direction * scale, vec2<f32>(-8.0), vec2<f32>(8.0)) * texel;
+
+    // Two taps inside the span, then two at its ends.
+    let inner = 0.5 * (
+        textureSample(source_texture, source_sampler, input.uv + direction * (1.0 / 3.0 - 0.5)).rgb
+        + textureSample(source_texture, source_sampler, input.uv + direction * (2.0 / 3.0 - 0.5)).rgb
+    );
+    let outer = inner * 0.5 + 0.25 * (
+        textureSample(source_texture, source_sampler, input.uv - direction * 0.5).rgb
+        + textureSample(source_texture, source_sampler, input.uv + direction * 0.5).rgb
+    );
+
+    // The wider blur is better unless it wandered off the edge entirely.
+    let luma_outer = fxaa_luma(outer);
+    if (luma_outer < luma_min || luma_outer > luma_max) {
+        return vec4<f32>(inner, center.a);
+    }
+    return vec4<f32>(outer, center.a);
+}

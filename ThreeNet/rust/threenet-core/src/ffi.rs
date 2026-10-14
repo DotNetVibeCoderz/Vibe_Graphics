@@ -22,7 +22,7 @@ use crate::error::Error;
 use crate::geometry::{Geometry, Topology, Vertex, primitives};
 use crate::light::{Light, LightKind};
 use crate::material::{AlphaMode, CullMode, Material, MaterialTextures, ShadingModel};
-use crate::math::{Quat, Transform, Vec2, Vec3, Vec4};
+use crate::math::{Mat4, Quat, Transform, Vec2, Vec3, Vec4};
 use crate::raycast::{Ray, RaycastOptions, raycast};
 use crate::renderer::{PowerPreference, Renderer, RendererConfig, ToneMapping};
 use crate::scene::{MeshBinding, Scene};
@@ -599,6 +599,8 @@ pub struct TnRendererDesc {
     pub debug_view: u32,
     /// Draws every surface as lines regardless of its material.
     pub wireframe: i32,
+    /// Fast approximate antialiasing on the finished image.
+    pub fxaa: i32,
     /// Darkens the corners; 0 is off.
     pub vignette: f32,
     /// How far in from the corner the darkening starts, 0 to 1.
@@ -654,6 +656,7 @@ impl From<TnRendererDesc> for RendererConfig {
             motion_blur_samples: value.motion_blur_samples,
             debug_view: DebugView::from_u32(value.debug_view),
             wireframe: value.wireframe != 0,
+            fxaa: value.fxaa != 0,
             vignette: value.vignette,
             vignette_softness: value.vignette_softness,
             grain: value.grain,
@@ -1351,7 +1354,54 @@ pub unsafe extern "C" fn tn_node_clear_camera(scene: *mut Scene, node: u32) -> i
     status::OK
 }
 
+/// Sets the per instance transforms of a node: `count` matrices, column major,
+/// 16 floats each. The transforms apply inside the node transform, so moving
+/// the node still moves every instance. Passing 0 makes it an ordinary node.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_set_instances(
+    scene: *mut Scene,
+    node: u32,
+    matrices: *const f32,
+    count: u32,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if count > 0 && matrices.is_null() {
+        set_last_error("instance matrix buffer is null");
+        return status::NULL_POINTER;
+    }
+    let Some(node) = scene.node_mut(node) else {
+        set_last_error("invalid node handle");
+        return status::INVALID_HANDLE;
+    };
+
+    let transforms = if count == 0 {
+        Vec::new()
+    } else {
+        let floats = unsafe { std::slice::from_raw_parts(matrices, count as usize * 16) };
+        floats
+            .chunks_exact(16)
+            .map(|chunk| Mat4::from_cols_slice(chunk))
+            .collect()
+    };
+    node.set_instances(transforms);
+    status::OK
+}
+
+/// How many instances a node draws; 0 means it is an ordinary single mesh.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_instance_count(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.node(node) {
+        Some(node) => node.instances.len() as i32,
+        None => {
+            set_last_error("invalid node handle");
+            status::INVALID_HANDLE
+        }
+    }
+}
+
 /// Sets the levels of detail on a node: `geometries[i]` is drawn out to
+
 /// `distances[i]` metres from the camera, nearest first. A geometry of 0 draws
 /// nothing, and past the last distance the node disappears - pass
 /// `f32::INFINITY` as the last distance to keep it forever.
