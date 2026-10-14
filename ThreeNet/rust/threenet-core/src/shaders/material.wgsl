@@ -23,7 +23,7 @@ struct MaterialData {
     custom1: vec4<f32>,
     custom2: vec4<f32>,
     custom3: vec4<f32>,
-    // x = clearcoat, y = clearcoat roughness, zw reserved
+    // x = clearcoat, y = clearcoat roughness, z = anisotropy, w = grain angle
     extended0: vec4<f32>,
     // xyz = sheen colour, w = sheen roughness
     extended1: vec4<f32>,
@@ -250,6 +250,20 @@ fn material_surface(input: VertexOutput, front_facing: bool) -> Surface {
     surface.clearcoat_roughness = material.extended0.y;
     surface.sheen = material.extended1.rgb;
     surface.sheen_roughness = max(material.extended1.w, 0.07);
+    surface.anisotropy = material.extended0.z;
+    // The grain runs along the tangent, turned in the tangent plane by the
+    // angle in w - so a brushed disc can have its grain go round rather than
+    // along the uv.
+    let grain = material.extended0.w;
+    let base_tangent = input.world_tangent.xyz;
+    if (abs(grain) > 0.0001 && length(base_tangent) > 1.0e-5) {
+        let n = surface.normal;
+        let t = normalize(base_tangent - n * dot(n, base_tangent));
+        let b = cross(n, t) * input.world_tangent.w;
+        surface.tangent = t * cos(grain) + b * sin(grain);
+    } else {
+        surface.tangent = base_tangent;
+    }
 
     var context: SurfaceContext;
     context.world_position = input.world_position;

@@ -64,6 +64,8 @@ fn fs_lighting(input: FullscreenVertex) -> @location(0) vec4<f32> {
     surface.clearcoat_roughness = 0.0;
     surface.sheen = vec3<f32>(0.0);
     surface.sheen_roughness = 0.1;
+    surface.anisotropy = 0.0;
+    surface.tangent = vec3<f32>(0.0);
 
     var mode = debug_view();
     if (mode == DEBUG_UV) {

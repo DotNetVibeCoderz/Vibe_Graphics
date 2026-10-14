@@ -296,6 +296,19 @@ public struct MaterialOptions
     public Vector3 Sheen;
     /// <summary>How wide the sheen rim is.</summary>
     public float SheenRoughness;
+    /// <summary>
+    /// Stretches the highlight along the surface grain: brushed metal, hair, a
+    /// vinyl record. 0 is off, 1 stretches along the tangent and -1 across it.
+    /// The mean roughness is held, so turning this up streaks the highlight
+    /// without also making the surface look rougher.
+    /// </summary>
+    /// <remarks>
+    /// Needs tangents on the geometry (<see cref="Geometry.ComputeTangents"/>,
+    /// which every built-in generator already calls). Forward path only.
+    /// </remarks>
+    public float Anisotropy;
+    /// <summary>Turns the grain within the tangent plane, in radians.</summary>
+    public float AnisotropyRotation;
     public float NormalScale;
     public float OcclusionStrength;
     public float AlphaCutoff;
@@ -348,6 +361,8 @@ public struct MaterialOptions
         ClearcoatRoughness = 0.1f;
         Sheen = Vector3.Zero;
         SheenRoughness = 0.3f;
+        Anisotropy = 0f;
+        AnisotropyRotation = 0f;
         NormalScale = 1f;
         OcclusionStrength = 1f;
         AlphaCutoff = 0.5f;
@@ -402,6 +417,8 @@ public struct MaterialOptions
         ClearcoatRoughness = ClearcoatRoughness,
         Sheen = Sheen,
         SheenRoughness = SheenRoughness,
+        Anisotropy = Anisotropy,
+        AnisotropyRotation = AnisotropyRotation,
         NormalScale = NormalScale,
         OcclusionStrength = OcclusionStrength,
         AlphaCutoff = AlphaCutoff,
@@ -448,6 +465,8 @@ public struct MaterialOptions
         ClearcoatRoughness = desc.ClearcoatRoughness,
         Sheen = desc.Sheen,
         SheenRoughness = desc.SheenRoughness,
+        Anisotropy = desc.Anisotropy,
+        AnisotropyRotation = desc.AnisotropyRotation,
         NormalScale = desc.NormalScale,
         OcclusionStrength = desc.OcclusionStrength,
         AlphaCutoff = desc.AlphaCutoff,

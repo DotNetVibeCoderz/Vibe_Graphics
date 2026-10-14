@@ -128,6 +128,11 @@ struct Surface {
     /// Retroreflective rim for cloth - velvet, satin, brushed wool. Black is off.
     sheen: vec3<f32>,
     sheen_roughness: f32,
+    /// Stretches the highlight along the surface grain: brushed metal, hair,
+    /// a vinyl record. 0 is off, 1 stretches along the tangent, -1 across it.
+    anisotropy: f32,
+    /// The surface tangent, which is the direction the grain runs.
+    tangent: vec3<f32>,
 };
 
 fn distribution_ggx(n_dot_h: f32, roughness: f32) -> f32 {
@@ -391,6 +396,22 @@ fn shadow_visibility(light: Light, world_position: vec3<f32>, normal: vec3<f32>,
 /// The Charlie distribution Estevez and Kulla use for cloth: unlike GGX it
 /// peaks at grazing angles, which is why velvet lights up around its edge
 /// instead of in the middle.
+/// GGX with a different width along and across the grain. A circular highlight
+/// becomes a streak, which is the whole of what brushed metal looks like.
+fn distribution_ggx_anisotropic(
+    n_dot_h: f32,
+    t_dot_h: f32,
+    b_dot_h: f32,
+    roughness_t: f32,
+    roughness_b: f32,
+) -> f32 {
+    let at = max(roughness_t * roughness_t, 1.0e-4);
+    let ab = max(roughness_b * roughness_b, 1.0e-4);
+    // The isotropic GGX denominator with the two axes separated out.
+    let d = t_dot_h * t_dot_h / (at * at) + b_dot_h * b_dot_h / (ab * ab) + n_dot_h * n_dot_h;
+    return 1.0 / max(PI * at * ab * d * d, 1.0e-7);
+}
+
 fn distribution_charlie(n_dot_h: f32, roughness: f32) -> f32 {
     let alpha = max(roughness * roughness, 1.0e-3);
     let inv = 1.0 / alpha;
@@ -470,7 +491,24 @@ fn evaluate_light(light: Light, surface: Surface, view: vec3<f32>, world_positio
     let n_dot_h = max(dot(surface.normal, half_vector), 0.0);
     let v_dot_h = max(dot(view, half_vector), 0.0);
 
-    let d = distribution_ggx(n_dot_h, surface.roughness);
+    var d = distribution_ggx(n_dot_h, surface.roughness);
+    if (abs(surface.anisotropy) > 0.001 && length(surface.tangent) > 1.0e-4) {
+        // Orthonormalise against the shading normal, which a normal map moves.
+        let tangent = normalize(surface.tangent - surface.normal * dot(surface.normal, surface.tangent));
+        let bitangent = cross(surface.normal, tangent);
+        // Widen one axis and narrow the other, keeping the mean roughness, so
+        // turning anisotropy up does not also make the surface look rougher.
+        let stretch = sqrt(1.0 - clamp(abs(surface.anisotropy), 0.0, 0.98));
+        let along = select(surface.roughness / stretch, surface.roughness * stretch, surface.anisotropy < 0.0);
+        let across = select(surface.roughness * stretch, surface.roughness / stretch, surface.anisotropy < 0.0);
+        d = distribution_ggx_anisotropic(
+            n_dot_h,
+            dot(tangent, half_vector),
+            dot(bitangent, half_vector),
+            clamp(along, 0.01, 1.0),
+            clamp(across, 0.01, 1.0),
+        );
+    }
     let g = geometry_smith(n_dot_v, n_dot_l, surface.roughness);
     let f = fresnel_schlick(v_dot_h, f0);
 

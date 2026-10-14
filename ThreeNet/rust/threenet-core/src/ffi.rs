@@ -272,6 +272,10 @@ pub struct TnMaterialDesc {
     /// Retroreflective rim for cloth; black is off. Forward path only.
     pub sheen: TnVec3,
     pub sheen_roughness: f32,
+    /// Stretches the highlight along the grain; 0 is off. Forward path only.
+    pub anisotropy: f32,
+    /// Turns the grain within the tangent plane, in radians.
+    pub anisotropy_rotation: f32,
     pub normal_scale: f32,
     pub occlusion_strength: f32,
     pub alpha_cutoff: f32,
@@ -319,6 +323,8 @@ impl From<Material> for TnMaterialDesc {
             clearcoat_roughness: value.clearcoat_roughness,
             sheen: value.sheen.into(),
             sheen_roughness: value.sheen_roughness,
+            anisotropy: value.anisotropy,
+            anisotropy_rotation: value.anisotropy_rotation,
             normal_scale: value.normal_scale,
             occlusion_strength: value.occlusion_strength,
             alpha_cutoff: value.alpha_cutoff,
@@ -358,6 +364,8 @@ impl TnMaterialDesc {
         material.clearcoat_roughness = self.clearcoat_roughness;
         material.sheen = self.sheen.into();
         material.sheen_roughness = self.sheen_roughness;
+        material.anisotropy = self.anisotropy.clamp(-1.0, 1.0);
+        material.anisotropy_rotation = self.anisotropy_rotation;
         material.normal_scale = self.normal_scale;
         material.occlusion_strength = self.occlusion_strength;
         material.alpha_cutoff = self.alpha_cutoff;

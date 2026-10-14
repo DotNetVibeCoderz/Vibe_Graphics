@@ -262,7 +262,12 @@ impl From<&Material> for MaterialUniform {
             custom1: [material.custom[4], material.custom[5], material.custom[6], material.custom[7]],
             custom2: [material.custom[8], material.custom[9], material.custom[10], material.custom[11]],
             custom3: [material.custom[12], material.custom[13], material.custom[14], material.custom[15]],
-            extended0: [material.clearcoat, material.clearcoat_roughness, 0.0, 0.0],
+            extended0: [
+                material.clearcoat,
+                material.clearcoat_roughness,
+                material.anisotropy,
+                material.anisotropy_rotation,
+            ],
             extended1: [
                 material.sheen.x,
                 material.sheen.y,

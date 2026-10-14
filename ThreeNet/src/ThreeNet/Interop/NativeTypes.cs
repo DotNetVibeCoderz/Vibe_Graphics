@@ -59,6 +59,8 @@ internal struct NativeMaterialDesc
     public float ClearcoatRoughness;
     public Vector3 Sheen;
     public float SheenRoughness;
+    public float Anisotropy;
+    public float AnisotropyRotation;
     public float NormalScale;
     public float OcclusionStrength;
     public float AlphaCutoff;

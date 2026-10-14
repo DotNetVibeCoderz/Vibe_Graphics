@@ -12,7 +12,10 @@ public class PhysicalMaterialTests
 {
     private const int Size = 96;
 
-    private static byte[] Render(Func<MaterialOptions, MaterialOptions> material, RenderPath path = RenderPath.Forward)
+    private static byte[] Render(
+        Func<MaterialOptions, MaterialOptions> material,
+        RenderPath path = RenderPath.Forward,
+        float lightIntensity = 4f)
     {
         Renderer? renderer;
         try
@@ -47,7 +50,7 @@ public class PhysicalMaterialTests
                 scene.CreateSphereGeometry(1.2f, 48, 32),
                 scene.CreateMaterial(material(MaterialOptions.Pbr(new Vector4(0.05f, 0.05f, 0.05f, 1f), 0f, 0.9f))));
 
-            Node light = scene.AddLight(Light.Directional(Vector3.One, 4f));
+            Node light = scene.AddLight(Light.Directional(Vector3.One, lightIntensity));
             light.LookAt(new Vector3(-0.4f, -0.4f, -1f));
 
             Node camera = scene.AddCamera(Camera.Perspective(50f.ToRadians()), new Vector3(0f, 0f, 4f));
@@ -155,6 +158,83 @@ public class PhysicalMaterialTests
     }
 
     [Fact]
+    public void AnisotropyStreaksTheHighlightWithoutDullingIt()
+    {
+        // A dim light on purpose: at full strength the highlight saturates at
+        // 255 in both cases and the peak can no longer say anything.
+        const float Dim = 0.35f;
+        byte[] plain = Render(m => m with { Roughness = 0.25f }, lightIntensity: Dim);
+        if (plain.Length == 0)
+        {
+            return;
+        }
+
+        byte[] brushed = Render(m => m with { Roughness = 0.25f, Anisotropy = 0.9f }, lightIntensity: Dim);
+        Assert.True(Peak(plain) < 250, $"the control highlight saturated at {Peak(plain)}, so the peak proves nothing");
+
+        // The highlight is stretched into a streak: wider along the grain,
+        // narrower across it, so it covers more pixels.
+        Assert.True(Lit(brushed) > Lit(plain), $"no streak: {Lit(plain)} then {Lit(brushed)}");
+
+        // And the peak holds. One axis widens by exactly as much as the other
+        // narrows, so the product of the two roughnesses - and with it the GGX
+        // normalisation - is unchanged. A remap that only widened an axis would
+        // dim the highlight, and the surface would read as rougher rather than
+        // as brushed, which is the whole point of holding the mean.
+        Assert.True(
+            Math.Abs(Peak(brushed) - Peak(plain)) <= 4,
+            $"anisotropy changed the peak, so it is not energy preserving: {Peak(plain)} then {Peak(brushed)}");
+    }
+
+    [Fact]
+    public void TurningTheGrainChangesWhereTheStreakRuns()
+    {
+        byte[] along = Render(m => m with { Roughness = 0.25f, Anisotropy = 0.9f }, lightIntensity: 0.35f);
+        if (along.Length == 0)
+        {
+            return;
+        }
+
+        // A quarter turn puts the grain across the surface instead of along it,
+        // so the streak lies the other way and the pixels differ.
+        byte[] across = Render(
+            m => m with
+            {
+                Roughness = 0.25f,
+                Anisotropy = 0.9f,
+                AnisotropyRotation = MathF.PI / 2f,
+            },
+            lightIntensity: 0.35f);
+
+        bool identical = true;
+        for (int i = 0; i < along.Length; i += 4)
+        {
+            if (Math.Abs(along[i] - across[i]) > 2)
+            {
+                identical = false;
+                break;
+            }
+        }
+
+        Assert.False(identical, "turning the grain changed nothing");
+    }
+
+    /// <summary>How many pixels carry any specular at all.</summary>
+    private static int Lit(byte[] pixels)
+    {
+        int count = 0;
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            if (pixels[i] > 8)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    [Fact]
     public void TheOptionsSurviveARoundTrip()
     {
         using Scene scene = new();
@@ -164,6 +244,8 @@ public class PhysicalMaterialTests
             ClearcoatRoughness = 0.2f,
             Sheen = new Vector3(0.9f, 0.5f, 0.3f),
             SheenRoughness = 0.4f,
+            Anisotropy = 0.6f,
+            AnisotropyRotation = 1.1f,
         });
 
         MaterialOptions read = material.Options;
@@ -171,5 +253,7 @@ public class PhysicalMaterialTests
         Assert.Equal(0.2f, read.ClearcoatRoughness, 3);
         Assert.Equal(0.5f, read.Sheen.Y, 3);
         Assert.Equal(0.4f, read.SheenRoughness, 3);
+        Assert.Equal(0.6f, read.Anisotropy, 3);
+        Assert.Equal(1.1f, read.AnisotropyRotation, 3);
     }
 }

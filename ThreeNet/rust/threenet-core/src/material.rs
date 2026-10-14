@@ -136,6 +136,12 @@ pub struct Material {
     /// off. Forward path only, for the same reason.
     pub sheen: Vec3,
     pub sheen_roughness: f32,
+    /// Stretches the highlight along the surface grain: brushed metal, hair, a
+    /// vinyl record. 0 is off, 1 stretches along the tangent, -1 across it.
+    /// Forward path only, like the other extended lobes.
+    pub anisotropy: f32,
+    /// Turns the grain within the tangent plane, in radians.
+    pub anisotropy_rotation: f32,
     pub normal_scale: f32,
     pub occlusion_strength: f32,
     pub alpha_cutoff: f32,
@@ -173,6 +179,8 @@ impl Default for Material {
             clearcoat_roughness: 0.1,
             sheen: Vec3::ZERO,
             sheen_roughness: 0.3,
+            anisotropy: 0.0,
+            anisotropy_rotation: 0.0,
             normal_scale: 1.0,
             occlusion_strength: 1.0,
             alpha_cutoff: 0.5,
