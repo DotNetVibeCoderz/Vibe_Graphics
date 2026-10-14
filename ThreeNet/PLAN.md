@@ -135,7 +135,7 @@ Done in 0.10.0.
 | Light probes | ✅ | `Renderer.BakeLightProbe(scene, position)` and `Scene.LightProbe`. Six renders projected onto three bands of spherical harmonics, nine coefficients a channel - enough to reconstruct the irradiance of any environment to about a percent, because a matte surface gathers over a cosine lobe too broad to hold anything sharper. It needed no compute: the projection is a CPU pass over six readbacks. The readback is eight bit, so anything brighter than white clips |
 | Compute pipelines | ✅ | `Scene.CreateComputeKernel`, `Scene.CreateStorageBuffer`, `Renderer.Dispatch` and `Renderer.ReadStorageBuffer`, with `Renderer.SupportsCompute` for adapters that have none. Buffers bind in the order given at `@group(0) @binding(0)` upwards. Pipelines are cached by kernel, edit and binding count, because compiling WGSL per dispatch would cost more than most kernels do |
 | GPU particles | ✅ | `Effects.GpuParticleEffect`. State in a storage buffer, stepped by a kernel that also writes the billboard quads straight into the geometry vertex buffer, so nothing crosses the bus. `Renderer.DispatchToGeometry` is the general form. What it gives up is visibility: the CPU does not know where any particle is, so there is no picking, no collision and the bounds are whatever `BoundsRadius` says |
-| GPU skinning | ⬜ | No longer blocked, but a second code path rather than a foundation: bounds and raycasts still need the CPU pose, so it only pays where throughput is the problem |
+| GPU skinning | ✅ | `Node.GpuSkinning`, per mesh. The bind pose and weights upload once and only the joint matrices travel each frame, against a whole vertex buffer per mesh on the CPU path. `Scene::joint_matrices` is shared by both paths, so the pose cannot drift between them. The cost is that the CPU no longer knows the pose: a raycast hits the bind pose and so do the bounds, which is why it is opt in and CPU skinning stays the default |
 | Instance aware culling and picking | ✅ | Culling unions the bounds of every instance, so a forest does not vanish when the node origin leaves the frustum; raycasting tests each instance transform and reports `RayHit.InstanceIndex`, so picking a crowd says which copy was hit |
 | Screen space refraction | ✅ | Shipped with transmission: the forward pass splits, the opaque colour is copied aside, and a refracting material samples it along the bent view ray. The offset comes from `Thickness` rather than from scene depth, because the post chain still does not hand a material the depth buffer |
 
@@ -166,9 +166,9 @@ items that were already in flight before it was written.
 2. **Browser (WebGL2) and iOS on real targets.** Both are built and packaged by CI, but nothing here can run
    an iOS device or a browser build end to end, so neither is claimed as tested. (Android is now covered: it
    renders live on a real phone.)
-3. **GPU skinning and instanced rendering.** CPU skinning is correct and keeps bounds and picking accurate;
-   a GPU path would be a second code path (bounds and raycasts would still need the CPU pose), so it waits
-   for a scene that actually needs the throughput.
+3. **Bounds that follow a GPU skinned pose.** `Node.GpuSkinning` exists now, but the CPU keeps the bind
+   pose, so bounds and raycasts are the bind pose too. Expanding the bind pose box by how far the joints
+   travelled would fix culling without giving the pose back to the CPU.
 4. **Contact hardening shadows.** Light probes are done; this is the half of that line that is left, and it wants a wider shadow filter driven by the distance between blocker and receiver.
 5. **GPU particles.** `ParticleEffect` rewrites geometry on the CPU each frame, which is honest but caps out
    in the low thousands per system. The compute pipelines it was waiting on exist now, so this is a matter of

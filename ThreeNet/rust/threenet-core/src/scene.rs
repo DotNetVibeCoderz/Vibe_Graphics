@@ -113,6 +113,11 @@ pub struct MeshBinding {
     pub receive_shadow: bool,
     /// Skeleton deforming the geometry, if the mesh is skinned.
     pub skin: Option<crate::animation::SkinId>,
+    /// Deform on the GPU instead of the CPU. Only the joint matrices travel
+    /// each frame rather than a whole vertex buffer, at the cost of the CPU no
+    /// longer knowing the pose: a raycast hits the bind pose, and bounds are
+    /// the bind pose box grown by how far the joints moved.
+    pub gpu_skin: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -669,6 +674,46 @@ impl Scene {
         self.textures.get_mut(id)
     }
 
+    /// Walks every live node with its id, for passes that need to find a
+    /// handful of nodes without cloning the arena.
+    pub fn nodes_iter(&self) -> impl Iterator<Item = (NodeId, &Node)> {
+        self.nodes.iter()
+    }
+
+    /// The joint matrices a skinned mesh on `node` needs this frame, in the
+    /// space the mesh is drawn in.
+    ///
+    /// The same expression the CPU skinning path uses, pulled out so both can
+    /// share it: a pose that disagreed between the two would show up only as a
+    /// mesh that jumps when GPU skinning is switched on.
+    pub fn joint_matrices(
+        &self,
+        node: NodeId,
+        skin: crate::animation::SkinId,
+    ) -> Option<Vec<crate::math::Mat4>> {
+        let skin = self.skins.get(skin)?;
+        let inverse_node = self.nodes.get(node)?.world.inverse();
+        Some(
+            skin.joints
+                .iter()
+                .enumerate()
+                .map(|(index, joint)| {
+                    let joint_world = self
+                        .nodes
+                        .get(*joint)
+                        .map(|n| n.world)
+                        .unwrap_or(crate::math::Mat4::IDENTITY);
+                    let inverse_bind = skin
+                        .inverse_bind_matrices
+                        .get(index)
+                        .copied()
+                        .unwrap_or(crate::math::Mat4::IDENTITY);
+                    inverse_node * joint_world * inverse_bind
+                })
+                .collect(),
+        )
+    }
+
     /// Identifies this scene among all the scenes in the process.
     #[inline]
     pub fn id(&self) -> u64 {
@@ -761,6 +806,7 @@ impl Scene {
             cast_shadow: true,
             receive_shadow: true,
             skin: None,
+            gpu_skin: false,
         });
         Ok(id)
     }

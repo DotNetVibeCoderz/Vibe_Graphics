@@ -634,6 +634,12 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_obj(nint scene, string path, uint parent, out NativeImportResult result);
 
+    [LibraryImport(Library)]
+    internal static partial int tn_node_set_gpu_skinning(nint scene, uint node, int enabled);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_node_get_gpu_skinning(nint scene, uint node);
+
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint tn_compute_kernel_create(
         nint scene, string name, string source, string entryPoint);

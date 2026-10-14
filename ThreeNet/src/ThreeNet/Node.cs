@@ -331,6 +331,42 @@ public sealed class Node : IEquatable<Node>
     public void DetachMesh() => NativeError.Check(NativeMethods.tn_node_detach_mesh(Scene.Handle, Id));
 
     /// <summary>The geometry this node draws, or null when it has no mesh.</summary>
+    /// <summary>
+    /// Deforms this skinned mesh on the GPU instead of the CPU.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the joint matrices travel each frame - a few kilobytes for a
+    /// skeleton - against a whole vertex buffer per mesh on the CPU path, and
+    /// the deformed vertices are written straight into the buffer the draw
+    /// reads. For a crowd of skinned characters that is the difference between
+    /// the bus being the bottleneck and it not mattering.
+    /// </para>
+    /// <para>
+    /// The cost is that the CPU no longer knows the pose. A raycast against
+    /// this mesh hits its bind pose, and so do its bounds, so a character that
+    /// animates well outside the bind pose can cull wrongly at the edge of the
+    /// frame. CPU skinning stays correct and stays the right choice unless
+    /// throughput is the actual problem.
+    /// </para>
+    /// <para>
+    /// Morph targets are applied on the CPU and do not reach this path. Needs
+    /// <see cref="Renderer.SupportsCompute"/>; without it the mesh simply stays
+    /// in its bind pose.
+    /// </para>
+    /// </remarks>
+    public bool GpuSkinning
+    {
+        get
+        {
+            int value = NativeMethods.tn_node_get_gpu_skinning(Scene.Handle, Id);
+            NativeError.Check(value);
+            return value != 0;
+        }
+
+        set => NativeError.Check(NativeMethods.tn_node_set_gpu_skinning(Scene.Handle, Id, value ? 1 : 0));
+    }
+
     public Geometry? Geometry
     {
         get

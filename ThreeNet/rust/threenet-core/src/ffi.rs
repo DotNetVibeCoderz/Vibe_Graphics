@@ -1278,6 +1278,7 @@ pub unsafe extern "C" fn tn_node_attach_mesh(
         cast_shadow: true,
         receive_shadow: true,
         skin: None,
+        gpu_skin: false,
     });
     status::OK
 }
@@ -2995,6 +2996,41 @@ pub unsafe extern "C" fn tn_scene_get_light_probe(
     }
     unsafe { out_intensity.write(scene.environment.light_probe_intensity) };
     status::OK
+}
+
+/// Turns GPU skinning on or off for a skinned mesh.
+///
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_set_gpu_skinning(scene: *mut Scene, node: u32, enabled: i32) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(target) = scene.node_mut(node) else {
+        set_last_error("no such node");
+        return status::INVALID_HANDLE;
+    };
+    let Some(mesh) = target.mesh.as_mut() else {
+        set_last_error("that node carries no mesh");
+        return status::INVALID_ARGUMENT;
+    };
+    mesh.gpu_skin = enabled != 0;
+    status::OK
+}
+
+/// Whether a mesh is skinned on the GPU; negative on error.
+///
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_node_get_gpu_skinning(scene: *mut Scene, node: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    match scene.node(node).and_then(|n| n.mesh) {
+        Some(mesh) => i32::from(mesh.gpu_skin),
+        None => {
+            set_last_error("no such node, or it carries no mesh");
+            status::INVALID_HANDLE
+        }
+    }
 }
 
 // -------------------------------------------------------------------- compute

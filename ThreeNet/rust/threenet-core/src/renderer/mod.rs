@@ -10,6 +10,7 @@ pub mod resources;
 pub mod shadows;
 pub mod sky;
 pub mod ssao;
+pub mod skinning;
 pub mod ssr;
 pub mod timing;
 pub mod uniforms;
@@ -440,6 +441,7 @@ pub struct Renderer {
     object_bind_group: wgpu::BindGroup,
     shadow_maps: ShadowMaps,
     ssao: Ssao,
+    gpu_skinning: crate::renderer::skinning::GpuSkinning,
     ssr: Ssr,
     deferred: Deferred,
     sky: Sky,
@@ -636,6 +638,7 @@ impl Renderer {
         let shadow_maps = ShadowMaps::new(&device, &layouts.object);
         let ssao = Ssao::new(&device, &queue, &layouts.object);
         let ssr = Ssr::new(&device);
+        let gpu_skinning = crate::renderer::skinning::GpuSkinning::new(&device);
         let deferred = Deferred::new(&device, &layouts);
         let sky = Sky::new(&device, &layouts);
         let effects = Effects::new(&device);
@@ -696,6 +699,7 @@ impl Renderer {
             object_bind_group,
             shadow_maps,
             ssao,
+            gpu_skinning,
             ssr,
             deferred,
             sky,
@@ -1144,6 +1148,71 @@ impl Renderer {
         Ok(out)
     }
 
+    /// Deforms every mesh that asked to be skinned on the GPU.
+    ///
+    /// Only the joint matrices travel each frame - a few kilobytes against a
+    /// whole vertex buffer - and the kernel writes the result into the same
+    /// buffer the draw will read, so nothing passes through system memory.
+    fn run_gpu_skinning(&mut self, scene: &mut Scene, encoder: &mut wgpu::CommandEncoder) {
+        if !self.supports_compute() {
+            return;
+        }
+
+        // Collected first so the scene is not borrowed while dispatching.
+        let work: Vec<(crate::scene::NodeId, GeometryId, crate::animation::SkinId)> = scene
+            .nodes_iter()
+            .filter_map(|(id, node)| {
+                let mesh = node.mesh?;
+                if !mesh.gpu_skin {
+                    return None;
+                }
+                Some((id, mesh.geometry, mesh.skin?))
+            })
+            .collect();
+        if work.is_empty() {
+            return;
+        }
+
+        let scene_id = scene.id();
+        for (node_id, geometry_id, skin_id) in work {
+            let Some(matrices) = scene.joint_matrices(node_id, skin_id) else {
+                continue;
+            };
+            let Some(geometry) = scene.geometry(geometry_id) else {
+                continue;
+            };
+            let Some(skin_weights) = geometry.skin.as_ref() else {
+                continue;
+            };
+            let bind_pose = skin_weights.bind_pose.clone();
+            let joints = skin_weights.joints.clone();
+            let weights = skin_weights.weights.clone();
+            let version = geometry.version();
+
+            // The vertex buffer has to exist before a kernel can write it.
+            self.resources
+                .ensure_mesh(&self.device, &self.queue, geometry_id, geometry);
+            let Some(target) = self.resources.mesh_vertex_buffer(geometry_id).cloned() else {
+                continue;
+            };
+
+            self.gpu_skinning.dispatch(
+                &self.device,
+                &self.queue,
+                encoder,
+                scene_id,
+                node_id,
+                geometry_id,
+                &bind_pose,
+                &joints,
+                &weights,
+                version,
+                &matrices,
+                &target,
+            );
+        }
+    }
+
     /// Bakes the light arriving at a point into a light probe: six renders, the
     /// same six a cube capture makes, projected onto spherical harmonics.
     ///
@@ -1482,6 +1551,10 @@ impl Renderer {
             &lights,
         );
         self.upload_object_uniforms();
+
+        // Skinned meshes that asked for the GPU are deformed here, after the
+        // world transforms are settled and before anything draws.
+        self.run_gpu_skinning(scene, &mut encoder);
 
         // ------------------------------------------------ shadow + AO passes
         let mut shadow_draw_calls = self.shadow_maps.render(

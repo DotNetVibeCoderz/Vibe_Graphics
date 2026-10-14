@@ -438,6 +438,12 @@ impl Scene {
             .iter()
             .filter_map(|(id, node)| {
                 let mesh = node.mesh?;
+                // A mesh skinned on the GPU is deformed during the frame, by a
+                // kernel writing the same vertex buffer. Doing it here as well
+                // would be work thrown away, and would upload over the result.
+                if mesh.gpu_skin {
+                    return None;
+                }
                 Some((id, mesh.geometry, mesh.skin?))
             })
             .collect();

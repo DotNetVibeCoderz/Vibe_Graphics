@@ -407,6 +407,7 @@ fn import_gltf_node(
                         cast_shadow: true,
                         receive_shadow: true,
                         skin: None,
+                        gpu_skin: false,
                     });
                     if target_count > 0 {
                         target.morph_weights = starting_weights.clone();

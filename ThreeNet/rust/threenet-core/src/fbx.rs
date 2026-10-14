@@ -776,6 +776,7 @@ pub fn load_fbx_from_slice(
                         cast_shadow: true,
                         receive_shadow: true,
                         skin: None,
+                        gpu_skin: false,
                     });
                 }
                 created.push((target, geometry));

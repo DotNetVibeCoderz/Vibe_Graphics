@@ -80,6 +80,10 @@ lights face -Z.
   `Custom0`..`Custom3`; factories `Pbr`, `Basic`, `Phong`, `Lambert`. `AlphaMode.Additive` adds the fragment
   to the frame instead of blending over it.
 
+- `Node.GpuSkinning` deforms a skinned mesh with a compute kernel instead of on the CPU. Only the joint
+  matrices travel each frame. The CPU then keeps the bind pose, so raycasts and bounds use that; CPU
+  skinning stays the default and stays correct.
+
 ## Compute
 
 - `Scene.CreateComputeKernel(source, entryPoint?, name?)` compiles WGSL with a `@compute` entry point.
