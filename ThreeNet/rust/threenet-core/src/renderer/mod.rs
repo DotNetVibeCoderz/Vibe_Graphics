@@ -913,15 +913,63 @@ impl Renderer {
         buffers: &[crate::scene::StorageBufferId],
         groups: [u32; 3],
     ) -> Result<()> {
+        self.dispatch_compute_inner(scene, kernel_id, buffers, None, groups)
+    }
+
+    /// Runs a kernel that writes the vertices of `geometry`.
+    ///
+    /// The storage buffers bind first, in the order given, and the vertex
+    /// buffer binds after them - so a kernel handed one buffer sees its state
+    /// at binding 0 and the vertices at binding 1.
+    ///
+    /// The kernel declares the vertex layout itself, and there is a trap in it:
+    /// a vertex is forty eight bytes - position, normal, uv, tangent - but WGSL
+    /// aligns `vec3<f32>` to sixteen, so the struct that looks right
+    /// (`vec3, vec3, vec2, vec4`) has a stride of sixty four and reads every
+    /// vertex after the first from the wrong place. Declare the fields as
+    /// scalars instead:
+    ///
+    /// ```wgsl
+    /// struct Vertex {
+    ///     px: f32, py: f32, pz: f32,
+    ///     nx: f32, ny: f32, nz: f32,
+    ///     u: f32, v: f32,
+    ///     tx: f32, ty: f32, tz: f32, tw: f32,
+    /// };
+    /// ```
+    ///
+    /// Nothing may write the geometry from the CPU afterwards, or the upload
+    /// will overwrite whatever the kernel produced. Build it at full size once
+    /// and leave it to the GPU.
+    pub fn dispatch_compute_to_geometry(
+        &mut self,
+        scene: &mut Scene,
+        kernel_id: crate::scene::ComputeKernelId,
+        buffers: &[crate::scene::StorageBufferId],
+        geometry: GeometryId,
+        groups: [u32; 3],
+    ) -> Result<()> {
+        self.dispatch_compute_inner(scene, kernel_id, buffers, Some(geometry), groups)
+    }
+
+    fn dispatch_compute_inner(
+        &mut self,
+        scene: &mut Scene,
+        kernel_id: crate::scene::ComputeKernelId,
+        buffers: &[crate::scene::StorageBufferId],
+        geometry: Option<GeometryId>,
+        groups: [u32; 3],
+    ) -> Result<()> {
         if !self.supports_compute() {
             return Err(Error::Device(
                 "this adapter cannot run compute shaders".into(),
             ));
         }
+        let scene_id = scene.id();
         let Some(kernel) = scene.compute_kernel(kernel_id) else {
             return Err(Error::InvalidHandle("compute kernel"));
         };
-        if buffers.is_empty() {
+        if buffers.is_empty() && geometry.is_none() {
             return Err(Error::InvalidArgument(
                 "a dispatch needs at least one storage buffer to work on".into(),
             ));
@@ -951,29 +999,54 @@ impl Renderer {
             let size = buffer.size;
             let pending = buffer.pending.clone();
             let version = buffer.version;
-            self.resources
-                .ensure_storage_buffer(&self.device, &self.queue, *id, size, pending.as_deref(), version);
+            self.resources.ensure_storage_buffer(
+                &self.device,
+                &self.queue,
+                scene_id,
+                *id,
+                size,
+                pending.as_deref(),
+                version,
+            );
         }
 
         // Compiled once per kernel, edit and binding count, not once per
         // dispatch: a particle system steps every frame.
+        if let Some(id) = geometry {
+            let Some(mesh) = scene.geometry(id) else {
+                return Err(Error::InvalidHandle("geometry"));
+            };
+            // Uploading here lets a kernel target a geometry that has not been
+            // drawn yet, which is the usual order when a system is built and
+            // stepped before its first frame.
+            self.resources.ensure_mesh(&self.device, &self.queue, id, mesh);
+        }
+
+        let binding_count = buffers.len() as u32 + u32::from(geometry.is_some());
         let (pipeline, layout) = self.resources.compute_pipeline(
             &self.device,
+            scene_id,
             kernel_id,
             kernel_version,
-            buffers.len() as u32,
+            binding_count,
             &source,
             &entry_point,
         );
         let pipeline = pipeline.clone();
         let layout = layout.clone();
 
-        let mut resources = Vec::with_capacity(buffers.len());
+        let mut resources = Vec::with_capacity(binding_count as usize);
         for id in buffers {
-            let Some(gpu) = self.resources.storage_buffer(*id) else {
+            let Some(gpu) = self.resources.storage_buffer(scene_id, *id) else {
                 return Err(Error::InvalidHandle("storage buffer"));
             };
             resources.push(gpu.as_entire_binding());
+        }
+        if let Some(id) = geometry {
+            let Some(vertices) = self.resources.mesh_vertex_buffer(id) else {
+                return Err(Error::InvalidHandle("geometry vertex buffer"));
+            };
+            resources.push(vertices.as_entire_binding());
         }
         let bind_entries: Vec<wgpu::BindGroupEntry> = resources
             .into_iter()
@@ -1027,7 +1100,7 @@ impl Renderer {
             return Err(Error::InvalidHandle("storage buffer"));
         };
         let size = buffer.size;
-        let Some(source) = self.resources.storage_buffer(id) else {
+        let Some(source) = self.resources.storage_buffer(scene.id(), id) else {
             // Nothing has been dispatched against it yet, so the only contents
             // are whatever the CPU staged.
             return Ok(buffer.pending.clone().unwrap_or_else(|| vec![0u8; size as usize]));

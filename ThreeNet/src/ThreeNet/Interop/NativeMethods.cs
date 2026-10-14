@@ -663,6 +663,11 @@ internal static unsafe partial class NativeMethods
         uint groupsX, uint groupsY, uint groupsZ);
 
     [LibraryImport(Library)]
+    internal static partial int tn_renderer_dispatch_compute_to_geometry(
+        nint renderer, nint scene, uint kernel, uint* buffers, uint bufferCount, uint geometry,
+        uint groupsX, uint groupsY, uint groupsZ);
+
+    [LibraryImport(Library)]
     internal static partial int tn_renderer_read_storage_buffer(
         nint renderer, nint scene, uint buffer, byte* data, ulong length);
 

@@ -588,6 +588,64 @@ public sealed class Renderer : IDisposable
     }
 
     /// <summary>
+    /// Runs a compute kernel that writes the vertices of a geometry, so what is
+    /// drawn never has to travel through system memory.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The storage buffers bind first, in order, and the vertex buffer binds
+    /// after them: a kernel handed one buffer sees its state at binding 0 and
+    /// the vertices at binding 1.
+    /// </para>
+    /// <para>
+    /// The kernel declares the vertex layout itself, and there is a trap in it.
+    /// A vertex is 48 bytes - position, normal, uv, tangent - but WGSL aligns
+    /// <c>vec3&lt;f32&gt;</c> to 16, so the struct that looks right has a
+    /// stride of 64 and reads every vertex after the first from the wrong
+    /// place. Declare the fields as scalars:
+    /// </para>
+    /// <code>
+    /// struct Vertex {
+    ///     px: f32, py: f32, pz: f32,
+    ///     nx: f32, ny: f32, nz: f32,
+    ///     u: f32, v: f32,
+    ///     tx: f32, ty: f32, tz: f32, tw: f32,
+    /// };
+    /// </code>
+    /// <para>
+    /// Nothing may write the geometry from the CPU afterwards, or the upload
+    /// overwrites what the kernel produced. Build it at full size once and
+    /// leave it to the GPU.
+    /// </para>
+    /// </remarks>
+    public unsafe void DispatchToGeometry(
+        Scene scene,
+        ComputeKernel kernel,
+        ReadOnlySpan<StorageBuffer> buffers,
+        Geometry geometry,
+        int groupsX,
+        int groupsY = 1,
+        int groupsZ = 1)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(kernel);
+        ArgumentNullException.ThrowIfNull(geometry);
+
+        Span<uint> ids = buffers.Length <= 8 ? stackalloc uint[buffers.Length] : new uint[buffers.Length];
+        for (int i = 0; i < buffers.Length; i++)
+        {
+            ids[i] = buffers[i].Id;
+        }
+
+        fixed (uint* pointer = ids)
+        {
+            NativeError.Check(NativeMethods.tn_renderer_dispatch_compute_to_geometry(
+                Handle, scene.Handle, kernel.Id, pointer, (uint)ids.Length, geometry.Id,
+                (uint)groupsX, (uint)groupsY, (uint)groupsZ));
+        }
+    }
+
+    /// <summary>
     /// Reads a storage buffer back into system memory.
     /// </summary>
     /// <remarks>

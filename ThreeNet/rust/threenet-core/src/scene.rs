@@ -321,6 +321,10 @@ pub struct Scene {
     root: NodeId,
     /// Camera used when the caller does not pass one explicitly.
     active_camera: Option<NodeId>,
+    /// Unique for the life of the process. Arena ids restart at 1 in every
+    /// scene, so anything the renderer caches by id has to be told which scene
+    /// the id belongs to or two scenes will share one entry.
+    id: u64,
 }
 
 impl Default for Scene {
@@ -353,6 +357,11 @@ impl Scene {
             assets: Default::default(),
             root,
             active_camera: None,
+            id: {
+                use std::sync::atomic::{AtomicU64, Ordering};
+                static NEXT: AtomicU64 = AtomicU64::new(1);
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            },
         }
     }
 
@@ -658,6 +667,12 @@ impl Scene {
     #[inline]
     pub fn texture_mut(&mut self, id: TextureId) -> Option<&mut Texture> {
         self.textures.get_mut(id)
+    }
+
+    /// Identifies this scene among all the scenes in the process.
+    #[inline]
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     // -------------------------------------------------------------- compute

@@ -180,8 +180,37 @@ Use `AlphaMode.Additive` (`GlowMaterial`) for anything that glows and `AlphaMode
 anything that does not.
 
 **Where this caps out.** Everything runs on the CPU and the geometry is re-uploaded every frame, which is
-honest and portable but tops out in the low thousands per system. A compute path would need compute pipelines
-in the core first; see `PLAN.md`.
+honest and portable but tops out in the low thousands per system, because every particle crosses the bus
+twice every frame.
+
+### On the GPU
+
+`GpuParticleEffect` is the other half of that trade. Particle state lives in a storage buffer and a compute
+kernel steps it and writes the billboard quads straight into the geometry's vertex buffer, so nothing passes
+through system memory at all and the count can go up by two orders of magnitude.
+
+```csharp
+GpuParticleEffect sparks = new(scene, renderer, capacity: 200_000)
+{
+    Origin = new Vector3(0f, 1f, 0f),
+    Direction = Vector3.UnitY,
+    Speed = 3f,
+    Gravity = new Vector3(0f, -2f, 0f),
+};
+scene.AddMesh(sparks.Geometry, scene.CreateMaterial(GpuParticleEffect.DefaultMaterial(colour)));
+
+// Each frame, with the camera transform so the quads face it:
+sparks.Update(renderer, scene, deltaSeconds, camera.WorldMatrix);
+```
+
+What it gives up is visibility. The CPU never learns where a particle went, so there is no picking, no
+collision against the scene, and the node bounds are whatever `BoundsRadius` says rather than something that
+follows the plume. Use `ParticleEffect` when the particles have to interact with anything and
+`GpuParticleEffect` when there are simply a lot of them. It needs `Renderer.SupportsCompute`.
+
+One trap worth repeating from the API docs: a kernel writing vertices has to declare the struct as scalars.
+A vertex is 48 bytes, but WGSL aligns `vec3<f32>` to 16, so the struct that looks right has a stride of 64
+and writes every quad after the first into the wrong place.
 
 ---
 

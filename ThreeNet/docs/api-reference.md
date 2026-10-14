@@ -113,6 +113,7 @@ lights face -Z.
 | `RenderToCube(scene, position, target)` | Captures the surroundings of a point into a cube render target: six frames at 90 degrees, through a camera the capture creates and removes itself |
 | `SupportsCompute` | False on adapters with no compute at all, such as WebGL2 |
 | `Dispatch(scene, kernel, buffers, groupsX, groupsY?, groupsZ?)` | Runs a compute kernel; the counts are workgroups, not threads |
+| `DispatchToGeometry(scene, kernel, buffers, geometry, groupsX, ...)` | Runs a kernel that writes a geometry's vertices. Declare the vertex struct as scalars: a vertex is 48 bytes, but WGSL aligns `vec3<f32>` to 16 and the obvious struct would have a stride of 64 |
 | `ReadStorageBuffer<T>(scene, buffer)` | Reads a storage buffer back; waits for the queue, so it belongs in a bake or a test |
 | `BakeLightProbe(scene, position)` | The same six frames projected onto spherical harmonics, giving a `LightProbe` of directional ambient light. Offscreen and square renderers only |
 | `Resize(width, height)`, `Options`, `Width`, `Height`, `AspectRatio` | Target |

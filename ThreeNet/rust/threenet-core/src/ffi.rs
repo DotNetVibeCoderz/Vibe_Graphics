@@ -3146,6 +3146,46 @@ pub unsafe extern "C" fn tn_renderer_dispatch_compute(
     }
 }
 
+/// Runs a compute kernel that writes the vertices of `geometry`.
+///
+/// # Safety
+/// `renderer` and `scene` must be valid, and `buffers` must point at
+/// `buffer_count` ids.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_dispatch_compute_to_geometry(
+    renderer: *mut Renderer,
+    scene: *mut Scene,
+    kernel: u32,
+    buffers: *const u32,
+    buffer_count: u32,
+    geometry: u32,
+    groups_x: u32,
+    groups_y: u32,
+    groups_z: u32,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    let scene = scene_ref!(scene);
+    if buffers.is_null() && buffer_count > 0 {
+        set_last_error("buffers is null");
+        return status::INVALID_ARGUMENT;
+    }
+    let ids = if buffer_count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(buffers, buffer_count as usize) }
+    };
+    match renderer.dispatch_compute_to_geometry(
+        scene,
+        kernel,
+        ids,
+        geometry,
+        [groups_x, groups_y, groups_z],
+    ) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
 /// Reads a storage buffer back into `out_data`, which must hold `length` bytes.
 ///
 /// # Safety

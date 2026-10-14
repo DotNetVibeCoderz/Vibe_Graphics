@@ -185,3 +185,121 @@ fn writing_past_the_end_is_refused() {
     assert!(!handle.write(4, &[0u8; 8]));
     assert!(!handle.write(9, &[0u8; 1]));
 }
+
+/// A kernel that reads a geometry's vertex positions out into a plain buffer.
+///
+/// Reading rather than writing is what makes the test mean something: if the
+/// vertex binding were wrong, the numbers that come back would be whatever
+/// happened to be in memory rather than the plane's own corners.
+const SAMPLE: &str = r#"
+// Scalars, not vec3: WGSL aligns a vec3 to 16 bytes, so the obvious struct
+// would have a stride of 64 while a Vertex is packed into 48.
+struct Vertex {
+    px: f32, py: f32, pz: f32,
+    nx: f32, ny: f32, nz: f32,
+    u: f32, v: f32,
+    tx: f32, ty: f32, tz: f32, tw: f32,
+};
+
+@group(0) @binding(0) var<storage, read_write> out: array<f32>;
+@group(0) @binding(1) var<storage, read_write> vertices: array<Vertex>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= arrayLength(&vertices)) {
+        return;
+    }
+    // Pack x and y so both axes are checked, not just one.
+    out[id.x * 2u] = vertices[id.x].px;
+    out[id.x * 2u + 1u] = vertices[id.x].py;
+}
+"#;
+
+#[test]
+fn a_kernel_sees_the_vertices_of_a_geometry() {
+    let Some(mut renderer) = renderer() else {
+        return;
+    };
+    if !renderer.supports_compute() {
+        return;
+    }
+
+    let mut scene = Scene::new();
+    // A 2 by 2 plane on XY: its four corners are at plus and minus one.
+    let geometry = scene.add_geometry(threenet_core::geometry::primitives::plane(2.0, 2.0, 1, 1));
+    let expected: Vec<[f32; 2]> = scene
+        .geometry(geometry)
+        .expect("just added")
+        .vertices
+        .iter()
+        .map(|v| [v.position[0], v.position[1]])
+        .collect();
+    assert_eq!(expected.len(), 4);
+
+    let out = scene.add_storage_buffer((expected.len() * 2 * 4) as u64);
+    let kernel = scene.add_compute_kernel(ComputeKernel::new("sample", SAMPLE, "main"));
+    renderer
+        .dispatch_compute_to_geometry(&mut scene, kernel, &[out], geometry, [1, 1, 1])
+        .expect("dispatch");
+
+    let bytes = renderer.read_storage_buffer(&scene, out).expect("readback");
+    let read: Vec<f32> = bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect();
+
+    for (index, corner) in expected.iter().enumerate() {
+        assert!(
+            (read[index * 2] - corner[0]).abs() < 1e-5,
+            "vertex {index} x was {} and should be {}",
+            read[index * 2],
+            corner[0]
+        );
+        assert!(
+            (read[(index * 2) + 1] - corner[1]).abs() < 1e-5,
+            "vertex {index} y was {} and should be {}",
+            read[(index * 2) + 1],
+            corner[1]
+        );
+    }
+}
+
+#[test]
+fn a_dispatch_with_only_a_geometry_is_allowed() {
+    let Some(mut renderer) = renderer() else {
+        return;
+    };
+    if !renderer.supports_compute() {
+        return;
+    }
+
+    const FLATTEN: &str = r#"
+// Scalars, not vec3: WGSL aligns a vec3 to 16 bytes, so the obvious struct
+// would have a stride of 64 while a Vertex is packed into 48.
+struct Vertex {
+    px: f32, py: f32, pz: f32,
+    nx: f32, ny: f32, nz: f32,
+    u: f32, v: f32,
+    tx: f32, ty: f32, tz: f32, tw: f32,
+};
+
+@group(0) @binding(0) var<storage, read_write> vertices: array<Vertex>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    if (id.x >= arrayLength(&vertices)) {
+        return;
+    }
+    vertices[id.x].py = 0.0;
+}
+"#;
+
+    let mut scene = Scene::new();
+    let geometry = scene.add_geometry(threenet_core::geometry::primitives::plane(1.0, 1.0, 1, 1));
+    let kernel = scene.add_compute_kernel(ComputeKernel::new("flatten", FLATTEN, "main"));
+    // No storage buffers at all: the geometry is the only thing to work on, and
+    // that has to count as something.
+    renderer
+        .dispatch_compute_to_geometry(&mut scene, kernel, &[], geometry, [1, 1, 1])
+        .expect("dispatch");
+}

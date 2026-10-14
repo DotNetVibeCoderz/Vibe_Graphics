@@ -291,12 +291,17 @@ pub struct ResourceCache {
     /// One instance buffer per node that carries instances, keyed by node id.
     instances: HashMap<crate::scene::NodeId, GpuInstances>,
     /// Storage buffers for compute, with the write version last uploaded.
-    storage_buffers: HashMap<crate::scene::StorageBufferId, (wgpu::Buffer, u32)>,
+    /// Keyed by scene as well as by id: arena ids restart at 1 in every scene,
+    /// so two scenes on one renderer would otherwise share a buffer and the
+    /// second would silently inherit the first one's contents.
+    storage_buffers: HashMap<(u64, crate::scene::StorageBufferId), (wgpu::Buffer, u32)>,
     /// Compiled compute pipelines, keyed by kernel, its edit version and how
     /// many buffers it was built for. Compiling WGSL on every dispatch would
     /// cost more than the work most kernels do.
-    compute_pipelines:
-        HashMap<(crate::scene::ComputeKernelId, u32, u32), (wgpu::ComputePipeline, wgpu::BindGroupLayout)>,
+    compute_pipelines: HashMap<
+        (u64, crate::scene::ComputeKernelId, u32, u32),
+        (wgpu::ComputePipeline, wgpu::BindGroupLayout),
+    >,
 }
 
 #[derive(Debug)]
@@ -499,6 +504,7 @@ impl ResourceCache {
     pub fn compute_pipeline(
         &mut self,
         device: &wgpu::Device,
+        scene: u64,
         id: crate::scene::ComputeKernelId,
         version: u32,
         bindings: u32,
@@ -506,7 +512,7 @@ impl ResourceCache {
         entry_point: &str,
     ) -> &(wgpu::ComputePipeline, wgpu::BindGroupLayout) {
         self.compute_pipelines
-            .entry((id, version, bindings))
+            .entry((scene, id, version, bindings))
             .or_insert_with(|| {
                 let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..bindings)
                     .map(|binding| wgpu::BindGroupLayoutEntry {
@@ -545,9 +551,18 @@ impl ResourceCache {
             })
     }
 
+    /// The vertex buffer behind a geometry, for a kernel to write into.
+    pub fn mesh_vertex_buffer(&self, id: GeometryId) -> Option<&wgpu::Buffer> {
+        self.meshes.get(&id).map(|mesh| &mesh.vertex_buffer)
+    }
+
     /// The GPU side of a storage buffer, once a dispatch has created it.
-    pub fn storage_buffer(&self, id: crate::scene::StorageBufferId) -> Option<&wgpu::Buffer> {
-        self.storage_buffers.get(&id).map(|(buffer, _)| buffer)
+    pub fn storage_buffer(
+        &self,
+        scene: u64,
+        id: crate::scene::StorageBufferId,
+    ) -> Option<&wgpu::Buffer> {
+        self.storage_buffers.get(&(scene, id)).map(|(buffer, _)| buffer)
     }
 
     /// Creates the buffer if it is missing or the wrong size, and uploads
@@ -556,6 +571,7 @@ impl ResourceCache {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        scene: u64,
         id: crate::scene::StorageBufferId,
         size: u64,
         pending: Option<&[u8]>,
@@ -563,7 +579,7 @@ impl ResourceCache {
     ) {
         let matches = self
             .storage_buffers
-            .get(&id)
+            .get(&(scene, id))
             .is_some_and(|(buffer, _)| buffer.size() == size);
         if !matches {
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -575,9 +591,10 @@ impl ResourceCache {
                 mapped_at_creation: false,
             });
             // A fresh buffer has never seen an upload, so force one below.
-            self.storage_buffers.insert(id, (buffer, version.wrapping_sub(1)));
+            self.storage_buffers
+                .insert((scene, id), (buffer, version.wrapping_sub(1)));
         }
-        let Some((buffer, uploaded)) = self.storage_buffers.get_mut(&id) else {
+        let Some((buffer, uploaded)) = self.storage_buffers.get_mut(&(scene, id)) else {
             return;
         };
         if *uploaded != version
@@ -652,7 +669,13 @@ impl ResourceCache {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("threenet.geometry.vertices"),
             contents: vertex_bytes,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            // STORAGE as well as VERTEX, so a compute kernel can write the
+            // vertices a later pass draws. It costs a usage flag and nothing
+            // else, and without it GPU particles would have to round trip
+            // through system memory, which is the thing they exist to avoid.
+            usage: wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST,
         });
         let index_buffer = (!geometry.indices.is_empty()).then(|| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {

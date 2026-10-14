@@ -109,7 +109,13 @@ dotnet run --project apps/HomeComplexCad         # add `-- --location "Ruang Tam
 - `basis-universal` compiles C++ in `build.rs`: the native build needs a C++ toolchain. Regenerate the
   compressed test files with `cargo test --test compressed -- --ignored`.
 - Arena ids are reused after removal: anything keyed by a texture id (streaming, cache) must be forgotten in
-  `Scene::remove_texture`.
+  `Scene::remove_texture`. Ids also restart at 1 in every *new* scene, so anything the renderer caches by id
+  across scenes must key on `Scene::id()` too - compute buffers and pipelines do, and without it a second
+  scene silently inherits the first one's GPU contents.
+- A compute kernel that reads or writes vertices must declare the struct as scalars (`px: f32, py: f32, ...`).
+  A `Vertex` is 48 bytes packed, but WGSL aligns `vec3<f32>` to 16, so the obvious
+  `vec3/vec3/vec2/vec4` struct has a stride of 64 and touches every vertex after the first at the wrong
+  offset - with no error, just wrong geometry.
 - `Rgba32Float` is not filterable on most adapters. The material's free texture slot (binding 7,
   `custom_texture`) is declared non-filterable for that reason: `textureLoad` it, never `textureSample`.
 - The built-in plane geometry stands on XY facing +Z. Anything that wants a ground plane builds its own
