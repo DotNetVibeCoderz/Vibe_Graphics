@@ -7,7 +7,7 @@ Catatan pengembangan Three.Net. Terbaru di atas.
 
 `threejs_fitur_lengkap.md` was checked feature by feature against the codebase, and the gaps written into
 `PLAN.md` as phase 8, grouped by what each costs to close rather than by the order the list happens to use.
-Group A is finished and group B is nine rows of ten.
+Group A is finished, and group B with it except for three rows: SMAA, iridescence and SSR.
 
 **Group A - geometry, materials and the things around them.** Seven geometry generators (circle, capsule,
 torus knot, tube, lathe, extrude, polyhedra and the four platonic solids). The tube is framed by parallel
@@ -30,6 +30,23 @@ a multisampled target and the G-buffer is resolved before the lighting sees it. 
 `vs_instanced` living beside `vs_main` in one module - an entry point nothing calls places no demand on the
 pipeline layout. Clearcoat, sheen and anisotropy. Render targets. Cube map environment textures.
 
+Instancing then needed two corrections it had shipped without. An instanced node culled and raycast against
+the *node* bounds, which is fine only while the copies sit on the origin: a forest vanished the moment that
+origin left the frustum, and every copy but the first was unpickable. Culling now unions the bounds of all
+the instances and a raycast tests each transform, reporting which copy it hit through `RayHit.InstanceIndex`.
+
+Transmission - glass - needed the forward pass split in two with the colour copied aside in between, since a
+pass cannot sample the target it is drawing into. It replaces the diffuse rather than adding to it, because
+light that passed through a surface did not also scatter back off it, and `Thickness` does double duty:
+it scales the refraction offset and drives the Beer-Lambert tint, so thick green glass visibly eats the red
+behind it. The split only happens when something in the frame actually refracts, and a test asserts an opaque
+scene comes out bit identical to what it was before any of this existed.
+
+And `CubeCamera`: six renders at ninety degrees into the layers of a cube render target, through a probe
+camera the capture creates and removes itself, so a bake disturbs nothing in the scene and cannot leave a
+stray camera behind if it fails halfway. That is a reflection probe, and with a spherical harmonic projection
+on the CPU it is also the way to light probes without waiting for compute.
+
 **What the tests caught.** Three times the first version of a test was wrong and the renderer was right, and
 each correction left a sharper test than the one intended. A clearcoat *lowers* the total brightness of a
 sphere, because it reflects by taking energy from the layer underneath rather than by inventing it - the test
@@ -44,14 +61,13 @@ wrapper, so that is where they are checked now.
 runner's WARP driver crashes in it intermittently rather than every time, which is worse than a reliable
 failure: it reddens main at random.
 
-ABI 13 through 17 across the work: a hemisphere light's ground colour, seven geometry entry points, instance
-transforms, the extended material lobes, render targets and cube maps.
+ABI 13 through 20 across the work: a hemisphere light's ground colour, seven geometry entry points, instance
+transforms, the extended material lobes, render targets, cube maps, transmission and the cube capture.
 
-**Still open, with the reason in `PLAN.md` beside each.** `CubeCamera`, SSR and transmission - all three much
-smaller now that render targets exist. SMAA, which is worth little beside FXAA. Pointer lock, which Avalonia
-does not expose. Instance aware culling, since an instanced node still culls against the node bounds rather
-than each instance's. And light probes, GPU particles and GPU skinning, which all wait on compute pipelines
-the core does not have yet - that is the one real wall left, and it is a foundation rather than a feature.
+**Still open, with the reason in `PLAN.md` beside each.** SSR, which now only wants the depth buffer in the
+post chain. Iridescence. SMAA, which is worth little beside a working FXAA. Pointer lock, which Avalonia does
+not expose. And light probes, GPU particles and GPU skinning, which all wait on compute pipelines the core
+does not have - that is the one real wall left, and it is a foundation rather than a feature.
 
 ## 2026-10-08 - Morph targets, a sky pass, and water, fire and VFX in the library (0.9.0)
 

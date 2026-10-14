@@ -321,6 +321,31 @@ impl Texture {
         })
     }
 
+    /// A cube the renderer draws into, six faces of `size` by `size`. Used to
+    /// capture the surroundings of a point for a reflection or a light probe.
+    pub fn render_target_cube(size: u32) -> Result<Self> {
+        if size == 0 {
+            return Err(Error::InvalidArgument(
+                "a cube render target needs a non zero size".into(),
+            ));
+        }
+        Ok(Self {
+            name: String::from("render target cube"),
+            width: size,
+            height: size,
+            format: TextureFormat::Rgba8UnormSrgb,
+            pixels: Vec::new(),
+            sampler: SamplerDesc {
+                mipmaps: false,
+                ..SamplerDesc::default()
+            },
+            compressed: None,
+            render_target: true,
+            layers: 6,
+            version: 1,
+        })
+    }
+
     /// True when this is a cube map rather than a flat texture.
     #[inline]
     pub fn is_cube(&self) -> bool {

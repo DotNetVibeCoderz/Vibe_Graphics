@@ -471,6 +471,31 @@ public sealed class Renderer : IDisposable
     }
 
     /// <summary>
+    /// Captures the surroundings of a point into a cube texture - a reflection
+    /// probe, or the input to a light probe.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Six renders, one per face, each with a ninety degree field of view. The
+    /// texture must come from <see cref="Scene.CreateCubeRenderTarget"/>, and
+    /// the renderer must be square and the same size as a face - the same
+    /// restriction <see cref="RenderToTexture"/> carries, for the same reason.
+    /// </para>
+    /// <para>
+    /// This is a bake rather than something to do every frame: it is six full
+    /// frames of work. A probe sees the scene exactly as a camera standing
+    /// there would.
+    /// </para>
+    /// </remarks>
+    public void RenderToCube(Scene scene, Vector3 position, Texture target)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(target);
+        NativeError.Check(NativeMethods.tn_renderer_render_to_cube(
+            Handle, scene.Handle, position, target.Id));
+    }
+
+    /// <summary>
     /// Renders the scene into a texture that any material can then sample: a
     /// mirror, a portal, a security monitor, a minimap.
     /// </summary>

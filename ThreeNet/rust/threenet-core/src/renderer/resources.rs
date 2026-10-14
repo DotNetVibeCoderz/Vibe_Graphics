@@ -355,6 +355,71 @@ impl ResourceCache {
         self.textures.get(&id).expect("just built").view.clone()
     }
 
+    /// Creates or reuses the GPU cube behind a cube render target, and returns
+    /// one view per face to draw into. The sampled view stays whole, so a
+    /// material binding the texture sees all six faces as one cube.
+    pub fn ensure_render_target_cube(
+        &mut self,
+        device: &wgpu::Device,
+        id: TextureId,
+        size: u32,
+        format: wgpu::TextureFormat,
+        sampler: &crate::texture::SamplerDesc,
+    ) -> Vec<wgpu::TextureView> {
+        let matches = self.textures.get(&id).is_some_and(|existing| {
+            existing.texture.width() == size
+                && existing.texture.depth_or_array_layers() == 6
+                && existing.texture.format() == format
+        });
+        if !matches {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("threenet.render_target.cube"),
+                size: wgpu::Extent3d {
+                    width: size,
+                    height: size,
+                    depth_or_array_layers: 6,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            // The view a material samples covers the whole cube.
+            let view = texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::Cube),
+                ..Default::default()
+            });
+            let generation = self.textures.get(&id).map_or(0, |t| t.generation);
+            self.textures.insert(
+                id,
+                GpuTexture {
+                    texture,
+                    view,
+                    sampler: create_sampler(device, sampler, 1),
+                    version: 1,
+                    generation: generation.wrapping_add(1),
+                },
+            );
+        }
+
+        // One view per face to render into: a render pass takes a single 2D
+        // layer, never the cube as a whole.
+        let texture = &self.textures.get(&id).expect("just built").texture;
+        (0..6)
+            .map(|face| {
+                texture.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("threenet.render_target.cube.face"),
+                    dimension: Some(wgpu::TextureViewDimension::D2),
+                    base_array_layer: face,
+                    array_layer_count: Some(1),
+                    ..Default::default()
+                })
+            })
+            .collect()
+    }
+
     pub fn instances(&self, id: crate::scene::NodeId) -> Option<&GpuInstances> {
         self.instances.get(&id)
     }

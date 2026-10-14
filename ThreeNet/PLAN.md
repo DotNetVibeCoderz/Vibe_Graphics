@@ -123,7 +123,7 @@ Done in 0.10.0.
 | Clipping planes | ✅ | `RendererOptions.ClipPlanes`, up to four world space planes. Clipped in the forward pass, the deferred G-buffer and the SSAO prepass - the prepass matters, or ambient occlusion and depth of field keep occluding against surfaces nothing draws |
 | Render targets as a public API | ✅ | `Scene.CreateRenderTarget` + `Renderer.RenderToTexture`, with no CPU round trip - the result is a GPU texture the material bind groups reference directly. Mirrors, portals, monitors and minimaps work today. The target must match the renderer size: every pass before the post chain owns buffers sized to the renderer, and an arbitrary size would rebuild all of them twice a frame. Relaxing that wants a second target set per size |
 | Cube map textures | ✅ | `Scene.CreateCubeTexture` from six faces. One environment slot takes either shape and the renderer binds it to the flat or the cube binding, with `misc.y` saying which - the unused one gets a 1x1 default, because a layout entry with nothing in it is a validation error rather than an empty slot |
-| `CubeCamera` (dynamic six face capture) | ⬜ | Needs rendering into the layers of a cube, and the render target size restriction makes it awkward since faces are square while a renderer usually is not |
+| `CubeCamera` (dynamic six face capture) | ✅ | `Scene.CreateCubeRenderTarget` + `Renderer.RenderToCube(scene, position, target)`: six renders at 90 degrees into per face layer views, through a probe camera created and removed by the capture, so nothing in the scene is disturbed. A bake, not a per frame cost: the renderer has to be square and face sized, like every other render target |
 | PBR extensions: clearcoat, sheen, anisotropy | ✅ | `MaterialOptions.Clearcoat`, `ClearcoatRoughness`, `Sheen`, `SheenRoughness`. The coat attenuates the layer underneath by its own Fresnel, since the energy it reflects has to come from somewhere; sheen uses the Charlie distribution, which peaks at grazing angles and is why velvet lights up around its edge. Anisotropy stretches the highlight along the grain, widening one axis by exactly as much as it narrows the other, so the GGX normalisation holds and a brushed surface does not read as merely rougher. Forward path only - the G-buffer has five targets and no room for a sixth, and there is a test pinning that |
 | PBR extensions: transmission | ✅ | `MaterialOptions.Transmission`, `Ior`, `Thickness`. The forward pass splits in two with the colour copied aside between, so glass samples what the opaque half left; the split only happens when something actually refracts, and a test asserts an opaque scene is bit identical. Transmission replaces the diffuse rather than adding to it, since light that passed through did not scatter back. Forward path only, and glass does not refract other glass - Three.js has the same limitation |
 | PBR extensions: iridescence | ⬜ | A thin film interference term over the base specular; needs a wavelength dependent Fresnel |
@@ -134,7 +134,7 @@ Done in 0.10.0.
 | Light probes | ⬜ | Already open in "Next up" |
 | GPU particles, GPU skinning | ⬜ | Already open in "Next up"; both need compute pipelines in the core |
 | Instance aware culling and picking | ✅ | Culling unions the bounds of every instance, so a forest does not vanish when the node origin leaves the frustum; raycasting tests each instance transform and reports `RayHit.InstanceIndex`, so picking a crowd says which copy was hit |
-| Screen space refraction | ⬜ | Already open in "Next up"; the same missing piece as transmission - no pass hands the scene colour or depth to a material shader |
+| Screen space refraction | ✅ | Shipped with transmission: the forward pass splits, the opaque colour is copied aside, and a refracting material samples it along the bent view ray. The offset comes from `Thickness` rather than from scene depth, because the post chain still does not hand a material the depth buffer |
 
 ### C. Asset formats
 
@@ -168,5 +168,6 @@ items that were already in flight before it was written.
 4. **Contact hardening shadows and light probes.**
 5. **GPU particles.** `ParticleEffect` rewrites geometry on the CPU each frame, which is honest but caps out
    in the low thousands per system; a compute path would need compute pipelines in the core first.
-6. **Screen space refraction for water.** The surface absorbs light with depth and reflects the sky, but what
-   is underneath is not bent, because no pass exposes the scene colour or depth to a material shader yet.
+6. **Screen space refraction for water.** Transmission gave the water surface everything it needs - the
+   opaque colour is bound and a refracting material bends it - so this is now a matter of turning it on in
+   `WaterSurface` and tuning it, rather than of missing machinery.

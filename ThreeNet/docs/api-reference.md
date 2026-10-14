@@ -56,6 +56,7 @@ lights face -Z.
 - `Scene.CreateCubeTexture(size, +X, -X, +Y, -Y, +Z, -Z)` makes a cube map. Set as
   `SceneEnvironment.EnvironmentMap` it is sampled by direction, which is even everywhere; an
   equirectangular image crowds its samples at the poles.
+- `Scene.CreateCubeRenderTarget(size)` makes an empty one for `Renderer.RenderToCube` to fill.
 - `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `Update(pixels)` (bytes or floats,
   written into the existing GPU texture), `State` (`TextureState`), `LoadError`, `Destroy()`.
 - `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.
@@ -92,6 +93,7 @@ lights face -Z.
 | `CreateOffscreen(options)`, `CreateForWin32(hwnd, options)`, `CreateForX11(window, display, screen, options)`, `CreateForAppKit(nsView, options)`, `CreateForAndroid(nativeWindow, options)` | Factories |
 | `Render(scene, camera?)` | Draws a frame |
 | `RenderToTexture(scene, camera?, target)` | Draws into a texture a material can sample; the target must match the renderer size |
+| `RenderToCube(scene, position, target)` | Captures the surroundings of a point into a cube render target: six frames at 90 degrees, through a camera the capture creates and removes itself |
 | `Resize(width, height)`, `Options`, `Width`, `Height`, `AspectRatio` | Target |
 | `ReadPixels()`, `ReadPixels(Span<byte>)`, `PixelBufferSize` | Offscreen readback |
 | `Stats` (`FrameStats`), `AdapterName`, `IsOffscreen` | Diagnostics |

@@ -2165,6 +2165,21 @@ pub unsafe extern "C" fn tn_texture_create_cube(
     }
 }
 
+/// Creates a cube the renderer draws into, six faces of `size` by `size`.
+/// Pass it to `tn_renderer_render_to_cube` to capture the surroundings of a
+/// point, then bind it as an environment map or sample it from a material.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_texture_create_target_cube(scene: *mut Scene, size: u32) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    match Texture::render_target_cube(size) {
+        Ok(texture) => scene.add_texture(texture),
+        Err(error) => {
+            fail(error);
+            0
+        }
+    }
+}
+
 /// Creates a texture the renderer draws into rather than one uploaded from
 /// pixels. Pass it to `tn_renderer_render_to_texture`, and bind it to a
 /// material like any other texture to sample what was drawn.
@@ -2558,6 +2573,21 @@ pub unsafe extern "C" fn tn_renderer_set_config(
     };
     renderer.set_config((*desc).into());
     status::OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_render_to_cube(
+    renderer: *mut Renderer,
+    scene: *mut Scene,
+    position: TnVec3,
+    texture: u32,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    let scene = scene_ref!(scene);
+    match renderer.render_to_cube(scene, position.into(), texture) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
 }
 
 #[unsafe(no_mangle)]

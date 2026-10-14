@@ -835,7 +835,97 @@ impl Renderer {
     }
 
     /// Renders `scene` from `camera_node` (or the scene active camera).
+    /// Captures the surroundings of a point into a cube texture: six renders,
+    /// one per face, each with a ninety degree field of view. What comes out is
+    /// a cube map any material can sample - a reflection probe, or the input to
+    /// a light probe.
+    ///
+    /// The texture must come from `Texture::render_target_cube`, and the
+    /// renderer must be square and the same size as a face, for the same reason
+    /// [Renderer::render_to_texture] asks it: every pass before the post chain
+    /// owns buffers sized to the renderer.
+    ///
+    /// This is a bake, not something to do every frame - it is six full frames.
+    /// Anything that renders a camera node is rendered, so a probe sees the
+    /// scene as a camera there would.
+    pub fn render_to_cube(
+        &mut self,
+        scene: &mut Scene,
+        position: Vec3,
+        texture: TextureId,
+    ) -> Result<()> {
+        let Some(target) = scene.texture(texture) else {
+            return Err(Error::InvalidHandle("texture"));
+        };
+        if !target.render_target || !target.is_cube() {
+            return Err(Error::InvalidArgument(
+                "that texture was not created as a cube render target".into(),
+            ));
+        }
+        let size = target.width;
+        if size != self.config.width || size != self.config.height {
+            return Err(Error::InvalidArgument(format!(
+                "a cube render target must match the renderer: face is {size}, renderer is {}x{}",
+                self.config.width, self.config.height
+            )));
+        }
+
+        let sampler = target.sampler;
+        let faces = self.resources.ensure_render_target_cube(
+            &self.device,
+            texture,
+            size,
+            self.output_format,
+            &sampler,
+        );
+
+        // A camera that exists only for the capture, so nothing in the scene
+        // has to be disturbed and the ordinary render path can be reused.
+        let probe = scene.create_node(None)?;
+        {
+            let node = scene.node_mut(probe).ok_or(Error::InvalidHandle("probe node"))?;
+            node.camera = Some(crate::camera::Camera::perspective(
+                std::f32::consts::FRAC_PI_2,
+                0.05,
+                500.0,
+            ));
+            node.transform.translation = position;
+        }
+
+        // The six directions a cube face looks, with the up vector each needs.
+        // +Y and -Y use -Z and +Z as up, which is what keeps the seams aligned.
+        const FACES: [(Vec3, Vec3); 6] = [
+            (Vec3::X, Vec3::NEG_Y),
+            (Vec3::NEG_X, Vec3::NEG_Y),
+            (Vec3::Y, Vec3::Z),
+            (Vec3::NEG_Y, Vec3::NEG_Z),
+            (Vec3::Z, Vec3::NEG_Y),
+            (Vec3::NEG_Z, Vec3::NEG_Y),
+        ];
+
+        let mut result = Ok(());
+        for (face, (direction, up)) in FACES.iter().enumerate() {
+            if let Some(node) = scene.node_mut(probe) {
+                node.transform.look_at(position + *direction, *up);
+            }
+            scene.mark_dirty(probe);
+
+            self.render_target = Some(faces[face].clone());
+            result = self.render(scene, Some(probe));
+            self.render_target = None;
+            if result.is_err() {
+                break;
+            }
+        }
+
+        // The probe goes whether the capture worked or not, or a failed bake
+        // would leave a stray camera in the scene.
+        let _ = scene.remove_node(probe);
+        result
+    }
+
     /// Renders the scene into a texture the scene owns, which any material can
+
     /// then sample: a mirror, a portal, a security monitor, a minimap.
     ///
     /// The texture must have been made as a render target

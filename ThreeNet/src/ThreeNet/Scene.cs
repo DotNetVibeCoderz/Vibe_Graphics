@@ -223,6 +223,15 @@ public sealed class Scene : IDisposable
     }
 
     /// <summary>
+    /// A cube the renderer draws into, six faces of <paramref name="size"/>
+    /// square. Capture into it with <see cref="Renderer.RenderToCube"/>, then
+    /// bind it as <see cref="SceneEnvironment.EnvironmentMap"/> or sample it
+    /// from a material.
+    /// </summary>
+    public Texture CreateCubeRenderTarget(int size) =>
+        new(this, NativeError.CheckHandle(NativeMethods.tn_texture_create_target_cube(Handle, (uint)size)));
+
+    /// <summary>
     /// A texture the renderer draws into rather than one uploaded from pixels.
     /// Pass it to <see cref="Renderer.RenderToTexture"/> and bind it to a
     /// material like any other texture to sample what was drawn.
