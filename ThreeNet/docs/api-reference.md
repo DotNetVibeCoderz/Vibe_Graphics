@@ -25,7 +25,7 @@ lights face -Z.
 | `CreateMaterial(in MaterialOptions)`, `CreateMaterial(color, metallic, roughness)` | Materials |
 | `LoadTexture(path, srgb)`, `LoadTexture(bytes, srgb)`, `CreateTexture(width, height, pixels, format)` | Textures |
 | `LoadTextureAsync(path, srgb)`, `LoadTextureCached(path, srgb)`, `PollStreaming()`, `FinishStreaming(timeout)`, `SetStreamingBudget(n)`, `AssetStats`, `ClearAssetCache()` | Streaming and cache |
-| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included) |
+| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply |
 | `CreateShader(source, language, name?)` | Custom shader hooks (WGSL / GLSL) |
 | `Animations`, `CreateAnimation(name)`, `UpdateAnimations(delta)` | Animation clips |
 | `Raycast(ray, options?, maxHits)`, `CreateCameraRay(camera, ndcX, ndcY, aspect)` | Picking |
@@ -57,6 +57,9 @@ lights face -Z.
   `SceneEnvironment.EnvironmentMap` it is sampled by direction, which is even everywhere; an
   equirectangular image crowds its samples at the poles.
 - `Scene.CreateCubeRenderTarget(size)` makes an empty one for `Renderer.RenderToCube` to fill.
+- `Scene.CreateNeutralColorLut(size)` makes a colour lookup table that changes nothing, as the starting
+  point for a look. The layout is a strip: `size` slices of `size` by `size`, red across a slice, green
+  down it, blue choosing the slice. Set it as `RendererOptions.ColorLut`.
 - `Texture`: `SetSampler(wrapU, wrapV, linearFilter, mipmaps, anisotropy)`, `Update(pixels)` (bytes or floats,
   written into the existing GPU texture), `State` (`TextureState`), `LoadError`, `Destroy()`.
 - `Shader`: `Name`, `CompiledWgsl`, `Update(source, language)`, `Destroy()`.
@@ -100,7 +103,8 @@ lights face -Z.
 | `Stats` (`FrameStats`), `AdapterName`, `IsOffscreen` | Diagnostics |
 
 `RendererOptions`: `Width`, `Height`, `VSync`, `MsaaSamples`, `Exposure`, `ToneMapping`, `Bloom`,
-`BloomIntensity`, `BloomThreshold`, `Ssr`, `SsrIntensity`, `SsrMaxDistance`, `SsrThickness`, `SsrSteps`
+`BloomIntensity`, `BloomThreshold`, `ColorLut`, `ColorLutStrength` (a lookup table applied last, after
+tone mapping and the other grading), `Ssr`, `SsrIntensity`, `SsrMaxDistance`, `SsrThickness`, `SsrSteps`
 (screen space reflections; they share the depth prepass with `Ssao`, reflect only what is on screen, and
 are weighted by Fresnel rather than by roughness), `FrustumCulling`, `PowerPreference`, `BgraOutput`,
 `Shadows`, `ShadowMapSize`, `ShadowDistance`, `ShadowCascades`, `ShadowSoftness`,

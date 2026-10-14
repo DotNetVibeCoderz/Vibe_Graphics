@@ -634,6 +634,12 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_obj(nint scene, string path, uint parent, out NativeImportResult result);
 
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_stl(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_ply(nint scene, string path, uint parent, out NativeImportResult result);
+
     // ---------------------------------------------------------- raycasting
 
     [LibraryImport(Library)]

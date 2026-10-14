@@ -8,7 +8,7 @@ struct PostParams {
     texel: vec4<f32>,
     // x = vignette strength, y = vignette softness, z = film grain, w = seconds
     grade: vec4<f32>,
-    // x = saturation, y = contrast, z = brightness, w reserved
+    // x = saturation, y = contrast, z = brightness, w = colour LUT strength
     grade2: vec4<f32>,
 };
 
@@ -16,6 +16,11 @@ struct PostParams {
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> post: PostParams;
 @group(0) @binding(3) var bloom_texture: texture_2d<f32>;
+// A colour lookup table laid out as a strip: `size` slices of `size` by `size`
+// side by side, so a 32 step table is a 1024 by 32 image. Only read when the
+// strength above is positive; otherwise this binding holds whatever was
+// convenient and the shader never touches it.
+@group(0) @binding(4) var lut_texture: texture_2d<f32>;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -110,6 +115,31 @@ fn grade_color(color: vec3<f32>, saturation: f32, contrast: f32, brightness: f32
     return out + vec3<f32>(brightness);
 }
 
+/// Looks a graded colour up in a strip LUT. The blue channel picks the slice
+/// and is interpolated between the two nearest by hand, because a 2D sampler
+/// would blend across the seam into the neighbouring slice.
+fn apply_lut(color: vec3<f32>, strength: f32) -> vec3<f32> {
+    let dimensions = vec2<f32>(textureDimensions(lut_texture));
+    let size = dimensions.y;
+    if (size < 2.0) {
+        return color;
+    }
+    let c = clamp(color, vec3<f32>(0.0), vec3<f32>(1.0));
+    let last = size - 1.0;
+
+    // Half a texel in from each end of a slice, so the ends are not blurred
+    // into whatever is next to them.
+    let u = (c.r * last + 0.5) / dimensions.x;
+    let v = (c.g * last + 0.5) / size;
+    let slice = c.b * last;
+    let low = floor(slice);
+    let high = min(low + 1.0, last);
+
+    let a = textureSampleLevel(lut_texture, source_sampler, vec2<f32>(u + low / size, v), 0.0).rgb;
+    let b = textureSampleLevel(lut_texture, source_sampler, vec2<f32>(u + high / size, v), 0.0).rgb;
+    return mix(color, mix(a, b, slice - low), clamp(strength, 0.0, 1.0));
+}
+
 @fragment
 fn fs_composite(input: VertexOutput) -> @location(0) vec4<f32> {
     let scene = textureSample(source_texture, source_sampler, input.uv);
@@ -134,6 +164,14 @@ fn fs_composite(input: VertexOutput) -> @location(0) vec4<f32> {
     // Grading, the vignette and the grain all come after tone mapping, because
     // they are things a lens and a film stock do, not things the scene does.
     color = grade_color(color, post.grade2.x, post.grade2.y, post.grade2.z);
+
+    // The lookup table is the last thing the colour passes through, so it sees
+    // exactly what the saturation and contrast left - which is what a table
+    // authored against a screenshot was authored against.
+    let lut_strength = post.grade2.w;
+    if (lut_strength > 0.0) {
+        color = apply_lut(color, lut_strength);
+    }
 
     let vignette = post.grade.x;
     if (vignette > 0.0) {

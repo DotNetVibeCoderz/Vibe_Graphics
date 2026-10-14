@@ -134,6 +134,7 @@ impl PostProcess {
                 sampler_entry,
                 uniform_entry,
                 texture_entry(3),
+                texture_entry(4),
             ],
         });
 
@@ -412,9 +413,18 @@ impl PostProcess {
         hdr: &wgpu::TextureView,
         output: &wgpu::TextureView,
         output_format: wgpu::TextureFormat,
+        color_lut: Option<&wgpu::TextureView>,
         settings: PostSettings,
     ) {
         let bloom_enabled = settings.bloom_intensity > 0.0 && self.bloom.is_some();
+        // Same trick the bloom binding uses: a layout entry has to point at
+        // something, so without a table it points at the HDR buffer and the
+        // shader never reads it because the strength is zero.
+        let lut_strength = match color_lut {
+            Some(_) => settings.color_lut_strength.clamp(0.0, 1.0),
+            None => 0.0,
+        };
+        let lut_view = color_lut.unwrap_or(hdr);
 
         if bloom_enabled {
             let bloom = self.bloom.as_ref().expect("checked above");
@@ -514,7 +524,7 @@ impl PostProcess {
                     settings.saturation,
                     settings.contrast,
                     settings.brightness,
-                    0.0,
+                    lut_strength,
                 ],
             }),
         );
@@ -544,6 +554,10 @@ impl PostProcess {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(bloom_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(lut_view),
                 },
             ],
         });
@@ -612,6 +626,8 @@ pub struct PostSettings {
     /// antialiasing the deferred path can have, since MSAA needs a multisampled
     /// target and the G-buffer is resolved before the lighting sees it.
     pub fxaa: bool,
+    /// How much of the colour lookup table to apply; 0 is off and skips it.
+    pub color_lut_strength: f32,
 }
 
 impl Default for PostSettings {
@@ -630,6 +646,7 @@ impl Default for PostSettings {
             contrast: 1.0,
             brightness: 0.0,
             fxaa: false,
+            color_lut_strength: 0.0,
         }
     }
 }

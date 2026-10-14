@@ -130,7 +130,8 @@ Done in 0.10.0.
 | Post: film grain, vignette, colour grading | ✅ | `RendererOptions.Vignette`, `VignetteSoftness`, `Grain`, `Saturation`, `Contrast`, `Brightness`, folded into the composite after tone mapping - they are what a lens and a film stock do, not what the scene does. A debug view switches them off, since it is meant to be read |
 | Post: FXAA | ✅ | `RendererOptions.Fxaa`. The composite lands in an intermediate and FXAA copies it out, so nothing pays for a pass it is not using. This is the only antialiasing the deferred path can have: MSAA needs a multisampled target and the G-buffer is resolved before lighting |
 | Post: SSR | ✅ | `RendererOptions.Ssr`, `SsrIntensity`, `SsrMaxDistance`, `SsrThickness`, `SsrSteps`. A fullscreen pass between the scene and the camera effects, marching the normal and linear depth prepass SSAO already writes - so turning it on turns that prepass on, in either path. Coarse march then four binary refinement steps. Weighted by Fresnel and the intensity only: the prepass carries geometry and not material parameters, so roughness does not blur the reflection. Fades at the frame edges, with distance and towards the camera, because a screen space ray has nothing to return once it leaves the frame |
-| Post: SMAA, LUT grading | ⬜ | SMAA is a heavier three pass technique than FXAA and worth little beside it |
+| Post: LUT grading | ✅ | `RendererOptions.ColorLut` + `ColorLutStrength`, and `Scene.CreateNeutralColorLut(size)` for a table to start from. An ordinary texture laid out as a strip of `size` slices each `size` by `size`, so the shader reads the size off the texture height and there is nothing to keep in step by hand. Applied last, after tone mapping and the saturation and contrast, which is what a table exported from a grading tool was authored against |
+| Post: SMAA | ⬜ | Three passes, and the middle one needs the precomputed area and search tables the technique is defined by. Worth little beside an FXAA that already works, so it stays last in the queue rather than ahead of loaders and compute |
 | Light probes | ⬜ | Already open in "Next up" |
 | GPU particles, GPU skinning | ⬜ | Already open in "Next up"; both need compute pipelines in the core |
 | Instance aware culling and picking | ✅ | Culling unions the bounds of every instance, so a forest does not vanish when the node origin leaves the frustum; raycasting tests each instance transform and reports `RayHit.InstanceIndex`, so picking a crowd says which copy was hit |
@@ -140,7 +141,7 @@ Done in 0.10.0.
 
 | Item | Status | Notes |
 |---|---|---|
-| STL, PLY | ⬜ | Small, self-contained, no material model to map. The obvious next two loaders |
+| STL, PLY | ✅ | `Scene.LoadStl` and `Scene.LoadPly`, both also reachable through `LoadModel`. STL reads binary and ASCII, told apart by the file length rather than by the leading word, because exporters write `solid` into the binary header too; a facet with a zero normal takes it from the winding. PLY reads ASCII and binary in either endianness, driven by the header, so properties come in whatever order and spelling the exporter chose and unknown elements are stepped over rather than ending the parse. A PLY with no faces loads as a point cloud |
 | Collada (DAE), 3DS, VRML, KMZ, 3MF | ⬜ | Older interchange formats; worth it only where a user actually has the files |
 | USDZ, VOX, IFC | ⬜ | USDZ matters for iOS AR, IFC for BIM, VOX is small. All three are substantial on their own |
 | SVG | ⬜ | Needs the 2D path and extrude work from group A to be useful |

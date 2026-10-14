@@ -520,6 +520,53 @@ public sealed class Scene : IDisposable
         }
     }
 
+    /// <summary>
+    /// A colour lookup table that changes nothing: every entry is the colour
+    /// that looks it up. Useful as the starting point for a look, and as the
+    /// control when checking that a table is being applied at all.
+    /// </summary>
+    /// <remarks>
+    /// The layout is the one <see cref="RendererOptions.ColorLut"/> expects: a
+    /// strip <paramref name="size"/> slices wide, each slice
+    /// <paramref name="size"/> by <paramref name="size"/>, with red across a
+    /// slice, green down it and blue choosing the slice. Edit the pixels and
+    /// upload them again with <see cref="Texture.Update(ReadOnlySpan{byte})"/>.
+    /// </remarks>
+    public Texture CreateNeutralColorLut(int size = 32)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(size, 2);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(size, 128);
+
+        int width = size * size;
+        byte[] pixels = new byte[width * size * 4];
+        float last = size - 1;
+        for (int blue = 0; blue < size; blue++)
+        {
+            byte b = (byte)Math.Round(blue / last * 255f);
+            for (int green = 0; green < size; green++)
+            {
+                byte g = (byte)Math.Round(green / last * 255f);
+                int row = green * width;
+                for (int red = 0; red < size; red++)
+                {
+                    int i = (row + (blue * size) + red) * 4;
+                    pixels[i] = (byte)Math.Round(red / last * 255f);
+                    pixels[i + 1] = g;
+                    pixels[i + 2] = b;
+                    pixels[i + 3] = 255;
+                }
+            }
+        }
+
+        // Unorm rather than sRGB: a table holds output values, and letting the
+        // hardware decode them would apply the transfer curve a second time.
+        Texture lut = CreateTexture(width, size, pixels, TextureFormat.Rgba8Unorm);
+        // Linear filtering across a slice, and no mipmaps - a lower mip would
+        // blend neighbouring slices into each other.
+        lut.SetSampler(WrapMode.ClampToEdge, WrapMode.ClampToEdge, linearFilter: true, mipmaps: false);
+        return lut;
+    }
+
     // -------------------------------------------------------------- loading
 
     /// <summary>Imports a glTF 2.0 or GLB file into the scene.</summary>
@@ -562,19 +609,54 @@ public sealed class Scene : IDisposable
         }
     }
 
-    /// <summary>Imports a model, picking the loader from the file extension (.gltf, .glb, .fbx, .obj).</summary>
+    /// <summary>
+    /// Imports a model, picking the loader from the file extension (.gltf,
+    /// .glb, .fbx, .obj, .stl, .ply).
+    /// </summary>
     public ImportResult LoadModel(string path, Node? parent = null) =>
         Path.GetExtension(path).ToLowerInvariant() switch
         {
             ".gltf" or ".glb" => LoadGltf(path, parent),
             ".fbx" => LoadFbx(path, parent),
             ".obj" => LoadObj(path, parent),
+            ".stl" => LoadStl(path, parent),
+            ".ply" => LoadPly(path, parent),
             var extension => throw new NotSupportedException($"no importer for '{extension}' files"),
         };
 
     public ImportResult LoadObj(string path, Node? parent = null)
     {
         NativeError.Check(NativeMethods.tn_load_obj(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports an STL file, binary or ASCII.</summary>
+    /// <remarks>
+    /// STL is a triangle soup: no indices, no UVs, no materials and no names,
+    /// so every triangle carries its own three vertices and the mesh is given a
+    /// default material. Binary and ASCII are told apart by the file length
+    /// rather than by the leading word, because exporters write "solid" into
+    /// the binary header too. A facet whose stored normal is zero - which is
+    /// common - takes its normal from the winding instead.
+    /// </remarks>
+    public ImportResult LoadStl(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_stl(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports a PLY file, ASCII or binary, either endianness.</summary>
+    /// <remarks>
+    /// PLY describes its own layout in the header, so properties are read in
+    /// whatever order and spelling a given exporter chose, and elements the
+    /// reader has no use for are stepped over rather than ending the parse.
+    /// Normals are used when the file has them and computed from the faces when
+    /// it does not. A file with no faces loads as a point cloud - vertices and
+    /// no indices - which is what a scanner usually produces.
+    /// </remarks>
+    public ImportResult LoadPly(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_ply(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
         return ImportResult.From(this, result);
     }
 

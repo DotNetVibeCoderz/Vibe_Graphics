@@ -256,6 +256,8 @@ internal struct NativeRendererDesc
     public float SsrMaxDistance;
     public float SsrThickness;
     public uint SsrSteps;
+    public uint ColorLut;
+    public float ColorLutStrength;
     public uint RenderPath;
     public int DepthOfField;
     public float DofFocusDistance;

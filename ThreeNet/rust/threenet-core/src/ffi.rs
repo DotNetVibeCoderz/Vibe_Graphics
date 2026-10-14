@@ -639,6 +639,10 @@ pub struct TnRendererDesc {
     pub ssr_max_distance: f32,
     pub ssr_thickness: f32,
     pub ssr_steps: u32,
+    /// A colour lookup table the scene owns (0 = none), as a strip of `size`
+    /// slices each `size` by `size`.
+    pub color_lut: u32,
+    pub color_lut_strength: f32,
     pub render_path: u32,
     pub depth_of_field: i32,
     pub dof_focus_distance: f32,
@@ -703,6 +707,8 @@ impl From<TnRendererDesc> for RendererConfig {
             ssr_max_distance: value.ssr_max_distance,
             ssr_thickness: value.ssr_thickness,
             ssr_steps: value.ssr_steps,
+            color_lut: value.color_lut,
+            color_lut_strength: value.color_lut_strength,
             render_path: RenderPath::from_u32(value.render_path),
             depth_of_field: value.depth_of_field != 0,
             dof_focus_distance: value.dof_focus_distance,
@@ -2821,6 +2827,58 @@ pub unsafe extern "C" fn tn_load_obj(
         return status::INVALID_ARGUMENT;
     };
     match crate::loaders::load_obj(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports an STL file, binary or ASCII.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_stl(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::stl::load_stl(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports a PLY file, ASCII or binary.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_ply(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::ply::load_ply(scene, path, (parent != 0).then_some(parent)) {
         Ok(result) => {
             unsafe { write_import_result(out_result, &result) };
             status::OK

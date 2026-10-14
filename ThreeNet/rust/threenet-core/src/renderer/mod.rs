@@ -208,6 +208,11 @@ pub struct RendererConfig {
     pub ssr_thickness: f32,
     /// Coarse steps along the ray before the binary refinement (8-128).
     pub ssr_steps: u32,
+    /// A colour lookup table the scene owns, laid out as a strip of `size`
+    /// slices each `size` by `size`. 0 is no table.
+    pub color_lut: u32,
+    /// How much of the table to apply, 0 to 1.
+    pub color_lut_strength: f32,
     /// Forward or deferred shading.
     pub render_path: RenderPath,
     /// Bokeh depth of field around a focus plane.
@@ -317,6 +322,8 @@ impl Default for RendererConfig {
             ssr_max_distance: 12.0,
             ssr_thickness: 0.5,
             ssr_steps: 32,
+            color_lut: 0,
+            color_lut_strength: 1.0,
             render_path: RenderPath::Forward,
             depth_of_field: false,
             dof_focus_distance: 10.0,
@@ -1484,7 +1491,13 @@ impl Renderer {
             contrast: if debug { 1.0 } else { self.config.contrast },
             brightness: if debug { 0.0 } else { self.config.brightness },
             fxaa: self.config.fxaa && !debug,
+            // A debug view is meant to be read, not graded.
+            color_lut_strength: if debug { 0.0 } else { self.config.color_lut_strength },
         };
+        let color_lut = (self.config.color_lut != 0)
+            .then(|| self.resources.texture(self.config.color_lut))
+            .flatten()
+            .map(|texture| &texture.view);
 
         // A render to texture frame ends here: the post chain and the overlay
         // land in the texture a material will sample, with no round trip
@@ -1497,6 +1510,7 @@ impl Renderer {
                 hdr_source,
                 &target,
                 self.output_format,
+                color_lut,
                 settings,
             );
             self.overlay.draw(
@@ -1549,6 +1563,7 @@ impl Renderer {
                     hdr_source,
                     &view,
                     self.output_format,
+                    color_lut,
                     settings,
                 );
                 self.overlay.draw(
@@ -1581,6 +1596,7 @@ impl Renderer {
                     hdr_source,
                     output,
                     self.output_format,
+                    color_lut,
                     settings,
                 );
                 self.overlay.draw(
@@ -1773,6 +1789,12 @@ impl Renderer {
         }
         if let Some(environment) = scene.environment.environment_map {
             used_textures.push(environment);
+        }
+        // The colour table is referenced by the renderer rather than by the
+        // scene, so nothing above would have found it and the grade would
+        // quietly do nothing.
+        if self.config.color_lut != 0 {
+            used_textures.push(self.config.color_lut);
         }
         used_textures.extend(scene.overlay.texture_ids());
         used_textures.sort_unstable();

@@ -78,6 +78,28 @@ public struct RendererOptions
     public float SsrThickness;
     /// <summary>Coarse steps along the ray before the binary refinement (8-128).</summary>
     public int SsrSteps;
+    /// <summary>
+    /// A colour lookup table applied at the very end of the chain: the usual
+    /// way a look is carried from a grading tool into a renderer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The table is an ordinary texture the scene owns, laid out as a strip -
+    /// <c>size</c> slices of <c>size</c> by <c>size</c> side by side, so a 32
+    /// step table is a 1024 by 32 image. The size is read from the texture
+    /// height, so there is nothing to keep in step by hand. Build a neutral one
+    /// with <see cref="Scene.CreateNeutralColorLut"/> and edit that, or export
+    /// a strip from a grading tool.
+    /// </para>
+    /// <para>
+    /// It runs after tone mapping, saturation and contrast, so a table authored
+    /// against a screenshot sees what that screenshot saw. A debug view skips
+    /// it, since a debug view is meant to be read rather than graded.
+    /// </para>
+    /// </remarks>
+    public Texture? ColorLut;
+    /// <summary>How much of the table to apply, 0 to 1.</summary>
+    public float ColorLutStrength;
     /// <summary>Forward (default, supports MSAA) or deferred shading (cheaper with many lights).</summary>
     public RenderPath RenderPath;
     /// <summary>Bokeh depth of field around <see cref="DofFocusDistance"/>.</summary>
@@ -176,6 +198,8 @@ public struct RendererOptions
         SsrMaxDistance = 12f;
         SsrThickness = 0.5f;
         SsrSteps = 32;
+        ColorLut = null;
+        ColorLutStrength = 1f;
         RenderPath = RenderPath.Forward;
         DepthOfField = false;
         DofFocusDistance = 10f;
@@ -225,6 +249,8 @@ public struct RendererOptions
         SsrMaxDistance = SsrMaxDistance,
         SsrThickness = SsrThickness,
         SsrSteps = (uint)Math.Clamp(SsrSteps, 8, 128),
+        ColorLut = ColorLut?.Id ?? 0,
+        ColorLutStrength = ColorLutStrength,
         RenderPath = (uint)RenderPath,
         DepthOfField = DepthOfField ? 1 : 0,
         DofFocusDistance = DofFocusDistance,
