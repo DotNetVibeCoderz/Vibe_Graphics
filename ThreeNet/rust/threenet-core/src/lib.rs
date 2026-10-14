@@ -10,6 +10,7 @@ pub mod animation;
 pub mod audio;
 pub mod assets;
 pub mod camera;
+pub mod compute;
 pub mod compressed;
 pub mod error;
 pub mod fbx;
@@ -30,6 +31,7 @@ pub mod scene;
 pub mod shader;
 pub mod stl;
 pub mod texture;
+pub mod vox;
 pub mod window;
 pub mod xr;
 
@@ -48,4 +50,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 25;
+pub const ABI_VERSION: u32 = 27;

@@ -887,6 +887,190 @@ impl Renderer {
     /// This is a bake, not something to do every frame - it is six full frames.
     /// Anything that renders a camera node is rendered, so a probe sees the
     /// scene as a camera there would.
+    /// True when this adapter can run compute at all. WebGL2 cannot, and some
+    /// downlevel adapters report that they cannot either.
+    pub fn supports_compute(&self) -> bool {
+        self.adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+    }
+
+    /// Runs a compute kernel over a set of storage buffers.
+    ///
+    /// The buffers are bound in the order given, at `@group(0) @binding(0)`
+    /// upwards, each as `var<storage, read_write>`. The counts are workgroups,
+    /// not threads: a kernel declaring `@workgroup_size(64)` dispatched with
+    /// `groups = (4, 1, 1)` runs 256 invocations.
+    ///
+    /// Anything a kernel wrote is visible to the next dispatch and to any pass
+    /// that reads the buffer afterwards, because the work is queued on the same
+    /// device queue the frame uses.
+    pub fn dispatch_compute(
+        &mut self,
+        scene: &mut Scene,
+        kernel_id: crate::scene::ComputeKernelId,
+        buffers: &[crate::scene::StorageBufferId],
+        groups: [u32; 3],
+    ) -> Result<()> {
+        if !self.supports_compute() {
+            return Err(Error::Device(
+                "this adapter cannot run compute shaders".into(),
+            ));
+        }
+        let Some(kernel) = scene.compute_kernel(kernel_id) else {
+            return Err(Error::InvalidHandle("compute kernel"));
+        };
+        if buffers.is_empty() {
+            return Err(Error::InvalidArgument(
+                "a dispatch needs at least one storage buffer to work on".into(),
+            ));
+        }
+        let limit = self.device.limits().max_compute_workgroups_per_dimension;
+        if groups.iter().any(|count| *count == 0) {
+            return Err(Error::InvalidArgument(
+                "a dispatch of zero workgroups does nothing; pass at least one in each dimension".into(),
+            ));
+        }
+        if let Some(over) = groups.iter().find(|count| **count > limit) {
+            return Err(Error::InvalidArgument(format!(
+                "{over} workgroups is past this adapter's limit of {limit}"
+            )));
+        }
+
+        let source = kernel.source.clone();
+        let entry_point = kernel.entry_point.clone();
+        let kernel_version = kernel.version;
+
+        // Upload anything written since the last dispatch, and make sure every
+        // buffer exists on the GPU.
+        for id in buffers {
+            let Some(buffer) = scene.storage_buffer(*id) else {
+                return Err(Error::InvalidHandle("storage buffer"));
+            };
+            let size = buffer.size;
+            let pending = buffer.pending.clone();
+            let version = buffer.version;
+            self.resources
+                .ensure_storage_buffer(&self.device, &self.queue, *id, size, pending.as_deref(), version);
+        }
+
+        // Compiled once per kernel, edit and binding count, not once per
+        // dispatch: a particle system steps every frame.
+        let (pipeline, layout) = self.resources.compute_pipeline(
+            &self.device,
+            kernel_id,
+            kernel_version,
+            buffers.len() as u32,
+            &source,
+            &entry_point,
+        );
+        let pipeline = pipeline.clone();
+        let layout = layout.clone();
+
+        let mut resources = Vec::with_capacity(buffers.len());
+        for id in buffers {
+            let Some(gpu) = self.resources.storage_buffer(*id) else {
+                return Err(Error::InvalidHandle("storage buffer"));
+            };
+            resources.push(gpu.as_entire_binding());
+        }
+        let bind_entries: Vec<wgpu::BindGroupEntry> = resources
+            .into_iter()
+            .enumerate()
+            .map(|(binding, resource)| wgpu::BindGroupEntry {
+                binding: binding as u32,
+                resource,
+            })
+            .collect();
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("threenet.bind_group.compute"),
+            layout: &layout,
+            entries: &bind_entries,
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("threenet.compute.encoder"),
+            });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("threenet.pass.compute"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.dispatch_workgroups(groups[0], groups[1], groups[2]);
+        }
+        self.queue.submit(Some(encoder.finish()));
+
+        // The GPU copy is now ahead of anything the CPU staged.
+        for id in buffers {
+            if let Some(buffer) = scene.storage_buffer_mut(*id) {
+                buffer.pending = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// Reads a storage buffer back into system memory.
+    ///
+    /// This waits for the queue to drain, so it is a debugging and baking tool
+    /// rather than something to do every frame.
+    pub fn read_storage_buffer(
+        &mut self,
+        scene: &Scene,
+        id: crate::scene::StorageBufferId,
+    ) -> Result<Vec<u8>> {
+        let Some(buffer) = scene.storage_buffer(id) else {
+            return Err(Error::InvalidHandle("storage buffer"));
+        };
+        let size = buffer.size;
+        let Some(source) = self.resources.storage_buffer(id) else {
+            // Nothing has been dispatched against it yet, so the only contents
+            // are whatever the CPU staged.
+            return Ok(buffer.pending.clone().unwrap_or_else(|| vec![0u8; size as usize]));
+        };
+
+        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("threenet.compute.readback"),
+            size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("threenet.compute.readback.encoder"),
+            });
+        encoder.copy_buffer_to_buffer(source, 0, &staging, 0, size);
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = staging.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        self.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            })
+            .map_err(|e| Error::Device(e.to_string()))?;
+        receiver
+            .recv()
+            .map_err(|e| Error::Device(e.to_string()))?
+            .map_err(|e| Error::Device(e.to_string()))?;
+        let data = slice
+            .get_mapped_range()
+            .map_err(|e| Error::Device(e.to_string()))?;
+        let out = data.to_vec();
+        drop(data);
+        staging.unmap();
+        Ok(out)
+    }
+
     /// Bakes the light arriving at a point into a light probe: six renders, the
     /// same six a cube capture makes, projected onto spherical harmonics.
     ///

@@ -507,6 +507,31 @@ public sealed class Scene : IDisposable
     }
 
     /// <summary>
+    /// Compiles a compute kernel from WGSL.
+    /// </summary>
+    /// <remarks>
+    /// The storage buffers a dispatch is given are bound in order, at
+    /// <c>@group(0) @binding(0)</c> upwards, each declared
+    /// <c>var&lt;storage, read_write&gt;</c>. Run it with
+    /// <see cref="Renderer.Dispatch"/>.
+    /// </remarks>
+    public ComputeKernel CreateComputeKernel(string source, string entryPoint = "main", string name = "kernel")
+    {
+        ArgumentException.ThrowIfNullOrEmpty(source);
+        ArgumentException.ThrowIfNullOrEmpty(entryPoint);
+        uint id = NativeMethods.tn_compute_kernel_create(Handle, name, source, entryPoint);
+        return new ComputeKernel(this, NativeError.CheckHandle(id));
+    }
+
+    /// <summary>A block of GPU memory for compute kernels to work on.</summary>
+    public StorageBuffer CreateStorageBuffer(long sizeInBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(sizeInBytes);
+        uint id = NativeMethods.tn_storage_buffer_create(Handle, (ulong)sizeInBytes);
+        return new StorageBuffer(this, NativeError.CheckHandle(id));
+    }
+
+    /// <summary>
     /// Directional ambient light for the whole scene, baked with
     /// <see cref="Renderer.BakeLightProbe"/>. Null clears it.
     /// </summary>
@@ -680,7 +705,7 @@ public sealed class Scene : IDisposable
 
     /// <summary>
     /// Imports a model, picking the loader from the file extension (.gltf,
-    /// .glb, .fbx, .obj, .stl, .ply).
+    /// .glb, .fbx, .obj, .stl, .ply, .vox).
     /// </summary>
     public ImportResult LoadModel(string path, Node? parent = null) =>
         Path.GetExtension(path).ToLowerInvariant() switch
@@ -690,6 +715,7 @@ public sealed class Scene : IDisposable
             ".obj" => LoadObj(path, parent),
             ".stl" => LoadStl(path, parent),
             ".ply" => LoadPly(path, parent),
+            ".vox" => LoadVox(path, parent),
             var extension => throw new NotSupportedException($"no importer for '{extension}' files"),
         };
 
@@ -711,6 +737,26 @@ public sealed class Scene : IDisposable
     public ImportResult LoadStl(string path, Node? parent = null)
     {
         NativeError.Check(NativeMethods.tn_load_stl(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports a MagicaVoxel <c>.vox</c> file.</summary>
+    /// <remarks>
+    /// <para>
+    /// Only the visible shell is built: a voxel face with another voxel against
+    /// it can never be seen, so a solid 32 cube becomes a few thousand
+    /// triangles instead of nearly two hundred thousand.
+    /// </para>
+    /// <para>
+    /// The palette becomes a 256 by 1 texture and every voxel points at it
+    /// through its UV, so a model of any number of colours is one mesh with one
+    /// material rather than one mesh per colour. Voxel space is Z up and the
+    /// mesh is built Y up, so models stand the right way round.
+    /// </para>
+    /// </remarks>
+    public ImportResult LoadVox(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_vox(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
         return ImportResult.From(this, result);
     }
 

@@ -25,7 +25,7 @@ lights face -Z.
 | `CreateMaterial(in MaterialOptions)`, `CreateMaterial(color, metallic, roughness)` | Materials |
 | `LoadTexture(path, srgb)`, `LoadTexture(bytes, srgb)`, `CreateTexture(width, height, pixels, format)` | Textures |
 | `LoadTextureAsync(path, srgb)`, `LoadTextureCached(path, srgb)`, `PollStreaming()`, `FinishStreaming(timeout)`, `SetStreamingBudget(n)`, `AssetStats`, `ClearAssetCache()` | Streaming and cache |
-| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply |
+| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadVox(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply, .vox |
 | `CreateShader(source, language, name?)` | Custom shader hooks (WGSL / GLSL) |
 | `Animations`, `CreateAnimation(name)`, `UpdateAnimations(delta)` | Animation clips |
 | `Raycast(ray, options?, maxHits)`, `CreateCameraRay(camera, ndcX, ndcY, aspect)` | Picking |
@@ -80,6 +80,14 @@ lights face -Z.
   `Custom0`..`Custom3`; factories `Pbr`, `Basic`, `Phong`, `Lambert`. `AlphaMode.Additive` adds the fragment
   to the frame instead of blending over it.
 
+## Compute
+
+- `Scene.CreateComputeKernel(source, entryPoint?, name?)` compiles WGSL with a `@compute` entry point.
+- `Scene.CreateStorageBuffer(sizeInBytes)` makes memory for a kernel to work on; `StorageBuffer.Write<T>`
+  stages data and `Size` reports the size. Writes upload before the next dispatch that uses the buffer.
+- Buffers bind in the order passed to `Renderer.Dispatch`, at `@group(0) @binding(0)` upwards, each as
+  `var<storage, read_write>`.
+
 ## Lighting and cameras
 
 - `LightProbe`: `Coefficients` (nine `Vector3`), `Irradiance(normal)`, `Uniform(radiance)`, `Scaled(factor)`,
@@ -103,6 +111,9 @@ lights face -Z.
 | `Render(scene, camera?)` | Draws a frame |
 | `RenderToTexture(scene, camera?, target)` | Draws into a texture a material can sample; the target must match the renderer size |
 | `RenderToCube(scene, position, target)` | Captures the surroundings of a point into a cube render target: six frames at 90 degrees, through a camera the capture creates and removes itself |
+| `SupportsCompute` | False on adapters with no compute at all, such as WebGL2 |
+| `Dispatch(scene, kernel, buffers, groupsX, groupsY?, groupsZ?)` | Runs a compute kernel; the counts are workgroups, not threads |
+| `ReadStorageBuffer<T>(scene, buffer)` | Reads a storage buffer back; waits for the queue, so it belongs in a bake or a test |
 | `BakeLightProbe(scene, position)` | The same six frames projected onto spherical harmonics, giving a `LightProbe` of directional ambient light. Offscreen and square renderers only |
 | `Resize(width, height)`, `Options`, `Width`, `Height`, `AspectRatio` | Target |
 | `ReadPixels()`, `ReadPixels(Span<byte>)`, `PixelBufferSize` | Offscreen readback |

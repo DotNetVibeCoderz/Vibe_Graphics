@@ -634,6 +634,38 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_obj(nint scene, string path, uint parent, out NativeImportResult result);
 
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint tn_compute_kernel_create(
+        nint scene, string name, string source, string entryPoint);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_compute_kernel_destroy(nint scene, uint kernel);
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_storage_buffer_create(nint scene, ulong size);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_storage_buffer_destroy(nint scene, uint buffer);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_storage_buffer_write(
+        nint scene, uint buffer, ulong offset, byte* data, ulong length);
+
+    [LibraryImport(Library)]
+    internal static partial long tn_storage_buffer_size(nint scene, uint buffer);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_supports_compute(nint renderer);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_dispatch_compute(
+        nint renderer, nint scene, uint kernel, uint* buffers, uint bufferCount,
+        uint groupsX, uint groupsY, uint groupsZ);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_renderer_read_storage_buffer(
+        nint renderer, nint scene, uint buffer, byte* data, ulong length);
+
     [LibraryImport(Library)]
     internal static partial int tn_renderer_bake_light_probe(
         nint renderer, nint scene, Vector3 position, Vector3* coefficients);
@@ -649,6 +681,9 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_ply(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_vox(nint scene, string path, uint parent, out NativeImportResult result);
 
     // ---------------------------------------------------------- raycasting
 

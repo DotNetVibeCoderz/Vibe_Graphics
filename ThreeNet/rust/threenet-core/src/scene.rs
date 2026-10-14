@@ -101,6 +101,8 @@ pub type GeometryId = u32;
 pub type MaterialId = u32;
 pub type TextureId = u32;
 pub type ShaderId = u32;
+pub type ComputeKernelId = u32;
+pub type StorageBufferId = u32;
 
 /// Geometry + material pair rendered at a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -310,6 +312,8 @@ pub struct Scene {
     materials: Arena<Material>,
     textures: Arena<Texture>,
     shaders: Arena<CustomShader>,
+    pub(crate) kernels: Arena<crate::compute::ComputeKernel>,
+    pub(crate) buffers: Arena<crate::compute::StorageBuffer>,
     pub(crate) animations: Arena<crate::animation::AnimationClip>,
     pub(crate) skins: Arena<crate::animation::Skin>,
     pub(crate) players: Arena<crate::animation::AnimationPlayer>,
@@ -341,6 +345,8 @@ impl Scene {
             materials: Arena::default(),
             textures: Arena::default(),
             shaders: Arena::default(),
+            kernels: Arena::default(),
+            buffers: Arena::default(),
             animations: Arena::default(),
             skins: Arena::default(),
             players: Arena::default(),
@@ -652,6 +658,36 @@ impl Scene {
     #[inline]
     pub fn texture_mut(&mut self, id: TextureId) -> Option<&mut Texture> {
         self.textures.get_mut(id)
+    }
+
+    // -------------------------------------------------------------- compute
+
+    pub fn add_compute_kernel(&mut self, kernel: crate::compute::ComputeKernel) -> ComputeKernelId {
+        self.kernels.insert(kernel)
+    }
+
+    pub fn compute_kernel(&self, id: ComputeKernelId) -> Option<&crate::compute::ComputeKernel> {
+        self.kernels.get(id)
+    }
+
+    pub fn remove_compute_kernel(&mut self, id: ComputeKernelId) -> bool {
+        self.kernels.remove(id).is_some()
+    }
+
+    pub fn add_storage_buffer(&mut self, size: u64) -> StorageBufferId {
+        self.buffers.insert(crate::compute::StorageBuffer::new(size))
+    }
+
+    pub fn storage_buffer(&self, id: StorageBufferId) -> Option<&crate::compute::StorageBuffer> {
+        self.buffers.get(id)
+    }
+
+    pub fn storage_buffer_mut(&mut self, id: StorageBufferId) -> Option<&mut crate::compute::StorageBuffer> {
+        self.buffers.get_mut(id)
+    }
+
+    pub fn remove_storage_buffer(&mut self, id: StorageBufferId) -> bool {
+        self.buffers.remove(id).is_some()
     }
 
     // -------------------------------------------------------------- shaders

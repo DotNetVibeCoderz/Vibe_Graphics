@@ -2861,6 +2861,32 @@ pub unsafe extern "C" fn tn_load_stl(
     }
 }
 
+/// Imports a MagicaVoxel `.vox` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_vox(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::vox::load_vox(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
 /// Imports a PLY file, ASCII or binary.
 ///
 /// # Safety
@@ -2969,6 +2995,184 @@ pub unsafe extern "C" fn tn_scene_get_light_probe(
     }
     unsafe { out_intensity.write(scene.environment.light_probe_intensity) };
     status::OK
+}
+
+// -------------------------------------------------------------------- compute
+
+/// Compiles a compute kernel from WGSL. Returns an id, or a negative status.
+///
+/// # Safety
+/// `scene`, `source` and `entry_point` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_compute_kernel_create(
+    scene: *mut Scene,
+    name: *const c_char,
+    source: *const c_char,
+    entry_point: *const c_char,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    let (Some(source), Some(entry_point)) =
+        (unsafe { str_from_ptr(source) }, unsafe { str_from_ptr(entry_point) })
+    else {
+        set_last_error("source or entry point is null or not valid UTF-8");
+        return 0;
+    };
+    let name = unsafe { str_from_ptr(name) }.unwrap_or("kernel");
+    scene.add_compute_kernel(crate::compute::ComputeKernel::new(name, source, entry_point))
+}
+
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_compute_kernel_destroy(scene: *mut Scene, kernel: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.remove_compute_kernel(kernel) {
+        status::OK
+    } else {
+        set_last_error("no such compute kernel");
+        status::INVALID_HANDLE
+    }
+}
+
+/// Creates a storage buffer of `size` bytes. Returns an id, or a negative status.
+///
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_storage_buffer_create(scene: *mut Scene, size: u64) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    if size == 0 {
+        set_last_error("a storage buffer needs a size");
+        return 0;
+    }
+    scene.add_storage_buffer(size)
+}
+
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_storage_buffer_destroy(scene: *mut Scene, buffer: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    if scene.remove_storage_buffer(buffer) {
+        status::OK
+    } else {
+        set_last_error("no such storage buffer");
+        status::INVALID_HANDLE
+    }
+}
+
+/// Stages `length` bytes at `offset` for the next dispatch that uses the buffer.
+///
+/// # Safety
+/// `scene` must be valid and `data` must point at `length` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_storage_buffer_write(
+    scene: *mut Scene,
+    buffer: u32,
+    offset: u64,
+    data: *const u8,
+    length: u64,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if data.is_null() {
+        set_last_error("data is null");
+        return status::INVALID_ARGUMENT;
+    }
+    let Some(target) = scene.storage_buffer_mut(buffer) else {
+        set_last_error("no such storage buffer");
+        return status::INVALID_HANDLE;
+    };
+    let slice = unsafe { std::slice::from_raw_parts(data, length as usize) };
+    if target.write(offset, slice) {
+        status::OK
+    } else {
+        set_last_error("that write runs past the end of the buffer");
+        status::INVALID_ARGUMENT
+    }
+}
+
+/// The size of a storage buffer in bytes, or a negative status.
+///
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_storage_buffer_size(scene: *mut Scene, buffer: u32) -> i64 {
+    let scene = scene_ref!(scene, -1i64);
+    match scene.storage_buffer(buffer) {
+        Some(found) => found.size as i64,
+        None => {
+            set_last_error("no such storage buffer");
+            -1
+        }
+    }
+}
+
+/// True when this adapter can run compute shaders at all.
+///
+/// # Safety
+/// `renderer` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_supports_compute(renderer: *mut Renderer) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    i32::from(renderer.supports_compute())
+}
+
+/// Runs a compute kernel over `buffer_count` storage buffers.
+///
+/// # Safety
+/// `renderer` and `scene` must be valid, and `buffers` must point at
+/// `buffer_count` ids.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_dispatch_compute(
+    renderer: *mut Renderer,
+    scene: *mut Scene,
+    kernel: u32,
+    buffers: *const u32,
+    buffer_count: u32,
+    groups_x: u32,
+    groups_y: u32,
+    groups_z: u32,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    let scene = scene_ref!(scene);
+    if buffers.is_null() && buffer_count > 0 {
+        set_last_error("buffers is null");
+        return status::INVALID_ARGUMENT;
+    }
+    let ids = unsafe { std::slice::from_raw_parts(buffers, buffer_count as usize) };
+    match renderer.dispatch_compute(scene, kernel, ids, [groups_x, groups_y, groups_z]) {
+        Ok(()) => status::OK,
+        Err(error) => fail(error),
+    }
+}
+
+/// Reads a storage buffer back into `out_data`, which must hold `length` bytes.
+///
+/// # Safety
+/// `renderer` and `scene` must be valid and `out_data` must point at `length`
+/// writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_renderer_read_storage_buffer(
+    renderer: *mut Renderer,
+    scene: *mut Scene,
+    buffer: u32,
+    out_data: *mut u8,
+    length: u64,
+) -> i32 {
+    let renderer = renderer_ref!(renderer);
+    let scene = scene_ref!(scene);
+    if out_data.is_null() {
+        set_last_error("out_data is null");
+        return status::INVALID_ARGUMENT;
+    }
+    match renderer.read_storage_buffer(scene, buffer) {
+        Ok(data) => {
+            let count = data.len().min(length as usize);
+            unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), out_data, count) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
 }
 
 // ------------------------------------------------------------------ raycasting

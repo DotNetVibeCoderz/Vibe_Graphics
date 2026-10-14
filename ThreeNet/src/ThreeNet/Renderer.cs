@@ -540,6 +540,77 @@ public sealed class Renderer : IDisposable
     }
 
     /// <summary>
+    /// True when this adapter can run compute shaders at all. WebGL2 cannot,
+    /// and some downlevel adapters report that they cannot either.
+    /// </summary>
+    public bool SupportsCompute => NativeMethods.tn_renderer_supports_compute(Handle) != 0;
+
+    /// <summary>
+    /// Runs a compute kernel over a set of storage buffers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The buffers are bound in the order given. The counts are workgroups, not
+    /// threads: a kernel declaring <c>@workgroup_size(64)</c> dispatched with
+    /// 4 groups runs 256 invocations, so the usual shape is
+    /// <c>(count + 63) / 64</c> groups and an early return in the kernel for
+    /// the invocations past the end.
+    /// </para>
+    /// <para>
+    /// Work is queued on the same device queue the frame uses, so whatever a
+    /// kernel writes is visible to the next dispatch and to any pass that reads
+    /// the buffer afterwards.
+    /// </para>
+    /// </remarks>
+    public unsafe void Dispatch(
+        Scene scene,
+        ComputeKernel kernel,
+        ReadOnlySpan<StorageBuffer> buffers,
+        int groupsX,
+        int groupsY = 1,
+        int groupsZ = 1)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(kernel);
+
+        Span<uint> ids = buffers.Length <= 8 ? stackalloc uint[buffers.Length] : new uint[buffers.Length];
+        for (int i = 0; i < buffers.Length; i++)
+        {
+            ids[i] = buffers[i].Id;
+        }
+
+        fixed (uint* pointer = ids)
+        {
+            NativeError.Check(NativeMethods.tn_renderer_dispatch_compute(
+                Handle, scene.Handle, kernel.Id, pointer, (uint)ids.Length,
+                (uint)groupsX, (uint)groupsY, (uint)groupsZ));
+        }
+    }
+
+    /// <summary>
+    /// Reads a storage buffer back into system memory.
+    /// </summary>
+    /// <remarks>
+    /// This waits for the queue to drain, so it belongs in a bake or a test
+    /// rather than in a frame.
+    /// </remarks>
+    public unsafe T[] ReadStorageBuffer<T>(Scene scene, StorageBuffer buffer)
+        where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(buffer);
+        long size = buffer.Size;
+        T[] result = new T[size / sizeof(T)];
+        fixed (T* pointer = result)
+        {
+            NativeError.Check(NativeMethods.tn_renderer_read_storage_buffer(
+                Handle, scene.Handle, buffer.Id, (byte*)pointer, (ulong)size));
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Bakes the light arriving at a point into a <see cref="ThreeNet.LightProbe"/>:
     /// six renders, projected onto spherical harmonics.
     /// </summary>

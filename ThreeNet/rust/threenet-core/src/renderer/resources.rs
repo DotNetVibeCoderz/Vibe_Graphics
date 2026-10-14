@@ -290,6 +290,13 @@ pub struct ResourceCache {
     materials: HashMap<MaterialId, GpuMaterial>,
     /// One instance buffer per node that carries instances, keyed by node id.
     instances: HashMap<crate::scene::NodeId, GpuInstances>,
+    /// Storage buffers for compute, with the write version last uploaded.
+    storage_buffers: HashMap<crate::scene::StorageBufferId, (wgpu::Buffer, u32)>,
+    /// Compiled compute pipelines, keyed by kernel, its edit version and how
+    /// many buffers it was built for. Compiling WGSL on every dispatch would
+    /// cost more than the work most kernels do.
+    compute_pipelines:
+        HashMap<(crate::scene::ComputeKernelId, u32, u32), (wgpu::ComputePipeline, wgpu::BindGroupLayout)>,
 }
 
 #[derive(Debug)]
@@ -485,6 +492,100 @@ impl ResourceCache {
     #[inline]
     pub fn texture(&self, id: TextureId) -> Option<&GpuTexture> {
         self.textures.get(&id)
+    }
+
+    /// Compiles a compute kernel for a given number of storage bindings, or
+    /// hands back the one already built.
+    pub fn compute_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        id: crate::scene::ComputeKernelId,
+        version: u32,
+        bindings: u32,
+        source: &str,
+        entry_point: &str,
+    ) -> &(wgpu::ComputePipeline, wgpu::BindGroupLayout) {
+        self.compute_pipelines
+            .entry((id, version, bindings))
+            .or_insert_with(|| {
+                let entries: Vec<wgpu::BindGroupLayoutEntry> = (0..bindings)
+                    .map(|binding| wgpu::BindGroupLayoutEntry {
+                        binding,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    })
+                    .collect();
+                let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("threenet.layout.compute"),
+                    entries: &entries,
+                });
+                let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("threenet.shader.compute"),
+                    source: wgpu::ShaderSource::Wgsl(source.into()),
+                });
+                let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("threenet.pipeline_layout.compute"),
+                    bind_group_layouts: &[Some(&layout)],
+                    immediate_size: 0,
+                });
+                let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("threenet.pipeline.compute"),
+                    layout: Some(&pipeline_layout),
+                    module: &module,
+                    entry_point: Some(entry_point),
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
+                (pipeline, layout)
+            })
+    }
+
+    /// The GPU side of a storage buffer, once a dispatch has created it.
+    pub fn storage_buffer(&self, id: crate::scene::StorageBufferId) -> Option<&wgpu::Buffer> {
+        self.storage_buffers.get(&id).map(|(buffer, _)| buffer)
+    }
+
+    /// Creates the buffer if it is missing or the wrong size, and uploads
+    /// anything the CPU staged since the last time.
+    pub fn ensure_storage_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        id: crate::scene::StorageBufferId,
+        size: u64,
+        pending: Option<&[u8]>,
+        version: u32,
+    ) {
+        let matches = self
+            .storage_buffers
+            .get(&id)
+            .is_some_and(|(buffer, _)| buffer.size() == size);
+        if !matches {
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("threenet.storage"),
+                size: size.max(4),
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            // A fresh buffer has never seen an upload, so force one below.
+            self.storage_buffers.insert(id, (buffer, version.wrapping_sub(1)));
+        }
+        let Some((buffer, uploaded)) = self.storage_buffers.get_mut(&id) else {
+            return;
+        };
+        if *uploaded != version
+            && let Some(data) = pending
+        {
+            queue.write_buffer(buffer, 0, data);
+            *uploaded = version;
+        }
     }
 
     pub fn clear(&mut self) {

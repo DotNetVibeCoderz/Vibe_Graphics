@@ -133,7 +133,8 @@ Done in 0.10.0.
 | Post: LUT grading | ✅ | `RendererOptions.ColorLut` + `ColorLutStrength`, and `Scene.CreateNeutralColorLut(size)` for a table to start from. An ordinary texture laid out as a strip of `size` slices each `size` by `size`, so the shader reads the size off the texture height and there is nothing to keep in step by hand. Applied last, after tone mapping and the saturation and contrast, which is what a table exported from a grading tool was authored against |
 | Post: SMAA | ⬜ | Three passes, and the middle one needs the precomputed area and search tables the technique is defined by. Worth little beside an FXAA that already works, so it stays last in the queue rather than ahead of loaders and compute |
 | Light probes | ✅ | `Renderer.BakeLightProbe(scene, position)` and `Scene.LightProbe`. Six renders projected onto three bands of spherical harmonics, nine coefficients a channel - enough to reconstruct the irradiance of any environment to about a percent, because a matte surface gathers over a cosine lobe too broad to hold anything sharper. It needed no compute: the projection is a CPU pass over six readbacks. The readback is eight bit, so anything brighter than white clips |
-| GPU particles, GPU skinning | ⬜ | Already open in "Next up"; both need compute pipelines in the core |
+| Compute pipelines | ✅ | `Scene.CreateComputeKernel`, `Scene.CreateStorageBuffer`, `Renderer.Dispatch` and `Renderer.ReadStorageBuffer`, with `Renderer.SupportsCompute` for adapters that have none. Buffers bind in the order given at `@group(0) @binding(0)` upwards. Pipelines are cached by kernel, edit and binding count, because compiling WGSL per dispatch would cost more than most kernels do |
+| GPU particles, GPU skinning | ⬜ | No longer blocked: compute pipelines exist now. Both are a second code path rather than a foundation - bounds and raycasts still need the CPU pose, so GPU skinning only pays where the throughput is the problem |
 | Instance aware culling and picking | ✅ | Culling unions the bounds of every instance, so a forest does not vanish when the node origin leaves the frustum; raycasting tests each instance transform and reports `RayHit.InstanceIndex`, so picking a crowd says which copy was hit |
 | Screen space refraction | ✅ | Shipped with transmission: the forward pass splits, the opaque colour is copied aside, and a refracting material samples it along the bent view ray. The offset comes from `Thickness` rather than from scene depth, because the post chain still does not hand a material the depth buffer |
 
@@ -142,10 +143,11 @@ Done in 0.10.0.
 | Item | Status | Notes |
 |---|---|---|
 | STL, PLY | ✅ | `Scene.LoadStl` and `Scene.LoadPly`, both also reachable through `LoadModel`. STL reads binary and ASCII, told apart by the file length rather than by the leading word, because exporters write `solid` into the binary header too; a facet with a zero normal takes it from the winding. PLY reads ASCII and binary in either endianness, driven by the header, so properties come in whatever order and spelling the exporter chose and unknown elements are stepped over rather than ending the parse. A PLY with no faces loads as a point cloud |
-| Collada (DAE), 3DS, VRML, KMZ, 3MF | ⬜ | Older interchange formats; worth it only where a user actually has the files |
-| USDZ, VOX, IFC | ⬜ | USDZ matters for iOS AR, IFC for BIM, VOX is small. All three are substantial on their own |
+| Collada (DAE), 3DS, VRML, KMZ, 3MF | ⬜ | Older interchange formats. All but 3DS need an XML parser, and KMZ and 3MF need a zip reader as well - neither is in the dependency list, so these wait on a decision to add them rather than on the work |
+| VOX | ✅ | `Scene.LoadVox`. Only the visible shell is built - a face with a voxel against it can never be seen, so a solid 4 cube is 96 faces rather than 384 - and the palette becomes a 256 by 1 texture that every voxel points at through its UV, so a model of any number of colours is one mesh with one material. Voxel space is Z up and the mesh is built Y up |
+| USDZ, IFC | ⬜ | USDZ matters for iOS AR and IFC for BIM. Both are substantial on their own, and both would bring dependencies the repository does not have yet |
 | SVG | ⬜ | Needs the 2D path and extrude work from group A to be useful |
-| Draco, Meshopt | ⬜ | Mesh compression. Draco is a C++ dependency like `basis-universal`; Meshopt is smaller and decodes fast |
+| Draco, Meshopt | ⬜ | Mesh compression. Draco is a C++ dependency like `basis-universal`; Meshopt has a usable Rust crate and is the cheaper of the two by a wide margin |
 
 ### What is deliberately not planned
 
@@ -168,7 +170,8 @@ items that were already in flight before it was written.
    for a scene that actually needs the throughput.
 4. **Contact hardening shadows.** Light probes are done; this is the half of that line that is left, and it wants a wider shadow filter driven by the distance between blocker and receiver.
 5. **GPU particles.** `ParticleEffect` rewrites geometry on the CPU each frame, which is honest but caps out
-   in the low thousands per system; a compute path would need compute pipelines in the core first.
+   in the low thousands per system. The compute pipelines it was waiting on exist now, so this is a matter of
+   writing the step kernel and feeding the sprite buffer from it.
 6. **Screen space refraction for water.** Transmission gave the water surface everything it needs - the
    opaque colour is bound and a refracting material bends it - so this is now a matter of turning it on in
    `WaterSurface` and tuning it, rather than of missing machinery.
