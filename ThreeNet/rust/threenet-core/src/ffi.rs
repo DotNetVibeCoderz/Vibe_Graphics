@@ -2881,15 +2881,24 @@ pub struct TnSimplifyResult {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn tn_geometry_optimize(scene: *mut Scene, geometry: u32) -> i32 {
     let scene = scene_ref!(scene);
-    let Some(target) = scene.geometry_mut(geometry) else {
-        set_last_error("no such geometry");
-        return status::INVALID_HANDLE;
-    };
-    if crate::meshopt_tools::optimize(target) {
-        status::OK
-    } else {
-        set_last_error("that geometry has no index buffer to reorder");
-        status::INVALID_ARGUMENT
+    #[cfg(feature = "mesh-tools")]
+    {
+        let Some(target) = scene.geometry_mut(geometry) else {
+            set_last_error("no such geometry");
+            return status::INVALID_HANDLE;
+        };
+        if crate::meshopt_tools::optimize(target) {
+            status::OK
+        } else {
+            set_last_error("that geometry has no index buffer to reorder");
+            status::INVALID_ARGUMENT
+        }
+    }
+    #[cfg(not(feature = "mesh-tools"))]
+    {
+        let _ = (scene, geometry);
+        set_last_error("this build has no mesh tools; the mesh-tools feature is off");
+        status::ERROR
     }
 }
 
@@ -2912,24 +2921,33 @@ pub unsafe extern "C" fn tn_geometry_simplify(
         set_last_error("output pointer is null");
         return status::INVALID_ARGUMENT;
     }
-    let Some(source) = scene.geometry(geometry) else {
-        set_last_error("no such geometry");
-        return status::INVALID_HANDLE;
-    };
-    match crate::meshopt_tools::simplify(source, ratio, error_limit) {
-        Ok((simplified, result)) => {
-            let id = scene.add_geometry(simplified);
-            unsafe {
-                out_geometry.write(id);
-                out_result.write(TnSimplifyResult {
-                    triangles_before: result.triangles_before as u32,
-                    triangles_after: result.triangles_after as u32,
-                    error: result.error,
-                });
+    #[cfg(feature = "mesh-tools")]
+    {
+        let Some(source) = scene.geometry(geometry) else {
+            set_last_error("no such geometry");
+            return status::INVALID_HANDLE;
+        };
+        match crate::meshopt_tools::simplify(source, ratio, error_limit) {
+            Ok((simplified, result)) => {
+                let id = scene.add_geometry(simplified);
+                unsafe {
+                    out_geometry.write(id);
+                    out_result.write(TnSimplifyResult {
+                        triangles_before: result.triangles_before as u32,
+                        triangles_after: result.triangles_after as u32,
+                        error: result.error,
+                    });
+                }
+                status::OK
             }
-            status::OK
+            Err(error) => fail(error),
         }
-        Err(error) => fail(error),
+    }
+    #[cfg(not(feature = "mesh-tools"))]
+    {
+        let _ = (scene, geometry, ratio, error_limit);
+        set_last_error("this build has no mesh tools; the mesh-tools feature is off");
+        status::ERROR
     }
 }
 
@@ -2952,7 +2970,7 @@ pub extern "C" fn tn_window_set_pointer_lock(locked: i32) -> i32 {
     {
         let _ = locked;
         set_last_error("this platform has no native window to lock the pointer to");
-        status::UNSUPPORTED
+        status::ERROR
     }
 }
 

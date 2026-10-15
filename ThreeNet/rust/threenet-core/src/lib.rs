@@ -25,6 +25,7 @@ pub mod light;
 pub mod light_probe;
 pub mod loaders;
 pub mod material;
+#[cfg(feature = "mesh-tools")]
 pub mod meshopt_tools;
 pub mod overlay;
 pub mod physics;

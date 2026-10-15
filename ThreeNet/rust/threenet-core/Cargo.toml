@@ -12,7 +12,7 @@ name = "threenet_core"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["gltf-lights", "basis", "audio-output", "gamepad", "xr"]
+default = ["gltf-lights", "basis", "audio-output", "gamepad", "xr", "mesh-tools"]
 # Imports KHR_lights_punctual lights from glTF files.
 gltf-lights = ["gltf/KHR_lights_punctual"]
 # Basis Universal transcoding (C++; needs a C++ toolchain for the target).
@@ -23,6 +23,9 @@ audio-output = ["dep:cpal"]
 gamepad = ["dep:gilrs"]
 # OpenXR runtime discovery (dynamic loader).
 xr = ["dep:openxr"]
+# meshoptimizer: cache ordering and simplification. Compiles C, so it needs a
+# toolchain for the target - which the Emscripten check does not have.
+mesh-tools = ["dep:meshopt"]
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
@@ -36,8 +39,9 @@ serde_json = "1"
 # heap, which matters for a scene file.
 quick-xml = "0.37"
 # meshoptimizer: vertex cache and fetch ordering, and the simplifier that
-# generates LODs. Compiles C, like basis-universal already does.
-meshopt = "0.6"
+# generates LODs. Compiles C, like basis-universal already does, so it is
+# optional for targets without a toolchain.
+meshopt = { version = "0.6", optional = true }
 # Draco decoding, pure Rust - no C++ toolchain, unlike basis-universal. Decode
 # only: nothing here writes compressed meshes.
 draco-core = { version = "2.3", default-features = false, features = ["decoder", "edgebreaker_valence_decode", "legacy_bitstream_decode"] }
