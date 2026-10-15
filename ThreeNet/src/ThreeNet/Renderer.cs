@@ -146,6 +146,25 @@ public struct RendererOptions
     /// that is not available or not enough.
     /// </summary>
     public bool Fxaa;
+    /// <summary>
+    /// Morphological antialiasing: finds edges, reconstructs where the real
+    /// geometric line crossed each one, and blends by how much of the pixel it
+    /// covered.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three passes against FXAA's one, and it keeps detail FXAA softens,
+    /// because an edge that is weak next to its neighbour is treated as texture
+    /// rather than as a silhouette. Takes precedence when both are set.
+    /// </para>
+    /// <para>
+    /// The coverage area is computed in the shader rather than looked up in the
+    /// tables the reference implementation ships, which removes their
+    /// quantisation. Diagonal pattern detection and corner rounding are not
+    /// included - both are optional in the reference too.
+    /// </para>
+    /// </remarks>
+    public bool Smaa;
 
     /// <summary>
     /// Darkens the corners of the frame; 0 is off. Applied after tone mapping,
@@ -211,6 +230,7 @@ public struct RendererOptions
         DebugView = DebugView.Off;
         Wireframe = false;
         Fxaa = false;
+        Smaa = false;
         Vignette = 0f;
         VignetteSoftness = 0.5f;
         Grain = 0f;
@@ -262,6 +282,7 @@ public struct RendererOptions
         DebugView = (uint)DebugView,
         Wireframe = Wireframe ? 1 : 0,
         Fxaa = Fxaa ? 1 : 0,
+        Smaa = Smaa ? 1 : 0,
         Vignette = Vignette,
         VignetteSoftness = VignetteSoftness,
         Grain = Grain,

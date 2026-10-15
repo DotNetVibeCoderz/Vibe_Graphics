@@ -3,6 +3,7 @@
 //! renderer from their own window handle instead.
 
 #[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(not(any(target_os = "android", target_os = "emscripten")))]
 use std::time::Instant;
@@ -38,6 +39,10 @@ pub enum EventKind {
     Focus = 10,
     CloseRequested = 11,
     ScaleFactorChanged = 12,
+    /// Raw pointer movement, in device units, with no position attached.
+    /// Only sent while the pointer is locked, which is the only time a
+    /// position would be meaningless.
+    RawMouseMove = 13,
 }
 
 /// Platform independent key identifiers. The values are mirrored by the
@@ -172,6 +177,34 @@ impl Key {
     }
 }
 
+/// The pointer lock request shared between the caller and the event loop.
+///
+/// One window runs at a time - `run` owns the thread it is called on - so one
+/// flag is enough, and sharing it this way keeps the request off the FFI
+/// surface of the window itself, which the host does not hold a pointer to.
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+pub fn pointer_lock_flag() -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+    use std::sync::OnceLock;
+    static FLAG: OnceLock<std::sync::Arc<std::sync::atomic::AtomicBool>> = OnceLock::new();
+    FLAG.get_or_init(|| std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)))
+        .clone()
+}
+
+/// Asks for the pointer to be locked to the window, or released.
+///
+/// The change is applied by the event loop on its own thread, so it takes
+/// effect on the next event rather than immediately.
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+pub fn set_pointer_lock(locked: bool) {
+    pointer_lock_flag().store(locked, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the pointer lock has been asked for.
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+pub fn pointer_lock() -> bool {
+    pointer_lock_flag().load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Input event handed to the host. Field meaning depends on [`InputEvent::kind`].
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -255,6 +288,42 @@ struct App<H: AppHandler> {
     cursor: (f32, f32),
     modifiers: u32,
     error: Option<Error>,
+    /// Whether the pointer is currently held to the window.
+    pointer_locked: bool,
+    /// Set from another thread by `tn_window_set_pointer_lock`, applied on the
+    /// event loop thread where winit requires it to happen.
+    pointer_lock_request: Arc<AtomicBool>,
+}
+
+#[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+impl<H: AppHandler> App<H> {
+    /// Takes or releases the pointer, and hides the cursor while it is held.
+    ///
+    /// Two grab modes exist because no platform has both: Windows and X11 can
+    /// confine the cursor to the window but not pin it, macOS and Wayland can
+    /// pin it outright. Asking for the pin first and falling back to confining
+    /// gets the best each one offers, and raw motion arrives either way.
+    fn apply_pointer_lock(&mut self, locked: bool) {
+        let Some(window) = self.window.as_ref() else {
+            return;
+        };
+        if locked {
+            let pinned = window
+                .set_cursor_grab(winit::window::CursorGrabMode::Locked)
+                .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Confined));
+            if pinned.is_err() {
+                // Nothing was taken, so do not claim it was: leaving the flag
+                // false means the host keeps getting ordinary cursor events
+                // rather than waiting for raw ones that will never come.
+                self.pointer_lock_request.store(false, Ordering::Relaxed);
+                return;
+            }
+        } else {
+            let _ = window.set_cursor_grab(winit::window::CursorGrabMode::None);
+        }
+        window.set_cursor_visible(!locked);
+        self.pointer_locked = locked;
+    }
 }
 
 #[cfg(not(any(target_os = "android", target_os = "emscripten")))]
@@ -302,7 +371,35 @@ impl<H: AppHandler> ApplicationHandler for App<H> {
         }
     }
 
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        // Raw motion is the whole point of locking: it keeps arriving after the
+        // cursor has stopped moving, because there is nowhere left for it to
+        // move to.
+        if let winit::event::DeviceEvent::MouseMotion { delta } = event
+            && self.pointer_locked
+            && let Some(renderer) = self.renderer.as_mut()
+        {
+            let mut out = InputEvent::new(EventKind::RawMouseMove);
+            out.modifiers = self.modifiers;
+            out.delta_x = delta.0 as f32;
+            out.delta_y = delta.1 as f32;
+            self.handler.on_event(renderer, &out);
+        }
+    }
+
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        // The lock is asked for from wherever the application happens to be and
+        // applied here, because winit will only take it on its own thread.
+        let wanted = self.pointer_lock_request.load(Ordering::Relaxed);
+        if wanted != self.pointer_locked {
+            self.apply_pointer_lock(wanted);
+        }
+
         let (Some(renderer), Some(window)) = (self.renderer.as_mut(), self.window.as_ref()) else {
             return;
         };
@@ -463,6 +560,8 @@ pub fn run_app<H: AppHandler>(config: WindowConfig, handler: H) -> Result<()> {
         cursor: (0.0, 0.0),
         modifiers: 0,
         error: None,
+        pointer_locked: false,
+        pointer_lock_request: pointer_lock_flag(),
     };
     event_loop
         .run_app(&mut app)

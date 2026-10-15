@@ -25,7 +25,7 @@ lights face -Z.
 | `CreateMaterial(in MaterialOptions)`, `CreateMaterial(color, metallic, roughness)` | Materials |
 | `LoadTexture(path, srgb)`, `LoadTexture(bytes, srgb)`, `CreateTexture(width, height, pixels, format)` | Textures |
 | `LoadTextureAsync(path, srgb)`, `LoadTextureCached(path, srgb)`, `PollStreaming()`, `FinishStreaming(timeout)`, `SetStreamingBudget(n)`, `AssetStats`, `ClearAssetCache()` | Streaming and cache |
-| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadVox(path, parent?)`, `Load3ds(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply, .vox, .3ds |
+| `LoadGltf(path or bytes, parent?)`, `LoadFbx(path or bytes, parent?)`, `LoadObj(path, parent?)`, `LoadStl(path, parent?)`, `LoadPly(path, parent?)`, `LoadVox(path, parent?)`, `Load3ds(path, parent?)`, `LoadCollada(path, parent?)`, `LoadKmz(path, parent?)`, `Load3mf(path, parent?)`, `LoadVrml(path, parent?)`, `LoadSvg(path, parent?, depth?)`, `LoadUsd(path, parent?)`, `LoadIfc(path, parent?)`, `LoadModel(path, parent?)`, `LoadModelCached(path, parent?)` | Asset import, returns `ImportResult` (`AnimationCount`, `SkinCount` included). `LoadModel` picks the loader from the extension: .gltf, .glb, .fbx, .obj, .stl, .ply, .vox, .3ds, .dae, .kmz, .3mf, .wrl, .svg, .usda, .usdz, .ifc |
 | `CreateShader(source, language, name?)` | Custom shader hooks (WGSL / GLSL) |
 | `Animations`, `CreateAnimation(name)`, `UpdateAnimations(delta)` | Animation clips |
 | `Raycast(ray, options?, maxHits)`, `CreateCameraRay(camera, ndcX, ndcY, aspect)` | Picking |
@@ -50,8 +50,12 @@ lights face -Z.
 ## Resources
 
 - `Geometry`: `Counts`, `Update(vertices, indices)`, `ComputeNormals()`, `ComputeTangents()`,
+  `Optimize()` (reorder for the GPU cache, same picture), `Simplify(ratio, errorLimit?)` (a new,
+  lighter mesh for `SetLevelsOfDetail`; the ratio is a target and the result says what it reached),
   `MorphTargetCount`, `MorphTargetNames`, `GetMorphTargetName(i)`, `AddMorphTarget(name, positionDeltas, normalDeltas?)`, `Destroy()`.
 - `Material`: `Options` (get/set), `Update(Func<MaterialOptions, MaterialOptions>)`, `BaseColor`, `Destroy()`.
+- `Scene.CreateGeometryFromDraco(bytes)` decodes a Draco compressed mesh. Decode only, and the loss
+  is the encoder's quantisation rather than the reader's.
 - `Scene.CreateRenderTarget(width, height)` makes a texture the renderer draws into.
 - `Scene.CreateCubeTexture(size, +X, -X, +Y, -Y, +Z, -Z)` makes a cube map. Set as
   `SceneEnvironment.EnvironmentMap` it is sampled by direction, which is even everywhere; an
@@ -133,7 +137,7 @@ are weighted by Fresnel rather than by roughness), `FrustumCulling`, `PowerPrefe
 `Ssao`, `SsaoRadius`, `SsaoIntensity`, `SsaoBias`, `SsaoSamples`, `SsaoDirectStrength`,
 `RenderPath` (`Forward` / `Deferred`), `DepthOfField`, `DofFocusDistance`, `DofFocusRange`, `DofMaxBlur`,
 `MotionBlur`, `MotionBlurStrength`, `MotionBlurSamples`, `DebugView`, `Wireframe`,
-`Fxaa`, `Vignette`, `VignetteSoftness`, `Grain`, `Saturation`, `Contrast`, `Brightness`,
+`Fxaa`, `Smaa` (morphological antialiasing; three passes, keeps detail FXAA softens, wins when both are set), `Vignette`, `VignetteSoftness`, `Grain`, `Saturation`, `Contrast`, `Brightness`,
 `ClipPlanes` (up to four world space planes; see [advanced-rendering.md](advanced-rendering.md#clipping-planes)).
 
 Custom shaders, deferred rendering, DoF / motion blur, animation, FBX, KTX2 / Basis and streaming are

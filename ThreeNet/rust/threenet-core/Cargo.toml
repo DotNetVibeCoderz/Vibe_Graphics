@@ -32,6 +32,18 @@ glam = { version = "0.33.7", features = ["bytemuck"] }
 # `mesh.extras.targetNames`; without it the targets arrive unnamed.
 gltf = { version = "1.4.1", features = ["import", "utils", "names", "extras"] }
 serde_json = "1"
+# Collada, 3MF and SVG are XML; a pull parser keeps the whole document off the
+# heap, which matters for a scene file.
+quick-xml = "0.37"
+# meshoptimizer: vertex cache and fetch ordering, and the simplifier that
+# generates LODs. Compiles C, like basis-universal already does.
+meshopt = "0.6"
+# Draco decoding, pure Rust - no C++ toolchain, unlike basis-universal. Decode
+# only: nothing here writes compressed meshes.
+draco-core = { version = "2.3", default-features = false, features = ["decoder", "edgebreaker_valence_decode", "legacy_bitstream_decode"] }
+# KMZ and 3MF are zip archives. Deflate only: the other codecs are not used by
+# either format and would be dead weight in the binary.
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "hdr", "bmp", "tga", "webp", "tiff", "dds", "exr"] }
 log = "0.4.34"
 # zlib for compressed FBX arrays and KTX2 supercompression.
@@ -61,3 +73,6 @@ winit = "0.30.13"
 [dev-dependencies]
 # The compression tests encode real ETC1S / UASTC data.
 basis-universal = "0.3.1"
+# The Draco test encodes a mesh so it has something real to decode. The library
+# itself ships decode only; the encoder is here and nowhere else.
+draco-core = { version = "2.3", default-features = false, features = ["encoder", "decoder", "edgebreaker_valence_encode", "edgebreaker_valence_decode"] }

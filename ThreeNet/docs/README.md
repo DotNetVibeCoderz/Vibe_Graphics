@@ -7,6 +7,7 @@
 | [api-reference.md](api-reference.md) | The public C# API |
 | [advanced-rendering.md](advanced-rendering.md) | Custom shaders, the sky, deferred, DoF / motion blur, animation and morph targets, FBX, KTX2 / Basis, streaming and cache |
 | [effects.md](effects.md) | Simulated water with caustics, volumetric fire, and the particle system |
+| [formats.md](formats.md) | Every model importer, what each reads and what it does not, and the traps each format sets |
 | [interactivity.md](interactivity.md) | Node pointer events, native HUD overlay, gamepads |
 | [extensions.md](extensions.md) | Physics (Rapier), spatial audio, networking, OpenXR probe and stereo cameras |
 | [platforms.md](platforms.md) | Runtimes (Windows, Linux, macOS, Android, iOS, browser), build features, mobile and web builds |

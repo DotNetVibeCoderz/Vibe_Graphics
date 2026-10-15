@@ -24,7 +24,16 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <VersionPrefix>0.11.0</VersionPrefix>
+    <!-- Rendered by tools/PackageIcon with the library itself. Regenerate it
+         by running that tool with the output path as its argument, then copy
+         the result here. The icon is baked into a published version and cannot
+         be changed without burning one, so it is a release blocker. -->
+    <PackageIcon>icon.png</PackageIcon>
+    <VersionPrefix>0.12.0</VersionPrefix>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
 </Project>

@@ -86,6 +86,13 @@ pub struct PostProcess {
     composite_uniform: wgpu::Buffer,
     bloom: Option<BloomTargets>,
     fxaa_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
+    /// Edge detection and weight calculation always land in the same internal
+    /// format, so they need one pipeline each; only the final blend has to
+    /// match whatever the frame is being written to.
+    smaa_edges_pipeline: Option<wgpu::RenderPipeline>,
+    smaa_weights_pipeline: Option<wgpu::RenderPipeline>,
+    smaa_blend_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
+    smaa_targets: Option<(u32, u32, wgpu::TextureView, wgpu::TextureView)>,
     fxaa_uniform: wgpu::Buffer,
     /// The composite lands here first when antialiasing is on, so FXAA has
     /// something to read. Keyed by size and format; rebuilt when either moves.
@@ -200,6 +207,10 @@ impl PostProcess {
             blur_pipeline,
             composite_pipelines: HashMap::new(),
             fxaa_pipelines: HashMap::new(),
+            smaa_edges_pipeline: None,
+            smaa_weights_pipeline: None,
+            smaa_blend_pipelines: HashMap::new(),
+            smaa_targets: None,
             fxaa_uniform: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("threenet.post.fxaa.uniform"),
                 contents: bytemuck::bytes_of(&PostUniform::default()),
@@ -296,6 +307,168 @@ impl PostProcess {
     }
 
     /// The intermediate the composite writes into while FXAA is on.
+    /// The format the edge and weight passes write. Eight bits a channel is
+    /// plenty: edges are a flag and weights never exceed a half.
+    const SMAA_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+    fn smaa_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        stage: &'static str,
+    ) -> wgpu::RenderPipeline {
+        let existing = match stage {
+            "fs_smaa_edges" => &self.smaa_edges_pipeline,
+            _ => &self.smaa_weights_pipeline,
+        };
+        if let Some(pipeline) = existing {
+            return pipeline.clone();
+        }
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("threenet.post.smaa.layout"),
+            bind_group_layouts: &[Some(&self.composite_layout)],
+            immediate_size: 0,
+        });
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("threenet.post.smaa"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &self.shader,
+                entry_point: Some("vs_fullscreen"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &self.shader,
+                entry_point: Some(stage),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: Self::SMAA_FORMAT,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+        match stage {
+            "fs_smaa_edges" => self.smaa_edges_pipeline = Some(pipeline.clone()),
+            _ => self.smaa_weights_pipeline = Some(pipeline.clone()),
+        }
+        pipeline
+    }
+
+    fn smaa_blend_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> &wgpu::RenderPipeline {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("threenet.post.smaa.blend.layout"),
+            bind_group_layouts: &[Some(&self.composite_layout)],
+            immediate_size: 0,
+        });
+        let shader = &self.shader;
+        self.smaa_blend_pipelines.entry(format).or_insert_with(|| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("threenet.post.smaa.blend"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: shader,
+                    entry_point: Some("vs_fullscreen"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: shader,
+                    entry_point: Some("fs_smaa_blend"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        })
+    }
+
+    /// The edge and weight buffers, rebuilt when the frame changes size.
+    fn ensure_smaa_targets(&mut self, device: &wgpu::Device) -> (wgpu::TextureView, wgpu::TextureView) {
+        let (width, height) = (self.width.max(1), self.height.max(1));
+        if let Some((w, h, edges, weights)) = &self.smaa_targets
+            && *w == width
+            && *h == height
+        {
+            return (edges.clone(), weights.clone());
+        }
+        let make = |label: &str| {
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some(label),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: Self::SMAA_FORMAT,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                })
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        };
+        let edges = make("threenet.post.smaa.edges");
+        let weights = make("threenet.post.smaa.weights");
+        self.smaa_targets = Some((width, height, edges.clone(), weights.clone()));
+        (edges, weights)
+    }
+
+    /// Binds two textures and the uniform into the composite layout, which has
+    /// room for the extra one the blend pass needs.
+    fn bind_pair(
+        &self,
+        device: &wgpu::Device,
+        first: &wgpu::TextureView,
+        second: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("threenet.post.smaa.bind_group"),
+            layout: &self.composite_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(first),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.fxaa_uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(second),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(second),
+                },
+            ],
+        })
+    }
+
     fn ensure_fxaa_target(
         &mut self,
         device: &wgpu::Device,
@@ -561,9 +734,11 @@ impl PostProcess {
                 },
             ],
         });
-        // With antialiasing on, the composite lands in an intermediate and
-        // FXAA copies it to the output; without it, the composite is the output.
-        let composite_target = if settings.fxaa {
+        // With antialiasing on, the composite lands in an intermediate and the
+        // antialiasing copies it to the output; without it, the composite is
+        // the output.
+        let antialias = settings.fxaa || settings.smaa;
+        let composite_target = if antialias {
             self.ensure_fxaa_target(device, output_format)
         } else {
             output.clone()
@@ -578,7 +753,7 @@ impl PostProcess {
             &composite_bind,
         );
 
-        if settings.fxaa {
+        if antialias {
             queue.write_buffer(
                 &self.fxaa_uniform,
                 0,
@@ -594,9 +769,27 @@ impl PostProcess {
                     grade2: [0.0; 4],
                 }),
             );
-            let bind = self.bind_simple(device, &composite_target, &self.fxaa_uniform);
-            let pipeline = self.fxaa_pipeline(device, output_format).clone();
-            Self::full_screen_pass(encoder, "threenet.post.fxaa", output, &pipeline, &bind);
+            if settings.smaa {
+                // Edges, then weights from those edges, then the blend. Each
+                // pass reads only what the one before wrote.
+                let (edges, weights) = self.ensure_smaa_targets(device);
+
+                let bind = self.bind_pair(device, &composite_target, &composite_target);
+                let pipeline = self.smaa_pipeline(device, "fs_smaa_edges");
+                Self::full_screen_pass(encoder, "threenet.post.smaa.edges", &edges, &pipeline, &bind);
+
+                let bind = self.bind_pair(device, &edges, &edges);
+                let pipeline = self.smaa_pipeline(device, "fs_smaa_weights");
+                Self::full_screen_pass(encoder, "threenet.post.smaa.weights", &weights, &pipeline, &bind);
+
+                let bind = self.bind_pair(device, &composite_target, &weights);
+                let pipeline = self.smaa_blend_pipeline(device, output_format).clone();
+                Self::full_screen_pass(encoder, "threenet.post.smaa.blend", output, &pipeline, &bind);
+            } else {
+                let bind = self.bind_simple(device, &composite_target, &self.fxaa_uniform);
+                let pipeline = self.fxaa_pipeline(device, output_format).clone();
+                Self::full_screen_pass(encoder, "threenet.post.fxaa", output, &pipeline, &bind);
+            }
         }
     }
 }
@@ -626,6 +819,9 @@ pub struct PostSettings {
     /// antialiasing the deferred path can have, since MSAA needs a multisampled
     /// target and the G-buffer is resolved before the lighting sees it.
     pub fxaa: bool,
+    /// Morphological antialiasing: three passes rather than FXAA's one, and it
+    /// keeps edges that FXAA softens.
+    pub smaa: bool,
     /// How much of the colour lookup table to apply; 0 is off and skips it.
     pub color_lut_strength: f32,
 }
@@ -646,6 +842,7 @@ impl Default for PostSettings {
             contrast: 1.0,
             brightness: 0.0,
             fxaa: false,
+            smaa: false,
             color_lut_strength: 0.0,
         }
     }

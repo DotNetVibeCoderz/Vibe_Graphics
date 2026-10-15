@@ -58,6 +58,36 @@ public sealed class AppWindow : IDisposable
     /// <summary>Raised for keyboard, mouse, touch and window events.</summary>
     public event Action<Renderer, InputEvent>? Input;
 
+    /// <summary>
+    /// Holds the pointer to the window and hides the cursor, which is what a
+    /// first person camera wants.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// While locked, movement arrives as <see cref="InputEventKind.RawMouseMove"/>
+    /// carrying a delta and no position, and it keeps arriving after the cursor
+    /// has reached the edge of the screen - which is the whole reason to lock,
+    /// since an unlocked pointer simply stops.
+    /// </para>
+    /// <para>
+    /// The grab is taken by the event loop on its own thread, so this takes
+    /// effect on the next event rather than immediately. Platforms differ in
+    /// what they can offer: macOS and Wayland pin the cursor outright, Windows
+    /// and X11 confine it to the window. Both deliver raw movement, which is
+    /// what the caller actually reads.
+    /// </para>
+    /// <para>
+    /// This is the native window only. <c>ThreeNetView</c> runs inside Avalonia,
+    /// which exposes no pointer lock, so the controllers there keep dragging -
+    /// see <c>LookWithoutDragging</c>.
+    /// </para>
+    /// </remarks>
+    public static bool PointerLocked
+    {
+        get => NativeMethods.tn_window_get_pointer_lock() != 0;
+        set => NativeError.Check(NativeMethods.tn_window_set_pointer_lock(value ? 1 : 0));
+    }
+
     /// <summary>Raised on a close request; set <c>Cancel</c> to keep the window open.</summary>
     public event Action<CloseRequest>? Closing;
 

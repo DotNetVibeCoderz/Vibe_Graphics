@@ -38,7 +38,7 @@ Dibuat oleh **Gravicode Studios**, dipimpin **Kang Fadhil**.
 
 | Part | Path | Status |
 |---|---|---|
-| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, screen space reflections, depth of field + motion blur, bloom + tone mapping, procedural sky, keyframe/skeletal animation with morph targets, glTF/FBX/OBJ, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
+| Native core (Rust, wgpu 30): forward + deferred renderer, scene graph, PBR, custom WGSL/GLSL shaders, shadow maps + SSAO, screen space reflections, depth of field + motion blur, bloom + tone mapping, procedural sky, keyframe/skeletal animation with morph targets (CPU or GPU skinned), compute pipelines, light probes, thirteen model formats (glTF, FBX, OBJ, STL, PLY, VOX, 3DS, Collada, KMZ, 3MF, VRML, SVG, USD, IFC) plus Draco and Meshopt, KTX2/Basis textures, texture streaming + asset cache, raycasting, windowing with pointer lock, native HUD overlay, gamepads, Rapier physics, spatial audio, OpenXR probe, C ABI | `rust/threenet-core` | working, tested |
 | .NET 10 binding (`ThreeNet`): scene, node events, HUD, gamepads, physics, audio, UDP networking, stereo, water / fire / particle effects (`ThreeNet.Effects`) | `src/ThreeNet` | working, tested |
 | Native packaging (`ThreeNet.Native`) | `src/ThreeNet.Native` | builds the Rust core automatically |
 | Avalonia control + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | working |
@@ -112,8 +112,10 @@ scene deterministically, the LLM translates behaviour, and the result is compile
 Everything is in [`docs/`](docs/README.md): getting started, architecture, API reference, advanced rendering
 (custom shaders, deferred, animation, FBX, KTX2, streaming), interactivity (node events, HUD, gamepads),
 extensions (physics, audio, networking, XR), platforms (Android, iOS, browser), the native core,
-ThreeGallery, ThreeAppGen and the Three.js converter. The roadmap is in [PLAN.md](PLAN.md) and the
-development log in [Progress.md](Progress.md).
+ThreeGallery, ThreeAppGen and the Three.js converter. Every model importer and what each one actually
+reads - with the limits worth knowing before you hit them - is in
+[docs/formats.md](docs/formats.md). The roadmap is in [PLAN.md](PLAN.md) and the development log in
+[Progress.md](Progress.md).
 
 ---
 
@@ -123,7 +125,7 @@ development log in [Progress.md](Progress.md).
 
 | Bagian | Lokasi | Status |
 |---|---|---|
-| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, refleksi screen space, depth of field + motion blur, bloom + tone mapping, langit prosedural, animasi keyframe/skeletal dengan morph target, glTF/FBX/OBJ, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
+| Inti native (Rust, wgpu 30): renderer forward + deferred, scene graph, PBR, shader kustom WGSL/GLSL, shadow map + SSAO, refleksi screen space, depth of field + motion blur, bloom + tone mapping, langit prosedural, animasi keyframe/skeletal dengan morph target (skinning CPU atau GPU), compute pipeline, light probe, tiga belas format model (glTF, FBX, OBJ, STL, PLY, VOX, 3DS, Collada, KMZ, 3MF, VRML, SVG, USD, IFC) plus Draco dan Meshopt, tekstur KTX2/Basis, streaming tekstur + cache aset, raycasting, window dengan pointer lock, HUD overlay native, gamepad, fisika Rapier, audio spasial, probe OpenXR, C ABI | `rust/threenet-core` | berjalan, teruji |
 | Binding .NET 10 (`ThreeNet`): scene, event node, HUD, gamepad, fisika, audio, jaringan UDP, stereo | `src/ThreeNet` | berjalan, teruji |
 | Paket native (`ThreeNet.Native`) | `src/ThreeNet.Native` | otomatis mem-build inti Rust |
 | Control Avalonia + orbit controls (`ThreeNet.Avalonia`) | `src/ThreeNet.Avalonia` | berjalan |
@@ -161,8 +163,9 @@ diperbaiki otomatis. Lihat [docs/threejs-conversion.md](docs/threejs-conversion.
 ### Dokumentasi
 
 Semua ada di [`docs/`](docs/README.md), termasuk rendering lanjutan (shader kustom, deferred, animasi, FBX,
-KTX2, streaming) di [docs/advanced-rendering.md](docs/advanced-rendering.md). Roadmap ada di [PLAN.md](PLAN.md) dan catatan progres di
-[Progress.md](Progress.md).
+KTX2, streaming) di [docs/advanced-rendering.md](docs/advanced-rendering.md). Daftar semua importer model
+beserta batasannya ada di [docs/formats.md](docs/formats.md). Roadmap ada di [PLAN.md](PLAN.md) dan catatan
+progres di [Progress.md](Progress.md).
 
 ---
 

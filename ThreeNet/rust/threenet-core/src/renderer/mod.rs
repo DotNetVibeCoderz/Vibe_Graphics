@@ -169,7 +169,9 @@ pub struct RendererConfig {
     pub width: u32,
     pub height: u32,
     pub vsync: bool,
-    /// 1, 2, 4 or 8. Silently clamped to what the adapter supports.
+    /// 1, 2 or 4. Silently clamped to what the device will actually allow,
+    /// which is the lower of the colour and depth targets and never more than
+    /// the 4 WebGPU guarantees without an adapter specific feature.
     pub msaa_samples: u32,
     pub exposure: f32,
     pub tone_mapping: ToneMapping,
@@ -243,6 +245,9 @@ pub struct RendererConfig {
     /// antialiasing the deferred path can have, because MSAA needs a
     /// multisampled target and the G-buffer is resolved before lighting.
     pub fxaa: bool,
+    /// Morphological antialiasing: three passes rather than FXAA's one, and it
+    /// keeps edges that FXAA softens. Takes precedence when both are set.
+    pub smaa: bool,
     /// Darkens the corners; 0 is off.
     pub vignette: f32,
     /// How far in from the corner the darkening starts, 0 to 1.
@@ -337,6 +342,7 @@ impl Default for RendererConfig {
             debug_view: DebugView::Off,
             wireframe: false,
             fxaa: false,
+            smaa: false,
             vignette: 0.0,
             vignette_softness: 0.5,
             grain: 0.0,
@@ -1943,6 +1949,7 @@ impl Renderer {
             contrast: if debug { 1.0 } else { self.config.contrast },
             brightness: if debug { 0.0 } else { self.config.brightness },
             fxaa: self.config.fxaa && !debug,
+            smaa: self.config.smaa && !debug,
             // A debug view is meant to be read, not graded.
             color_lut_strength: if debug { 0.0 } else { self.config.color_lut_strength },
         };
@@ -2691,14 +2698,28 @@ fn create_instance() -> wgpu::Instance {
 }
 
 fn clamp_samples(adapter: &wgpu::Adapter, requested: u32) -> u32 {
-    let flags = adapter.get_texture_format_features(HDR_FORMAT).flags;
+    // Two traps here, and both produced a validation panic rather than the
+    // "silently clamped" the option documents.
+    //
+    // The first is that colour and depth are separate: an adapter can
+    // multisample the HDR format at a count it refuses for the depth format.
+    //
+    // The second is that `get_texture_format_features` reports what the
+    // *adapter* can do, including counts that need
+    // TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES to actually use. This renderer
+    // never asks for that feature, so anything beyond the WebGPU guarantee of
+    // 4 is reported as available and then refused by the device.
+    const GUARANTEED: u32 = 4;
+    let colour = adapter.get_texture_format_features(HDR_FORMAT).flags;
+    let depth = adapter.get_texture_format_features(DEPTH_FORMAT).flags;
     let mut samples = match requested {
         0 | 1 => 1,
         2 | 3 => 2,
-        4..=7 => 4,
-        _ => 8,
+        _ => GUARANTEED,
     };
-    while samples > 1 && !flags.sample_count_supported(samples) {
+    while samples > 1
+        && !(colour.sample_count_supported(samples) && depth.sample_count_supported(samples))
+    {
         samples /= 2;
     }
     samples

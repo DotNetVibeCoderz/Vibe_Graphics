@@ -699,6 +699,45 @@ internal static unsafe partial class NativeMethods
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tn_load_3ds(nint scene, string path, uint parent, out NativeImportResult result);
 
+    [LibraryImport(Library)]
+    internal static partial int tn_window_set_pointer_lock(int locked);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_window_get_pointer_lock();
+
+    [LibraryImport(Library)]
+    internal static partial uint tn_geometry_from_draco(nint scene, byte* data, ulong length);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_geometry_optimize(nint scene, uint geometry);
+
+    [LibraryImport(Library)]
+    internal static partial int tn_geometry_simplify(
+        nint scene, uint geometry, float ratio, float errorLimit,
+        out uint simplified, out NativeSimplifyResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_usd(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_ifc(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_collada(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_kmz(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_3mf(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_vrml(nint scene, string path, uint parent, out NativeImportResult result);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tn_load_svg(
+        nint scene, string path, uint parent, float depth, out NativeImportResult result);
+
     // ---------------------------------------------------------- raycasting
 
     [LibraryImport(Library)]

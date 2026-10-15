@@ -8,19 +8,24 @@
 
 pub mod animation;
 pub mod audio;
+pub mod archives;
 pub mod assets;
 pub mod camera;
+pub mod collada;
 pub mod compute;
 pub mod compressed;
+pub mod draco;
 pub mod error;
 pub mod fbx;
 pub mod gamepad;
 pub mod ffi;
 pub mod geometry;
+pub mod ifc;
 pub mod light;
 pub mod light_probe;
 pub mod loaders;
 pub mod material;
+pub mod meshopt_tools;
 pub mod overlay;
 pub mod physics;
 pub mod ply;
@@ -30,9 +35,12 @@ pub mod renderer;
 pub mod scene;
 pub mod shader;
 pub mod stl;
+pub mod svg;
 pub mod tds;
 pub mod texture;
+pub mod usd;
 pub mod vox;
+pub mod vrml;
 pub mod window;
 pub mod xr;
 
@@ -51,4 +59,4 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
-pub const ABI_VERSION: u32 = 30;
+pub const ABI_VERSION: u32 = 35;

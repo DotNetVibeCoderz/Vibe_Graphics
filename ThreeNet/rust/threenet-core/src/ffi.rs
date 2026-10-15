@@ -657,6 +657,8 @@ pub struct TnRendererDesc {
     pub wireframe: i32,
     /// Fast approximate antialiasing on the finished image.
     pub fxaa: i32,
+    /// Morphological antialiasing; wins over fxaa when both are set.
+    pub smaa: i32,
     /// Darkens the corners; 0 is off.
     pub vignette: f32,
     /// How far in from the corner the darkening starts, 0 to 1.
@@ -720,6 +722,7 @@ impl From<TnRendererDesc> for RendererConfig {
             debug_view: DebugView::from_u32(value.debug_view),
             wireframe: value.wireframe != 0,
             fxaa: value.fxaa != 0,
+            smaa: value.smaa != 0,
             vignette: value.vignette,
             vignette_softness: value.vignette_softness,
             grain: value.grain,
@@ -2854,6 +2857,318 @@ pub unsafe extern "C" fn tn_load_stl(
         return status::INVALID_ARGUMENT;
     };
     match crate::stl::load_stl(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// What a simplification achieved.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct TnSimplifyResult {
+    pub triangles_before: u32,
+    pub triangles_after: u32,
+    pub error: f32,
+}
+
+/// Reorders a geometry for the GPU without changing what it draws.
+///
+/// # Safety
+/// `scene` must be valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_optimize(scene: *mut Scene, geometry: u32) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(target) = scene.geometry_mut(geometry) else {
+        set_last_error("no such geometry");
+        return status::INVALID_HANDLE;
+    };
+    if crate::meshopt_tools::optimize(target) {
+        status::OK
+    } else {
+        set_last_error("that geometry has no index buffer to reorder");
+        status::INVALID_ARGUMENT
+    }
+}
+
+/// Simplifies a geometry into a new one, returning its id through
+/// `out_geometry` and what was achieved through `out_result`.
+///
+/// # Safety
+/// `scene` must be valid and both out pointers writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_simplify(
+    scene: *mut Scene,
+    geometry: u32,
+    ratio: f32,
+    error_limit: f32,
+    out_geometry: *mut u32,
+    out_result: *mut TnSimplifyResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    if out_geometry.is_null() || out_result.is_null() {
+        set_last_error("output pointer is null");
+        return status::INVALID_ARGUMENT;
+    }
+    let Some(source) = scene.geometry(geometry) else {
+        set_last_error("no such geometry");
+        return status::INVALID_HANDLE;
+    };
+    match crate::meshopt_tools::simplify(source, ratio, error_limit) {
+        Ok((simplified, result)) => {
+            let id = scene.add_geometry(simplified);
+            unsafe {
+                out_geometry.write(id);
+                out_result.write(TnSimplifyResult {
+                    triangles_before: result.triangles_before as u32,
+                    triangles_after: result.triangles_after as u32,
+                    error: result.error,
+                });
+            }
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Locks the pointer to the native window, or releases it.
+///
+/// While locked the cursor is hidden and held, and raw movement arrives as
+/// `RawMouseMove` events carrying a delta and no position. Takes effect on the
+/// next event, because winit will only change the grab on its own thread.
+///
+/// This is the native window host only. An Avalonia view has no pointer lock
+/// to offer, so the controllers there keep dragging.
+#[unsafe(no_mangle)]
+pub extern "C" fn tn_window_set_pointer_lock(locked: i32) -> i32 {
+    #[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+    {
+        crate::window::set_pointer_lock(locked != 0);
+        status::OK
+    }
+    #[cfg(any(target_os = "android", target_os = "emscripten"))]
+    {
+        let _ = locked;
+        set_last_error("this platform has no native window to lock the pointer to");
+        status::UNSUPPORTED
+    }
+}
+
+/// Whether the pointer lock has been asked for; negative on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn tn_window_get_pointer_lock() -> i32 {
+    #[cfg(not(any(target_os = "android", target_os = "emscripten")))]
+    {
+        i32::from(crate::window::pointer_lock())
+    }
+    #[cfg(any(target_os = "android", target_os = "emscripten"))]
+    {
+        0
+    }
+}
+
+/// Decodes a Draco buffer into a geometry, returning its id or 0.
+///
+/// # Safety
+/// `scene` must be valid and `data` must point at `length` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_geometry_from_draco(
+    scene: *mut Scene,
+    data: *const u8,
+    length: u64,
+) -> u32 {
+    let scene = scene_ref!(scene, 0);
+    if data.is_null() {
+        set_last_error("data is null");
+        return 0;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(data, length as usize) };
+    match crate::draco::decode(bytes) {
+        Ok(geometry) => scene.add_geometry(geometry),
+        Err(error) => {
+            let _ = fail(error);
+            0
+        }
+    }
+}
+
+/// Imports a USD `.usda` or `.usdz` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_usd(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::usd::load_usd(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports a IFC `.ifc` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_ifc(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::ifc::load_ifc(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports a Collada `.dae` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_collada(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::collada::load_collada(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports a Google Earth `.kmz` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_kmz(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::archives::load_kmz(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports a 3D Manufacturing `.3mf` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_3mf(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::archives::load_3mf(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports a VRML `.wrl` file.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_vrml(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::vrml::load_vrml(scene, path, (parent != 0).then_some(parent)) {
+        Ok(result) => {
+            unsafe { write_import_result(out_result, &result) };
+            status::OK
+        }
+        Err(error) => fail(error),
+    }
+}
+
+/// Imports an `.svg` file, extruding every outline by `depth`.
+///
+/// # Safety
+/// `scene` and `path` must be valid; `out_result` must point at a writable
+/// `TnImportResult`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn tn_load_svg(
+    scene: *mut Scene,
+    path: *const c_char,
+    parent: u32,
+    depth: f32,
+    out_result: *mut TnImportResult,
+) -> i32 {
+    let scene = scene_ref!(scene);
+    let Some(path) = (unsafe { str_from_ptr(path) }) else {
+        set_last_error("path is null or not valid UTF-8");
+        return status::INVALID_ARGUMENT;
+    };
+    match crate::svg::load_svg(scene, path, (parent != 0).then_some(parent), depth) {
         Ok(result) => {
             unsafe { write_import_result(out_result, &result) };
             status::OK

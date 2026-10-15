@@ -42,6 +42,14 @@ internal struct NativeTransform
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct NativeSimplifyResult
+{
+    public uint TrianglesBefore;
+    public uint TrianglesAfter;
+    public float Error;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct NativeMaterialDesc
 {
     public uint Shading;
@@ -269,6 +277,7 @@ internal struct NativeRendererDesc
     public uint DebugView;
     public int Wireframe;
     public int Fxaa;
+    public int Smaa;
     public float Vignette;
     public float VignetteSoftness;
     public float Grain;

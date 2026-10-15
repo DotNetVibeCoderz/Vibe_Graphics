@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- A build-time tool, never packed. -->
+    <IsPackable>false</IsPackable>
+    <AssemblyName>ThreeNet.PackageIcon</AssemblyName>
+    <RootNamespace>ThreeNet.PackageIcon</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ThreeNet\ThreeNet.csproj" />
+  </ItemGroup>
+
+</Project>

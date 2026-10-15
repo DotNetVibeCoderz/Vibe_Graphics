@@ -19,6 +19,12 @@ public enum InputEventKind : uint
     Focus = 10,
     CloseRequested = 11,
     ScaleFactorChanged = 12,
+    /// <summary>
+    /// Raw pointer movement, carrying a delta and no position. Only arrives
+    /// while <see cref="AppWindow.PointerLocked"/> is on, which is the only
+    /// time a position would be meaningless.
+    /// </summary>
+    RawMouseMove = 13,
 }
 
 /// <summary>

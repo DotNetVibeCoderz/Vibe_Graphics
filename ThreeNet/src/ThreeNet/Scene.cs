@@ -705,8 +705,13 @@ public sealed class Scene : IDisposable
 
     /// <summary>
     /// Imports a model, picking the loader from the file extension (.gltf,
-    /// .glb, .fbx, .obj, .stl, .ply, .vox, .3ds).
+    /// .glb, .fbx, .obj, .stl, .ply, .vox, .3ds, .dae, .kmz, .3mf, .wrl, .svg,
+    /// .usda, .usdz, .ifc).
     /// </summary>
+    /// <remarks>
+    /// An SVG is extruded by a default depth; call <see cref="LoadSvg"/>
+    /// directly to choose it.
+    /// </remarks>
     public ImportResult LoadModel(string path, Node? parent = null) =>
         Path.GetExtension(path).ToLowerInvariant() switch
         {
@@ -717,6 +722,13 @@ public sealed class Scene : IDisposable
             ".ply" => LoadPly(path, parent),
             ".vox" => LoadVox(path, parent),
             ".3ds" => Load3ds(path, parent),
+            ".dae" => LoadCollada(path, parent),
+            ".kmz" => LoadKmz(path, parent),
+            ".3mf" => Load3mf(path, parent),
+            ".wrl" => LoadVrml(path, parent),
+            ".svg" => LoadSvg(path, parent),
+            ".usda" or ".usdz" => LoadUsd(path, parent),
+            ".ifc" => LoadIfc(path, parent),
             var extension => throw new NotSupportedException($"no importer for '{extension}' files"),
         };
 
@@ -738,6 +750,156 @@ public sealed class Scene : IDisposable
     public ImportResult LoadStl(string path, Node? parent = null)
     {
         NativeError.Check(NativeMethods.tn_load_stl(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>
+    /// Decodes a Draco compressed mesh into geometry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Draco quantises attributes and codes the connectivity with edgebreaker,
+    /// which is why a buffer is often a tenth the size of the triangles it
+    /// holds. Pass a whole Draco buffer: the one inside a glTF
+    /// <c>KHR_draco_mesh_compression</c> buffer view, or what
+    /// <c>draco_encoder</c> writes.
+    /// </para>
+    /// <para>
+    /// The loss is the format's choice and not the reader's - positions come
+    /// back on whatever quantisation grid the encoder picked, so a mesh encoded
+    /// at eleven bits has eleven bits of position. Decoding only; nothing here
+    /// writes Draco.
+    /// </para>
+    /// </remarks>
+    public unsafe Geometry CreateGeometryFromDraco(ReadOnlySpan<byte> data)
+    {
+        fixed (byte* pointer = data)
+        {
+            uint id = NativeMethods.tn_geometry_from_draco(Handle, pointer, (ulong)data.Length);
+            return new Geometry(this, NativeError.CheckHandle(id));
+        }
+    }
+
+    /// <summary>Imports a USD <c>.usda</c> file, or a <c>.usdz</c> holding one.</summary>
+    /// <remarks>
+    /// <para>
+    /// USD is a scene description language with layers, references, variants
+    /// and composition arcs. What this reads is the shape of it a loader can
+    /// support without becoming an implementation of USD: the <c>def Mesh</c>
+    /// prims in a text layer, which is what most AR exporters write after
+    /// flattening a scene.
+    /// </para>
+    /// <para>
+    /// Binary <c>.usdc</c> is not read. It is USD's own memory mappable crystal
+    /// format, and guessing at it would produce wrong geometry rather than an
+    /// error - so a USDZ holding only <c>.usdc</c> says so and points at
+    /// <c>usdcat</c>, which converts one to text. Several Apple tools write
+    /// binary by default.
+    /// </para>
+    /// </remarks>
+    public ImportResult LoadUsd(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_usd(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports the tessellated geometry out of an <c>.ifc</c> file.</summary>
+    /// <remarks>
+    /// <para>
+    /// IFC is a STEP physical file: numbered entities referring to each other.
+    /// This reads the geometry that is already polygons -
+    /// <c>IfcTriangulatedFaceSet</c>, which is how IFC4 exporters write meshes,
+    /// and the older <c>IfcPolyLoop</c> faceted form.
+    /// </para>
+    /// <para>
+    /// The parametric half of IFC is not read, and it is a large half: swept
+    /// solids, extrusions along a directrix, constructive solid geometry with
+    /// booleans, and the placement tree that positions them. Evaluating those
+    /// is a geometry kernel rather than a loader. A file written entirely that
+    /// way reports it, and says to re-export with tessellation turned on,
+    /// rather than importing an empty model that looks like a bug.
+    /// </para>
+    /// </remarks>
+    public ImportResult LoadIfc(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_ifc(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports a Collada <c>.dae</c> file.</summary>
+    /// <remarks>
+    /// Collada describes geometry indirectly - a source of numbers, an accessor
+    /// saying how wide a stride they come in, and one index per input per
+    /// corner - and the loader resolves all of that, welding corners that agree
+    /// on every index so a cube is eight vertices rather than thirty six.
+    /// Materials and the node hierarchy are not read, so the file flattens to
+    /// one node per geometry.
+    /// </remarks>
+    public ImportResult LoadCollada(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_collada(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports a Google Earth <c>.kmz</c> file.</summary>
+    /// <remarks>
+    /// A KMZ is a zip holding a Collada document, so this unwraps the archive
+    /// and hands the model to the Collada loader. The placemark and overlay
+    /// parts of KML are not read; what comes out is the geometry.
+    /// </remarks>
+    public ImportResult LoadKmz(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_kmz(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports a 3D Manufacturing Format <c>.3mf</c> file.</summary>
+    /// <remarks>
+    /// A zip holding XML that lists vertices and triangles directly, with none
+    /// of Collada's indirection. Normals are computed, because a printed solid
+    /// carries none. Triangles pointing past the vertex list are dropped.
+    /// </remarks>
+    public ImportResult Load3mf(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_3mf(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>Imports a VRML 2.0 <c>.wrl</c> file.</summary>
+    /// <remarks>
+    /// VRML is its own curly brace syntax rather than XML. Only
+    /// <c>IndexedFaceSet</c> is read - the coordinates and the face list -
+    /// because the rest of the language is sensors, scripts and interpolators,
+    /// which want a browser and not a loader.
+    /// </remarks>
+    public ImportResult LoadVrml(string path, Node? parent = null)
+    {
+        NativeError.Check(NativeMethods.tn_load_vrml(Handle, path, parent?.Id ?? 0, out NativeImportResult result));
+        return ImportResult.From(this, result);
+    }
+
+    /// <summary>
+    /// Imports an <c>.svg</c> file, extruding every outline it can flatten into
+    /// a solid <paramref name="depth"/> deep.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An SVG is a drawing rather than a model, so extruding is the step that
+    /// makes it one: a logo becomes a solid. Paths, polygons and rectangles are
+    /// read; curves are flattened into segments because the triangulator works
+    /// on polygons.
+    /// </para>
+    /// <para>
+    /// Arcs are not flattened, and a path using one is skipped rather than
+    /// closed with a straight line through where the curve should be. If every
+    /// path in a file is an arc the import reports that rather than returning
+    /// an empty model. SVG measures y down the page, so outlines are flipped on
+    /// the way in.
+    /// </para>
+    /// </remarks>
+    public ImportResult LoadSvg(string path, Node? parent = null, float depth = 1f)
+    {
+        NativeError.Check(NativeMethods.tn_load_svg(Handle, path, parent?.Id ?? 0, depth, out NativeImportResult result));
         return ImportResult.From(this, result);
     }
 

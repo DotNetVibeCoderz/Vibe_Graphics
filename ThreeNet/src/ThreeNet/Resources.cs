@@ -19,6 +19,48 @@ public sealed class Geometry : IEquatable<Geometry>
     public bool IsNull => Id == 0;
 
     /// <summary>Number of vertices and indices currently stored.</summary>
+    /// <summary>
+    /// Reorders this mesh for the GPU without changing what it draws.
+    /// </summary>
+    /// <remarks>
+    /// Indices are reordered so triangles sharing vertices are drawn near each
+    /// other and the post-transform cache keeps hitting, then the vertices are
+    /// reordered to match, so fetching them walks memory forwards. Same
+    /// triangles, same picture. Vertices no index refers to are dropped, so the
+    /// buffer can come back slightly smaller.
+    /// </remarks>
+    public void Optimize() => NativeError.Check(NativeMethods.tn_geometry_optimize(Scene.Handle, Id));
+
+    /// <summary>
+    /// Collapses this mesh towards <paramref name="ratio"/> of its triangles,
+    /// holding the silhouette. The original is left alone.
+    /// </summary>
+    /// <param name="ratio">The fraction of triangles to keep, 0 to 1.</param>
+    /// <param name="errorLimit">
+    /// How far the result may stray, as a fraction of the mesh size. 0.01 is a
+    /// tight budget, 0.1 a loose one; simplification stops at whichever limit
+    /// it reaches first.
+    /// </param>
+    /// <remarks>
+    /// This is how the levels for <see cref="Node.SetLevelsOfDetail"/> get made
+    /// without modelling them by hand. The ratio is a target rather than a
+    /// promise: a mesh with nothing redundant in it comes back larger than
+    /// asked for, because the alternative is to destroy its shape. The returned
+    /// counts say what actually happened.
+    /// </remarks>
+    public (Geometry Simplified, int TrianglesBefore, int TrianglesAfter, float Error) Simplify(
+        float ratio,
+        float errorLimit = 0.01f)
+    {
+        NativeError.Check(NativeMethods.tn_geometry_simplify(
+            Scene.Handle, Id, ratio, errorLimit, out uint simplified, out NativeSimplifyResult result));
+        return (
+            new Geometry(Scene, simplified),
+            (int)result.TrianglesBefore,
+            (int)result.TrianglesAfter,
+            result.Error);
+    }
+
     public (int Vertices, int Indices) Counts
     {
         get
