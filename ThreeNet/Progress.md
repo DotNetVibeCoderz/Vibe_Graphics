@@ -3,6 +3,77 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-10-15 - Phase 8 finished (0.12.0)
+
+Every row in `PLAN.md` is closed. Fourteen features and thirteen ABI versions,
+19 to 35, and the part worth recording is how often the obstacle turned out not
+to be there.
+
+**Three things were blocked by nothing.** Light probes were filed behind compute
+pipelines along with GPU particles and skinning; they never needed compute, because
+the projection is an integral over six captured faces and a cube capture already
+existed. Draco was filed behind a C++ toolchain next to `basis-universal`;
+`draco-core` is pure Rust. Pointer lock was filed behind Avalonia, which is true
+of `ThreeNetView` and only of it - the library also hosts a winit window, which
+has `set_cursor_grab` and raw mouse motion. Each of those rows had a plausible
+reason beside it that nobody had rechecked.
+
+**The renderer.** CubeCamera bakes a reflection probe in six frames through a
+camera it creates and removes itself. Iridescence is the Belcour-Barla thin film
+model, where the optical path difference becomes a colour through a Gaussian fit
+of the CIE matching curves. Screen space reflections march the normal and depth
+prepass SSAO already writes, so they needed no new G-buffer and work in both
+paths. Colour lookup tables land last in the chain. SMAA computes its coverage
+area inline instead of reading the table the reference ships, which removes the
+quantisation and leaves nothing that could be subtly wrong without a test
+noticing - a mis-generated area table looks perfect in a still and shimmers in
+motion.
+
+**Compute.** The core had none, and three features were waiting on that. It has
+kernels, storage buffers, dispatch and readback now, with pipelines cached by
+kernel, edit and binding count - the first version compiled WGSL on every
+dispatch, which would have made GPU particles slower than the CPU path they
+exist to replace. On top of it: particles stepped and billboarded entirely on
+the GPU, and `Node.GpuSkinning`, which sends joint matrices instead of a whole
+vertex buffer per mesh per frame.
+
+**Formats, from three to fourteen.** STL, PLY, VOX, 3DS, Collada, KMZ, 3MF,
+VRML, SVG, USD and IFC, plus Draco decoding and meshoptimizer. Two needed new
+dependencies and the rest did not; VRML in particular had been listed as needing
+an XML parser and is not XML at all.
+
+Several are honest subsets and say so where a caller will read it rather than in
+a changelog. USD reads text layers and not the binary `.usdc` most AR exporters
+write, so a USDZ holding only that reports it and points at `usdcat`. IFC reads
+the tessellated half; the parametric half is a geometry kernel, and a file
+written that way says to re-export with tessellation rather than importing
+empty. SVG skips arcs instead of closing them with a straight line through where
+the curve belongs.
+
+**What the tests caught.** Three failed first where the code was right and the
+fixture was wrong: a 3DS vertex at z = 1 is up because 3DS is Z up, two points
+is a line and not an outline, and optimising a mesh drops vertices no index
+refers to. Two were real bugs that a looser test would have missed entirely. A
+`vec3<f32>` is aligned to 16 in WGSL, so a kernel declaring the vertex struct
+the obvious way reads every vertex after the first from the wrong offset - found
+only because the test was rewritten to read the plane's own corners back rather
+than assert something trivially true. And two scenes on one renderer shared a
+compute buffer, because arena ids restart at 1 in every scene; the directional
+particle test caught it only because it checked both directions.
+
+**Release 0.12.0** carries a package icon for the first time: a dragon breathing
+a three colour flame. It was rendered with ThreeNet first, which was mush at the
+32 pixels nuget.org uses, then drawn by hand with Skia paths, which read as a
+bird. The third attempt is generated art, and `tools/PackageIcon` now does only
+the part with rules attached - resize with Mitchell resampling, because a
+cheaper filter aliases the rim light into a dashed line, and fail the build
+rather than the push if it passes a megabyte.
+
+One renderer bug fell out of making it: `MsaaSamples` documented itself as
+silently clamped and then panicked at 8, because the clamp consulted only the
+colour format and because `get_texture_format_features` reports counts that need
+an adapter specific feature this renderer never requests.
+
 ## 2026-10-14 - Three.js parity, phase 8 (0.11.0 partway through)
 
 `threejs_fitur_lengkap.md` was checked feature by feature against the codebase, and the gaps written into
