@@ -24,10 +24,11 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <!-- Rendered by tools/PackageIcon with the library itself. Regenerate it
-         by running that tool with the output path as its argument, then copy
-         the result here. The icon is baked into a published version and cannot
-         be changed without burning one, so it is a release blocker. -->
+    <!-- A dragon breathing a three colour flame. The artwork is generated and
+         kept at full size in docs/images/package-icon-source.png; tools/PackageIcon
+         resizes it to the 256 square NuGet wants and fails if the result passes
+         the one megabyte limit. The icon is baked into a published version and
+         cannot be changed without burning one, so it is a release blocker. -->
     <PackageIcon>icon.png</PackageIcon>
     <VersionPrefix>0.12.0</VersionPrefix>
   </PropertyGroup>
