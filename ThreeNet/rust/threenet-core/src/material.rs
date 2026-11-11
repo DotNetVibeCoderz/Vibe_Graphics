@@ -224,7 +224,7 @@ impl Default for Material {
             textures: MaterialTextures::default(),
             shader: None,
             custom: [0.0; 16],
-            version: 1,
+            version: crate::next_resource_version(),
         }
     }
 }
@@ -256,7 +256,7 @@ impl Material {
     /// Marks the material dirty so its GPU uniform and bind group are rebuilt.
     #[inline]
     pub fn touch(&mut self) {
-        self.version = self.version.wrapping_add(1).max(1);
+        self.version = crate::next_resource_version();
     }
 
     #[inline]

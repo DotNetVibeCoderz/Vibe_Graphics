@@ -54,10 +54,14 @@ public class ThreeNetView : Control
             nameof(RendererOptions),
             defaultValue: RendererOptions.Default with { BgraOutput = true, VSync = false });
 
-    private readonly DispatcherTimer _timer = new(DispatcherPriority.Render);
+    // Background priority: the loop renders on the UI thread, so at Render priority a frame that takes longer
+    // than the tick interval keeps the timer permanently due and starves Avalonia's own layout and
+    // composition passes - the window stops repainting while the UI thread still runs.
+    private readonly DispatcherTimer _timer = new(DispatcherPriority.Background);
     private readonly Stopwatch _clock = new();
     private Renderer? _renderer;
-    private WriteableBitmap? _bitmap;
+    private WriteableBitmap? _bitmap;      // front: what Render draws
+    private WriteableBitmap? _backBitmap;  // back: the next frame is read into this one, then they swap
     private PixelSize _surfaceSize;
     private TimeSpan _lastFrame;
     private byte[] _staging = [];
@@ -285,7 +289,7 @@ public class ThreeNetView : Control
     /// <summary>Renders one frame immediately, outside the loop.</summary>
     public void RenderFrame()
     {
-        if (Scene is not { } scene || Bounds.Width <= 0 || Bounds.Height <= 0)
+        if (Scene is not { } scene || Bounds.Width <= 0 || Bounds.Height <= 0 || !IsEffectivelyVisible)
         {
             return;
         }
@@ -385,8 +389,10 @@ public class ThreeNetView : Control
             _surfaceSize = size;
             _staging = new byte[_renderer.PixelBufferSize];
             _bitmap?.Dispose();
+            _backBitmap?.Dispose();
             double dpi = 96 * RenderScaling;
             _bitmap = new WriteableBitmap(size, new Vector(dpi, dpi), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+            _backBitmap = new WriteableBitmap(size, new Vector(dpi, dpi), PixelFormat.Bgra8888, AlphaFormat.Opaque);
             return true;
         }
         catch (ThreeNetException exception)
@@ -398,30 +404,36 @@ public class ThreeNetView : Control
 
     private unsafe void CopyToBitmap()
     {
-        if (_renderer is null || _bitmap is null)
+        if (_renderer is null || _backBitmap is null)
         {
             return;
         }
 
-        using ILockedFramebuffer buffer = _bitmap.Lock();
-        int rowBytes = _surfaceSize.Width * 4;
-
-        if (buffer.RowBytes == rowBytes)
+        // Write into the back buffer and swap, so the compositor never samples a bitmap that is being
+        // overwritten (the front one may still be referenced by the last submitted frame).
+        using (ILockedFramebuffer buffer = _backBitmap.Lock())
         {
-            // Tightly packed: read straight into the bitmap memory.
-            Span<byte> destination = new((void*)buffer.Address, rowBytes * _surfaceSize.Height);
-            _renderer.ReadPixels(destination);
-            return;
+            int rowBytes = _surfaceSize.Width * 4;
+            if (buffer.RowBytes == rowBytes)
+            {
+                // Tightly packed: read straight into the bitmap memory.
+                Span<byte> destination = new((void*)buffer.Address, rowBytes * _surfaceSize.Height);
+                _renderer.ReadPixels(destination);
+            }
+            else
+            {
+                // Padded rows: read once, then copy row by row.
+                _renderer.ReadPixels(_staging);
+                for (int y = 0; y < _surfaceSize.Height; y++)
+                {
+                    Span<byte> source = _staging.AsSpan(y * rowBytes, rowBytes);
+                    Span<byte> destination = new((void*)(buffer.Address + (nint)(y * buffer.RowBytes)), rowBytes);
+                    source.CopyTo(destination);
+                }
+            }
         }
 
-        // Padded rows: read once, then copy row by row.
-        _renderer.ReadPixels(_staging);
-        for (int y = 0; y < _surfaceSize.Height; y++)
-        {
-            Span<byte> source = _staging.AsSpan(y * rowBytes, rowBytes);
-            Span<byte> destination = new((void*)(buffer.Address + (nint)(y * buffer.RowBytes)), rowBytes);
-            source.CopyTo(destination);
-        }
+        (_bitmap, _backBitmap) = (_backBitmap, _bitmap);
     }
 
     private void Fail(string message)
@@ -439,6 +451,8 @@ public class ThreeNetView : Control
         _renderer = null;
         _bitmap?.Dispose();
         _bitmap = null;
+        _backBitmap?.Dispose();
+        _backBitmap = null;
         _surfaceSize = default;
         _staging = [];
     }

@@ -3,6 +3,22 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-11-11 - Embedding fixes from Gravicode CAD Studio (0.12.1)
+
+Found while embedding `ThreeNetView` in a CAD editor whose model is rebuilt after every edit.
+
+- **Stale GPU buffers on recycled ids.** The renderer caches meshes, materials and textures by arena id and
+  re-uploads when the version changes, but every new object started at version 1. After a destroy, a new
+  object that reused the id matched the old cache entry and drew with the old buffers (wrong geometry, a grid
+  turned into a wall, faces missing). Versions now come from one process wide counter
+  (`next_resource_version`), so a recycled id can never match a stale entry.
+- **First frame took ~17 s on Windows.** DX12 was compiling every pipeline with the legacy FXC compiler.
+  wgpu's `static-dxc` feature is now enabled for Windows x64: renderer creation 9 s → 2 s, first frame
+  16.6 s → 1.0 s on the test machine (the native DLL grows by ~22 MB).
+- **`ThreeNetView`**: the render loop runs at `Background` priority instead of `Render` (a slow frame could keep
+  the timer permanently due and starve Avalonia's layout/composition), frames are read into a back bitmap and
+  swapped so the compositor never samples a bitmap being overwritten, and hidden views skip rendering.
+
 ## 2026-10-15 - Phase 8 finished (0.12.0)
 
 Every row in `PLAN.md` is closed. Fourteen features and thirteen ABI versions,

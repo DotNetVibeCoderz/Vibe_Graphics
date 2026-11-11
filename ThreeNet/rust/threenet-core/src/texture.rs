@@ -130,7 +130,7 @@ impl Texture {
             compressed: None,
             render_target: false,
             layers: 1,
-            version: 1,
+            version: crate::next_resource_version(),
         })
     }
 
@@ -153,7 +153,7 @@ impl Texture {
             compressed: None,
             render_target: false,
             layers: 1,
-            version: 1,
+            version: crate::next_resource_version(),
         }
     }
 
@@ -201,7 +201,7 @@ impl Texture {
                 compressed: None,
                 render_target: false,
                 layers: 1,
-                version: 1,
+                version: crate::next_resource_version(),
             })
         } else {
             let rgba = image.to_rgba8();
@@ -219,7 +219,7 @@ impl Texture {
                 compressed: None,
                 render_target: false,
                 layers: 1,
-                version: 1,
+                version: crate::next_resource_version(),
             })
         }
     }
@@ -244,7 +244,7 @@ impl Texture {
             compressed,
             render_target: false,
             layers: 1,
-            version: 1,
+            version: crate::next_resource_version(),
         })
     }
 
@@ -277,7 +277,7 @@ impl Texture {
             compressed: None,
             render_target: true,
             layers: 1,
-            version: 1,
+            version: crate::next_resource_version(),
         })
     }
 
@@ -317,7 +317,7 @@ impl Texture {
             compressed: None,
             render_target: false,
             layers: 6,
-            version: 1,
+            version: crate::next_resource_version(),
         })
     }
 
@@ -342,7 +342,7 @@ impl Texture {
             compressed: None,
             render_target: true,
             layers: 6,
-            version: 1,
+            version: crate::next_resource_version(),
         })
     }
 
@@ -354,7 +354,7 @@ impl Texture {
 
     #[inline]
     pub fn touch(&mut self) {
-        self.version = self.version.wrapping_add(1).max(1);
+        self.version = crate::next_resource_version();
     }
 
     #[inline]

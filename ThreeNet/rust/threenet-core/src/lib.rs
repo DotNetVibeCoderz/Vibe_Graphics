@@ -61,3 +61,19 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// ABI revision of the exported C surface. Bumped whenever an exported symbol
 /// changes shape; the managed side refuses to load a mismatching binary.
 pub const ABI_VERSION: u32 = 35;
+
+/// Returns a process wide unique, non zero version stamp for geometry, material and texture data.
+///
+/// The renderer caches GPU resources by arena id and re-uploads when the version differs. Arena ids are
+/// recycled after a destroy, so per object counters starting at 1 let a new object match the stale cache
+/// entry of the one it replaced and draw with the old buffers. One global counter makes that impossible.
+pub(crate) fn next_resource_version() -> u32 {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(1);
+    loop {
+        let v = NEXT.fetch_add(1, Ordering::Relaxed);
+        if v != 0 {
+            return v;
+        }
+    }
+}

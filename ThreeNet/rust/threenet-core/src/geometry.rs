@@ -151,7 +151,7 @@ impl Default for Geometry {
             bounds: Aabb::EMPTY,
             skin: None,
             morph: None,
-            version: 1,
+            version: crate::next_resource_version(),
         }
     }
 }
@@ -170,7 +170,7 @@ impl Geometry {
     /// Marks the geometry dirty so the renderer re-uploads it on the next frame.
     #[inline]
     pub fn touch(&mut self) {
-        self.version = self.version.wrapping_add(1).max(1);
+        self.version = crate::next_resource_version();
     }
 
     #[inline]
