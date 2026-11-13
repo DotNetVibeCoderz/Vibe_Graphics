@@ -71,7 +71,7 @@ Made by Gravicode Studios, led by Kang Fadhil.
 | Spatial audio | ✅ | cpal output + software mixer: panning, attenuation, Doppler, air absorption; WAV/OGG/MP3/FLAC via symphonia; offline rendering |
 | VR/AR via OpenXR | 🟡 | Runtime / headset probe, off-axis cameras, `StereoRig`; headset sessions and swapchain submission still open |
 | Networking / multiplayer sync | ✅ | `NetworkSession` (UDP): host relay, reliable ordered + unreliable messages, interpolated node replication, timeouts |
-| Water, fire and VFX (`ThreeNet.Effects`) | ✅ | `WaterSimulation` / `WaterSurface` (wave equation height field, caustics by differential area, sky reflection, depth absorption), `FireEffect` (ray marched volume with simplex turbulence), `ParticleEffect` (emitter shapes, curl noise, attractors, collision, colour over life) |
+| Water, fire and VFX (`ThreeNet.Effects`) | ✅ | `WaterSimulation` / `WaterSurface` (wave equation height field, caustics by differential area, sky reflection, depth absorption), `FireEffect` (ray marched volume with simplex turbulence), `CloudLayer` (ray marched cloud deck with sun shadowing; 0.12.2, unpublished), `ParticleEffect` (emitter shapes, curl noise, attractors, collision, colour over life) |
 
 ## Phase 7 - Ecosystem & tooling
 

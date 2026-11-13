@@ -34,6 +34,7 @@ public class EffectsTests
     [InlineData(nameof(EffectShaders.Fire))]
     [InlineData(nameof(EffectShaders.Particle))]
     [InlineData(nameof(EffectShaders.Smoke))]
+    [InlineData(nameof(EffectShaders.Clouds))]
     [InlineData(nameof(PointsAndLines.Points))]
     [InlineData(nameof(PointsAndLines.Lines))]
     public void EveryEffectShaderCompiles(string name)
@@ -45,6 +46,7 @@ public class EffectsTests
             nameof(EffectShaders.Fire) => EffectShaders.Fire,
             nameof(EffectShaders.Particle) => EffectShaders.Particle,
             nameof(EffectShaders.Smoke) => EffectShaders.Smoke,
+            nameof(EffectShaders.Clouds) => EffectShaders.Clouds,
             nameof(PointsAndLines.Points) => PointsAndLines.Points,
             _ => PointsAndLines.Lines,
         };
@@ -232,6 +234,70 @@ public class EffectsTests
         }
 
         Assert.InRange(lowest, 0.3f, 0.99f);
+    }
+
+    [Fact]
+    public void ACloudLayerFollowsTheCameraAndDriftsWithTheWind()
+    {
+        using Scene scene = new();
+        CloudLayer clouds = new(scene, altitude: 1_200f, radius: 6_000f)
+        {
+            Style = CloudStyle.Overcast,
+            Wind = new Vector2(10f, 0f),
+            SunDirection = new Vector3(0f, 2f, 0f),
+        };
+
+        Assert.Equal(AlphaMode.Blend, clouds.Material.Options.AlphaMode);
+        Assert.False(clouds.Material.Options.DepthWrite);
+        Assert.Equal(CloudStyle.Overcast.Coverage, clouds.Material.Options.Custom0.W, 3);
+        // The sun direction is kept as a unit vector whatever was handed in.
+        Assert.Equal(1f, clouds.Material.Options.Custom0.Y, 3);
+
+        clouds.Update(2f, new Vector3(300f, 50f, -700f));
+        Assert.Equal(new Vector3(300f, 1_200f, -700f), clouds.Node.Position);
+        // Two seconds of a 10 m/s wind: the pattern has slid 20 m.
+        Assert.Equal(-20f, clouds.Material.Options.Custom3.X, 3);
+        // Steps in the whole part, haze in the fraction.
+        Assert.Equal(CloudStyle.Overcast.Steps + CloudStyle.Overcast.Haze, clouds.Material.Options.Custom3.W, 3);
+    }
+
+    [Fact]
+    public void AnOvercastSkyIsBrighterThanTheSpaceBehindIt()
+    {
+        using Renderer? renderer = TryCreateRenderer();
+        if (renderer is null)
+        {
+            return;
+        }
+
+        using Scene scene = new()
+        {
+            Environment = SceneEnvironment.Default with { Background = new Vector4(0f, 0f, 0f, 1f) },
+        };
+
+        CloudLayer clouds = new(scene, altitude: 800f, radius: 6_000f)
+        {
+            Style = CloudStyle.Overcast with { Coverage = 1f },
+        };
+        Vector3 eye = new(0f, 2f, 0f);
+        clouds.Update(0f, eye);
+        Node camera = scene.AddCamera(Camera.Perspective(60f.ToRadians(), 0.1f, 9_000f), eye);
+        // Straight up is degenerate for LookAt; lean a little.
+        camera.LookAt(new Vector3(0f, 1_000f, -300f));
+
+        renderer.Render(scene, camera);
+        byte[] pixels = renderer.ReadPixels();
+        int cloudy = 0;
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            if (pixels[i] > 40 && pixels[i + 1] > 40 && pixels[i + 2] > 40)
+            {
+                cloudy++;
+            }
+        }
+
+        // A full deck seen from underneath covers most of the frame.
+        Assert.True(cloudy > pixels.Length / 4 / 2, $"only {cloudy} of {pixels.Length / 4} pixels showed cloud");
     }
 
     [Fact]

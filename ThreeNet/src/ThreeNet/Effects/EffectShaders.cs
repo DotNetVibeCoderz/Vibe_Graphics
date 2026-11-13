@@ -13,7 +13,7 @@ namespace ThreeNet.Effects;
 /// reads, since <c>custom0</c>..<c>custom3</c> and <c>custom_texture</c> are all
 /// a hook gets.
 /// </remarks>
-public static class EffectShaders
+public static partial class EffectShaders
 {
     /// <summary>
     /// Reads the wave height field out of <c>custom_texture</c>. Shared by the

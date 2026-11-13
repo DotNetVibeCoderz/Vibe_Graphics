@@ -130,6 +130,48 @@ strobing.
 
 ---
 
+## Clouds
+
+```csharp
+CloudLayer clouds = new(scene, altitude: 1_200f, radius: 8_000f)
+{
+    Style = CloudStyle.FairWeather,          // Overcast, Storm
+    SunDirection = toSun,                    // the same sun the scene uses
+    Wind = new Vector2(9f, 3f),              // metres per second
+};
+
+clouds.Update(deltaSeconds, camera.WorldPosition);   // every frame
+```
+
+**A cloud deck is a slab of air, not a picture on the sky.** The layer is a sheet at the cloud base; each of
+its fragments marches the view ray up through the slab above and asks a density function how much cloud is
+there. Where there is some, a short second march toward the sun finds how much cloud the light came through
+(Beer's law), which is what gives a cloud a bright side and a dark belly, and a forward scattering term lights
+its edges when the sun is behind it.
+
+- **Density** is layered value noise, cut off by `Coverage` and shaped by height: bases come in sharply, crowns
+  taper away.
+- **The sheet is real geometry** at a real height, so mountains hide the cloud behind them. Keep `Radius`
+  inside the camera's far plane; the cloud thins to nothing over the outer third.
+- **Fog.** Distance fog set for streets would paint a far-off deck one colour. The shader takes only
+  `Haze` (a fraction) of the scene's fog.
+- **Lighting is its own**: `SunColor` and `AmbientColor` in the style, not the scene's lights. A volume has no
+  surface for them to fall on.
+
+Limits: it is meant to be seen from below (keep `Altitude` above the camera), it casts no shadow, and every
+pixel of sky pays for `Steps` samples - twelve is plenty on integrated graphics.
+
+| Knob | What it does |
+|---|---|
+| `Coverage` | 0 is a clear sky, 1 a solid deck |
+| `Density` | Extinction per metre: higher is thicker and darker underneath |
+| `Thickness` | Depth of the layer, base to top |
+| `FeatureSize` | Size of the largest billows, in metres |
+| `Steps` | Samples per ray, 4..64: the cost of the effect |
+| `Haze` | How much of the scene's distance fog reaches the cloud |
+
+---
+
 ## Particles
 
 ```csharp

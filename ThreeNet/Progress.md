@@ -3,6 +3,28 @@
 Development log for Three.Net. Newest first.
 Catatan pengembangan Three.Net. Terbaru di atas.
 
+## 2026-11-13 - Volumetric clouds (0.12.2, not published)
+
+Asked for by Barudak Bogor, whose sky had only a painted cloud sheet and low-poly puffs.
+
+- **`CloudLayer`** (`ThreeNet.Effects`) and **`EffectShaders.Clouds`**: a tessellated sheet at the cloud base
+  whose fragments ray march the slab of air above it. Density is layered value noise cut by a coverage
+  threshold and shaped by height (flat bases, heaped tops); at every sample inside cloud a three step march
+  toward the sun gives Beer's law shadowing, plus a forward scattering term for the silver lining. Presets
+  `CloudStyle.FairWeather`, `Overcast`, `Storm`. `Update(dt, cameraPosition)` keeps the sheet over the camera
+  and slides the pattern with the wind.
+- **Fog.** Distance fog tuned for the ground wipes out a deck kilometres away, so the shader computes the fog
+  the forward pass is about to apply and hands over a colour that comes out of it carrying only
+  `CloudStyle.Haze` of it. This reads `frame` directly and depends on `apply_fog` staying as it is.
+- No ABI change: the native core is untouched, `ABI_VERSION` stays.
+- Tests: the shader compiles against both passes, the layer follows the camera and drifts, and an overcast
+  deck seen from below renders bright over a black background (GPU test, skips itself without an adapter).
+
+Honest notes: meant to be seen from below only; the layer casts no shadow on the ground; it is lit by its own
+two colours, not the scene lights; there is no DemoGraphics scene or gallery picture for it yet; the cost is
+`Steps` noise lookups per sky pixel (measured in the game on an Intel UHD 620 at 768 x 432: 22.7 to 20.1 fps
+with 12 steps). The uncommitted `ThreeNetView.cs` change in this checkout is unrelated and still untested.
+
 ## 2026-11-11 - Embedding fixes from Gravicode CAD Studio (0.12.1)
 
 Found while embedding `ThreeNetView` in a CAD editor whose model is rebuilt after every edit.

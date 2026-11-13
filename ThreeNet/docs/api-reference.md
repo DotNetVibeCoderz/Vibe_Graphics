@@ -248,6 +248,9 @@ Beyond `CreatePlane/Box/Sphere/Cylinder/Cone/Torus/GridGeometry`:
   `SunDirection`, `AddFloor(options)`, `Splash`, `HeightAt`, `NormalAt`, `Update(dt)`.
 - `FireEffect`: `Node`, `Material`, `Style` (`FireStyle.Campfire/Torch/Candle/Magic`), `Size`, `Flicker`,
   `Update(dt)`.
+- `CloudLayer`: `Node`, `Material`, `Radius`, `Altitude`, `Wind`, `SunDirection`, `Style`
+  (`CloudStyle.FairWeather/Overcast/Storm`: `Coverage`, `Density`, `Thickness`, `FeatureSize`, `SunColor`,
+  `AmbientColor`, `Steps`, `Haze`), `Update(dt, cameraPosition)`.
 - `ParticleEffect`: `Shape` (`EmitterShape`), `Origin`, `Rate`, `Lifetime`, `Size`, `Growth`, `Rise`,
   `Spread`, `Radial`, `Gravity`, `Drag`, `Wind`, `Turbulence`, `Attractors`, `FloorHeight`, `Bounce`,
   `StretchBySpeed`, `Burst`, `Update`, `Upload`, `CreateGeometry`, `GlowMaterial`, `SmokeMaterial`.
